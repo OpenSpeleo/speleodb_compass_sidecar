@@ -15,7 +15,8 @@
       {
         "title": "speleodb-compass-sidecar",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "minHeight": 900
       }
     ],
     "security": {

@@ -1,5 +1,7 @@
 {
   "emmet.includeLanguages": {
     "rust": "html"
-  }
+  },
+  "makefile.configureOnOpen": false,
+  "rust-analyzer.cargo.targetDir": true,
 }

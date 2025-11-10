@@ -1,3 +1,4 @@
+mod speleo_db_controller;
 mod app;
 
 use app::App;
