@@ -1,0 +1,33 @@
+# Config for Dependabot updates. See Documentation here:
+# https://help.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+
+version: 2
+updates:
+  # Update GitHub actions in workflows
+  - package-ecosystem: "github-actions"
+    open-pull-requests-limit: 25
+    directory: "/"
+    # Every weekday
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "cargo"
+    open-pull-requests-limit: 50
+    directory: "/"
+    # Every weekday
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "cargo"
+    open-pull-requests-limit: 50
+    directory: "src-tauri"
+    # Every weekday
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "cargo"
+    open-pull-requests-limit: 50
+    directory: "common"
+    # Every weekday
+    schedule:
+      interval: "weekly"
