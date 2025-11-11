@@ -13,10 +13,14 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "speleodb-compass-sidecar",
-        "width": 800,
-        "height": 600,
-        "minHeight": 900
+        "title": "SpeleoDB Compass Sidecar",
+        "fullscreen": false,
+        "resizable": true,
+        "decorations": true,
+        "transparent": false,
+        "titleBarStyle": "visible",
+        "width": 1000,
+        "height": 900
       }
     ],
     "security": {

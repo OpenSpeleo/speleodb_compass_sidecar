@@ -4,8 +4,17 @@ use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen::JsValue;
 use yew::prelude::*;
 
+use crate::components::project_details::ProjectDetails;
+use crate::components::project_listing::ProjectListing;
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
+use crate::speleo_db_controller::Prefs as ControllerPrefs;
+use serde_wasm_bindgen;
 
+#[derive(Clone, Copy, PartialEq)]
+enum ActiveTab {
+    Listing,
+    Details,
+}
 
 #[wasm_bindgen]
 extern "C" {
@@ -65,6 +74,8 @@ pub fn app() -> Html {
     let show_error = use_state(|| false);
     let error_msg = use_state(|| String::new());
     let error_is_403 = use_state(|| false);
+    let active_tab = use_state(|| ActiveTab::Listing);
+    let selected_project: UseStateHandle<Option<String>> = use_state(|| None);
 
     // Validation helpers
     let validate_instance = |val: &str| -> bool {
@@ -249,10 +260,57 @@ pub fn app() -> Html {
         })
     };
 
-    let back_to_form = {
+    // Disconnect handler: clear OAuth token in prefs and form, reset UI to login
+    let on_disconnect = {
+        let instance = instance.clone();
+        let email = email.clone();
+        let password = password.clone();
+        let oauth = oauth.clone();
         let logged_in = logged_in.clone();
+        let active_tab = active_tab.clone();
+        let selected_project = selected_project.clone();
         Callback::from(move |_| {
-            logged_in.set(false);
+            let instance_val = (*instance).clone();
+            let email = email.clone();
+            let password = password.clone();
+            let oauth = oauth.clone();
+            let logged_in = logged_in.clone();
+            let active_tab = active_tab.clone();
+            let selected_project = selected_project.clone();
+            spawn_local(async move {
+                // Persist prefs with empty token but keep the instance
+                let prefs = ControllerPrefs { instance: instance_val.clone(), oauth: String::new() };
+                #[derive(Serialize)]
+                struct SaveArgs<'a> { prefs: &'a ControllerPrefs }
+                let args = serde_wasm_bindgen::to_value(&SaveArgs { prefs: &prefs }).unwrap_or(JsValue::NULL);
+                let _ = invoke("save_user_prefs", args).await;
+                // Clear form fields
+                email.set(String::new());
+                password.set(String::new());
+                oauth.set(String::new());
+                // Reset in-app state
+                selected_project.set(None);
+                active_tab.set(ActiveTab::Listing);
+                logged_in.set(false);
+            });
+        })
+    };
+
+    // Project selection from listing
+    let on_project_selected = {
+        let selected_project = selected_project.clone();
+        let active_tab = active_tab.clone();
+        Callback::from(move |project_id: String| {
+            selected_project.set(Some(project_id));
+            active_tab.set(ActiveTab::Details);
+        })
+    };
+
+    // Back to project listing
+    let on_back_to_listing = {
+        let active_tab = active_tab.clone();
+        Callback::from(move |_| {
+            active_tab.set(ActiveTab::Listing);
         })
     };
 
@@ -283,9 +341,25 @@ pub fn app() -> Html {
     if *logged_in {
         html! {
             <main class="container">
-                <h1>{"SUCCESS"}</h1>
-                <p>{"You are now logged in."}</p>
-                <button onclick={back_to_form}>{"Back"}</button>
+                <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; width:100%;">
+                    <h1>{"SpeleoDB - Compass Sidecar"}</h1>
+                    <div style="gap:8px;">
+                        <button style="background-color:red; color:white;" onclick={on_disconnect.clone()}>{ "Disconnect" }</button>
+                    </div>
+                </header>
+                <section style="width:100%;">
+                    {
+                        if *active_tab == ActiveTab::Listing {
+                            html!{ <ProjectListing on_select={on_project_selected.clone()} /> }
+                        } else {
+                            if let Some(pid) = &*selected_project {
+                                html!{ <ProjectDetails project_id={pid.clone()} on_back={on_back_to_listing.clone()} /> }
+                            } else {
+                                html!{ <p>{"Select a project from the listing first."}</p> }
+                            }
+                        }
+                    }
+                </section>
             </main>
         }
     } else {

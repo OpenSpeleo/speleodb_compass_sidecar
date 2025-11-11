@@ -19,9 +19,64 @@ pub struct Prefs {
     pub oauth: String,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Project {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub permission: String,
+    pub active_mutex: Option<serde_json::Value>,  // Can be null, string, or object
+    pub country: String,
+    pub created_by: String,
+    pub creation_date: String,
+    pub modified_date: String,
+    pub fork_from: Option<String>,
+    pub visibility: String,
+    pub exclude_geojson: bool,
+}
+
+#[derive(Deserialize, Debug)]
+struct ProjectsResponse {
+    pub data: Vec<Project>,
+    pub success: bool,
+    // Ignore extra fields like timestamp and url
+}
+
 pub struct SpeleoDBController {}
 
 impl SpeleoDBController {
+    pub async fn fetch_projects(&self) -> Result<Vec<Project>, String> {
+        // Call the Tauri backend to fetch projects
+        #[derive(Serialize)]
+        struct FetchProjectsArgs {}
+        
+        let args = FetchProjectsArgs {};
+        let serialized_args = serde_wasm_bindgen::to_value(&args)
+            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
+        
+        let rv = invoke("fetch_projects", serialized_args).await;
+        
+        // First convert to serde_json::Value for debugging
+        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv.clone())
+            .map_err(|e| format!("Failed to convert JsValue to JSON: {:?}", e))?;
+        
+        // Check if it's an error response from our backend
+        if json.get("ok").and_then(|v| v.as_bool()) == Some(false) {
+            let err_msg = json.get("error").and_then(|v| v.as_str()).unwrap_or("Failed to fetch projects");
+            return Err(err_msg.to_string());
+        }
+        
+        // Now try to deserialize to ProjectsResponse using serde_json
+        let response: ProjectsResponse = serde_json::from_value(json)
+            .map_err(|e| format!("Failed to parse API response: {}", e))?;
+        
+        if response.success {
+            Ok(response.data)
+        } else {
+            Err("API returned success: false".to_string())
+        }
+    }
+
     pub async fn authenticate(
         &self,
         email: &str,

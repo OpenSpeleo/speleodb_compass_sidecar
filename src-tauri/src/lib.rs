@@ -52,6 +52,65 @@ fn forget_user_prefs() -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn fetch_projects() -> serde_json::Value {
+    use reqwest::Client;
+    use std::time::Duration;
+
+    // Load user prefs to get instance URL and OAuth token
+    let mut path = speleodb_compass_common::SDB_USER_DIR.clone();
+    path.push("user_prefs.json");
+    
+    let prefs_str = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(_) => return serde_json::json!({"ok": false, "error": "No saved credentials found"}),
+    };
+    
+    let prefs: serde_json::Value = match serde_json::from_str(&prefs_str) {
+        Ok(p) => p,
+        Err(e) => return serde_json::json!({"ok": false, "error": format!("Failed to parse preferences: {}", e)}),
+    };
+    
+    let instance = match prefs.get("instance").and_then(|v| v.as_str()) {
+        Some(s) if !s.is_empty() => s,
+        _ => return serde_json::json!({"ok": false, "error": "No instance URL in preferences"}),
+    };
+    
+    let oauth = match prefs.get("oauth").and_then(|v| v.as_str()) {
+        Some(s) if !s.is_empty() => s,
+        _ => return serde_json::json!({"ok": false, "error": "No OAuth token in preferences"}),
+    };
+    
+    let base = instance.trim_end_matches('/');
+    let url = format!("{}{}", base, "/api/v1/projects/");
+    
+    let client = match Client::builder().timeout(Duration::from_secs(10)).build() {
+        Ok(c) => c,
+        Err(e) => return serde_json::json!({"ok": false, "error": format!("Failed to build HTTP client: {}", e)}),
+    };
+    
+    let resp = match client
+        .get(&url)
+        .header("Authorization", format!("Token {}", oauth))
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)}),
+    };
+    
+    let status = resp.status();
+    
+    if status.is_success() {
+        match resp.json::<serde_json::Value>().await {
+            Ok(json) => json,
+            Err(e) => serde_json::json!({"ok": false, "error": format!("Failed to parse response: {}", e)}),
+        }
+    } else {
+        serde_json::json!({"ok": false, "error": format!("Request failed with status {}", status.as_u16()), "status": status.as_u16()})
+    }
+}
+
+#[tauri::command]
 async fn native_auth_request(
     email: String,
     password: String,
@@ -219,7 +278,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, save_user_prefs, load_user_prefs, forget_user_prefs, native_auth_request])
+        .invoke_handler(tauri::generate_handler![greet, save_user_prefs, load_user_prefs, forget_user_prefs, native_auth_request, fetch_projects])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
