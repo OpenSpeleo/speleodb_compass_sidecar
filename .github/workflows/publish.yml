@@ -2,9 +2,6 @@ name: 'publish'
 
 on:
   push:
-    branches:
-      - main
-      - master
     tags:
       - '*'
 
@@ -15,7 +12,12 @@ concurrency:
 # This workflow will trigger on each push to the `release` branch to create or update a GitHub release, build your app, and upload the artifacts to the release.
 
 jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
   publish-tauri:
+    needs: test
     permissions:
       contents: write
     strategy:

@@ -207,18 +207,219 @@ pub fn validate_email_password(email: &str, password: &str) -> bool {
 mod tests {
     use super::*;
 
+    // OAuth validation tests
     #[test]
     fn oauth_valid_examples() {
-        assert!(validate_oauth(&"0123456789abcdef0123456789abcdef01234567"));
+        assert!(validate_oauth("0123456789abcdef0123456789abcdef01234567"));
         assert!(!validate_oauth(&"g".repeat(40)));
         assert!(!validate_oauth("short"));
     }
 
+    #[test]
+    fn oauth_uppercase_hex_valid() {
+        assert!(validate_oauth("0123456789ABCDEF0123456789ABCDEF01234567"));
+    }
+
+    #[test]
+    fn oauth_mixed_case_valid() {
+        assert!(validate_oauth("0123456789aBcDeF0123456789AbCdEf01234567"));
+    }
+
+    #[test]
+    fn oauth_invalid_length_too_short() {
+        assert!(!validate_oauth("0123456789abcdef"));
+    }
+
+    #[test]
+    fn oauth_invalid_length_too_long() {
+        assert!(!validate_oauth("0123456789abcdef0123456789abcdef012345678"));
+    }
+
+    #[test]
+    fn oauth_empty_string() {
+        assert!(!validate_oauth(""));
+    }
+
+    #[test]
+    fn oauth_non_hex_chars() {
+        assert!(!validate_oauth("0123456789abcdef0123456789abcdef0123456g"));
+        assert!(!validate_oauth("0123456789abcdef0123456789abcdef0123456 "));
+        assert!(!validate_oauth("0123456789abcdef0123456789abcdef0123456-"));
+    }
+
+    #[test]
+    fn oauth_all_zeros() {
+        assert!(validate_oauth("0000000000000000000000000000000000000000"));
+    }
+
+    #[test]
+    fn oauth_all_fs() {
+        assert!(validate_oauth("ffffffffffffffffffffffffffffffffffffffff"));
+    }
+
+    // Email/password validation tests
     #[test]
     fn email_password_validation() {
         assert!(validate_email_password("user@example.com", "secret"));
         assert!(!validate_email_password("userexample.com", "secret"));
         assert!(!validate_email_password("user@localhost", "secret"));
         assert!(!validate_email_password("user@example.com", ""));
+    }
+
+    #[test]
+    fn email_password_both_empty() {
+        assert!(!validate_email_password("", ""));
+    }
+
+    #[test]
+    fn email_password_empty_email() {
+        assert!(!validate_email_password("", "password"));
+    }
+
+    #[test]
+    fn email_password_empty_password() {
+        assert!(!validate_email_password("user@example.com", ""));
+    }
+
+    #[test]
+    fn email_missing_at_symbol() {
+        assert!(!validate_email_password("userexample.com", "password"));
+    }
+
+    #[test]
+    fn email_multiple_at_symbols() {
+        assert!(!validate_email_password("user@@example.com", "password"));
+        assert!(!validate_email_password("us@er@example.com", "password"));
+    }
+
+    #[test]
+    fn email_missing_dot_in_domain() {
+        assert!(!validate_email_password("user@localhost", "password"));
+        assert!(!validate_email_password("user@domain", "password"));
+    }
+
+    #[test]
+    fn email_valid_formats() {
+        assert!(validate_email_password("user@example.com", "pass"));
+        assert!(validate_email_password("user.name@example.com", "pass"));
+        assert!(validate_email_password("user+tag@example.co.uk", "pass"));
+        assert!(validate_email_password("user_name@sub.example.com", "pass"));
+    }
+
+    #[test]
+    fn email_ending_with_at() {
+        assert!(!validate_email_password("user@", "password"));
+    }
+
+    #[test]
+    fn email_starting_with_at() {
+        assert!(!validate_email_password("@example.com", "password"));
+    }
+
+    #[test]
+    fn password_single_char() {
+        assert!(validate_email_password("user@example.com", "x"));
+    }
+
+    #[test]
+    fn password_long() {
+        let long_pass = "a".repeat(1000);
+        assert!(validate_email_password("user@example.com", &long_pass));
+    }
+
+    #[test]
+    fn password_special_chars() {
+        assert!(validate_email_password("user@example.com", "p@$$w0rd!"));
+        assert!(validate_email_password("user@example.com", "🔒secure"));
+    }
+
+    // Prefs struct tests
+    #[test]
+    fn prefs_serialization() {
+        let prefs = Prefs {
+            instance: "https://test.com".to_string(),
+            oauth: "0123456789abcdef0123456789abcdef01234567".to_string(),
+        };
+        
+        let json = serde_json::to_string(&prefs).unwrap();
+        assert!(json.contains("https://test.com"));
+        assert!(json.contains("0123456789abcdef0123456789abcdef01234567"));
+    }
+
+    #[test]
+    fn prefs_deserialization() {
+        let json = r#"{"instance":"https://test.com","oauth":"token123"}"#;
+        let prefs: Prefs = serde_json::from_str(json).unwrap();
+        
+        assert_eq!(prefs.instance, "https://test.com");
+        assert_eq!(prefs.oauth, "token123");
+    }
+
+    // Project struct tests
+    #[test]
+    fn project_deserialization_with_null_mutex() {
+        let json = r#"{
+            "id": "123",
+            "name": "Test",
+            "description": "Desc",
+            "permission": "ADMIN",
+            "active_mutex": null,
+            "country": "US",
+            "created_by": "user",
+            "creation_date": "2025-01-01",
+            "modified_date": "2025-01-02",
+            "fork_from": null,
+            "visibility": "PUBLIC",
+            "exclude_geojson": false
+        }"#;
+        
+        let project: Project = serde_json::from_str(json).unwrap();
+        assert_eq!(project.name, "Test");
+        assert!(project.active_mutex.is_none());
+    }
+
+    #[test]
+    fn project_deserialization_with_string_mutex() {
+        let json = r#"{
+            "id": "123",
+            "name": "Test",
+            "description": "Desc",
+            "permission": "READ_AND_WRITE",
+            "active_mutex": "user@example.com",
+            "country": "US",
+            "created_by": "user",
+            "creation_date": "2025-01-01",
+            "modified_date": "2025-01-02",
+            "fork_from": null,
+            "visibility": "PRIVATE",
+            "exclude_geojson": true
+        }"#;
+        
+        let project: Project = serde_json::from_str(json).unwrap();
+        assert_eq!(project.name, "Test");
+        assert!(project.active_mutex.is_some());
+        assert_eq!(project.active_mutex.as_ref().unwrap().as_str(), Some("user@example.com"));
+    }
+
+    #[test]
+    fn project_clone_works() {
+        let project = Project {
+            id: "1".to_string(),
+            name: "Test".to_string(),
+            description: "Desc".to_string(),
+            permission: "ADMIN".to_string(),
+            active_mutex: None,
+            country: "US".to_string(),
+            created_by: "user".to_string(),
+            creation_date: "2025-01-01".to_string(),
+            modified_date: "2025-01-02".to_string(),
+            fork_from: None,
+            visibility: "PUBLIC".to_string(),
+            exclude_geojson: false,
+        };
+        
+        let cloned = project.clone();
+        assert_eq!(project.id, cloned.id);
+        assert_eq!(project.name, cloned.name);
     }
 }

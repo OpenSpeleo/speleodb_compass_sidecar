@@ -28,5 +28,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 speleodb_compass_common = { path = "../common" }
 
 [dev-dependencies]
-wiremock = "0.6"
+serial_test = "3"
+dotenvy = "0.15"
+ctor = "0.2"
 

@@ -1,0 +1,99 @@
+name: 'CI Tests'
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'windows-latest'
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      # Cache Rust dependencies and build artifacts
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          shared-key: ${{ matrix.platform }}-test
+
+      # Cache cargo binaries (trunk and wasm-pack)
+      - name: Cache cargo binaries
+        uses: actions/cache@v4
+        id: cargo-bins-cache
+        with:
+          path: |
+            ~/.cargo/bin/trunk*
+            ~/.cargo/bin/wasm-pack*
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: ${{ runner.os }}-cargo-bins-test-${{ hashFiles('**/Cargo.lock') }}-trunk-wasm-pack
+
+      # Cache Trunk frontend build artifacts
+      - name: Cache Trunk build
+        uses: actions/cache@v4
+        with:
+          path: |
+            dist
+            target/wasm32-unknown-unknown
+          key: ${{ runner.os }}-trunk-test-${{ hashFiles('src/**', 'Cargo.lock', 'index.html', 'styles.css') }}
+          restore-keys: |
+            ${{ runner.os }}-trunk-test-
+
+      - name: Install dependencies
+        if: steps.cargo-bins-cache.outputs.cache-hit != 'true'
+        run: |
+          cargo install trunk --locked
+          cargo install wasm-pack --locked
+        shell: bash
+
+      - name: Install wasm target
+        run: |
+          rustup target add wasm32-unknown-unknown
+        shell: bash
+
+      - name: Setup test environment
+        run: |
+          echo "TEST_SPELEODB_INSTANCE=${{ secrets.TEST_SPELEODB_INSTANCE || 'https://www.speleoDB.org' }}" >> $GITHUB_ENV
+          echo "TEST_SPELEODB_OAUTH=${{ secrets.TEST_SPELEODB_OAUTH || '0123456789abcdef0123456789abcdef01234567' }}" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Install make (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: choco install make
+        shell: powershell
+
+      - name: Run tests
+        run: make test
+        shell: bash
+

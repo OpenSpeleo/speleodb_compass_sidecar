@@ -19,5 +19,8 @@ once_cell = "1"
 
 speleodb_compass_common = { path = "common" }
 
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
 [workspace]
 members = ["src-tauri", "common"]
