@@ -1,5 +1,8 @@
 use once_cell::sync::Lazy;
-use std::path::PathBuf;
+use std::{
+    path::{ Path, PathBuf},
+    process::Command,
+};
 
 /// Name of the hidden application directory inside the user's home directory.
 pub const SPELEODB_COMPASS_DIR_NAME: &str = ".speleodb_compass";
@@ -7,14 +10,12 @@ pub const SPELEODB_COMPASS_DIR_NAME: &str = ".speleodb_compass";
 /// Lazily-initialized full path to the application directory (home + SPELEODB_COMPASS_DIR_NAME).
 ///
 /// This is a runtime-initialized static because the user's home directory is not known at compile time.
-pub static SDB_USER_DIR: Lazy<PathBuf> = Lazy::new(|| {
-    match dirs::home_dir() {
-        Some(mut p) => {
-            p.push(SPELEODB_COMPASS_DIR_NAME);
-            p
-        }
-        None => PathBuf::from(SPELEODB_COMPASS_DIR_NAME),
+pub static SDB_USER_DIR: Lazy<PathBuf> = Lazy::new(|| match dirs::home_dir() {
+    Some(mut p) => {
+        p.push(SPELEODB_COMPASS_DIR_NAME);
+        p
     }
+    None => PathBuf::from(SPELEODB_COMPASS_DIR_NAME),
 });
 
 /// Return a clone of the computed application directory path.
@@ -57,8 +58,22 @@ pub fn init_file_logger(level: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+pub fn open_with_compass(project_path: &Path) -> Result<(), String> {
+    if !std::fs::exists(project_path).unwrap() {
+        Err("Provided path does not exist!: {project_path}".to_string())
+    } else {
+        Command::new("explorer")
+            .args([project_path])
+            .spawn()
+            .expect("Expected to launch compass software");
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
 
     #[test]
@@ -137,5 +152,11 @@ mod tests {
     fn constant_value_is_correct() {
         // Verify the constant has the expected value
         assert_eq!(SPELEODB_COMPASS_DIR_NAME, ".speleodb_compass");
+    }
+    #[test]
+    fn launch_compass_project() {
+        let project_path =PathBuf::from_str( "./assets/test_data/Fulfords.mak").unwrap().canonicalize().unwrap();
+
+        open_with_compass(&project_path).unwrap();
     }
 }
