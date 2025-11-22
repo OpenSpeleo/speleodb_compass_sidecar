@@ -1,5 +1,5 @@
 mod compass_project;
-pub use compass_project::CompassProject;
+pub use compass_project::{CompassProject, Project, SpeleoDb};
 
 use once_cell::sync::Lazy;
 use std::{
@@ -112,10 +112,13 @@ mod tests {
         // In production code, this is acceptable as it's in the user's home
         let result = ensure_app_dir_exists();
         assert!(result.is_ok(), "ensure_app_dir_exists should succeed");
-        
+
         // Verify the directory was created
         let path = app_dir_path();
-        assert!(path.exists(), "Directory should exist after ensure_app_dir_exists");
+        assert!(
+            path.exists(),
+            "Directory should exist after ensure_app_dir_exists"
+        );
         assert!(path.is_dir(), "Path should be a directory");
     }
 
@@ -131,12 +134,12 @@ mod tests {
     fn init_file_logger_with_valid_level() {
         // Test logger initialization with valid log levels
         // Note: This will actually create a log file, which is acceptable for tests
-        
+
         // Clean up any existing logger first
         let result = init_file_logger("info");
         // The first call should succeed or already be initialized
         assert!(result.is_ok() || result.is_err()); // Logger can only be init once per process
-        
+
         // Verify the log directory exists after initialization
         let log_dir = app_dir_path();
         assert!(log_dir.exists());
@@ -146,10 +149,10 @@ mod tests {
     fn init_file_logger_creates_directory() {
         // The logger should create the directory if it doesn't exist
         let log_dir = app_dir_path();
-        
+
         // Try to initialize logger (may fail if already initialized)
         let _ = init_file_logger("debug");
-        
+
         // Directory should exist regardless
         assert!(log_dir.exists());
         assert!(log_dir.is_dir());
