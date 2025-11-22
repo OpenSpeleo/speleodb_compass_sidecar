@@ -1,3 +1,6 @@
+mod compass_project;
+pub use compass_project::CompassProject;
+
 use once_cell::sync::Lazy;
 use std::{
     path::{Path, PathBuf},
