@@ -1,6 +1,6 @@
 use once_cell::sync::Lazy;
 use std::{
-    path::{ Path, PathBuf},
+    path::{Path, PathBuf},
     process::Command,
 };
 
@@ -58,12 +58,16 @@ pub fn init_file_logger(level: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-pub fn open_with_compass(project_path: &Path) -> Result<(), String> {
-    if !std::fs::exists(project_path).unwrap() {
-        Err("Provided path does not exist!: {project_path}".to_string())
+pub fn open_with_compass<P: AsRef<Path>>(project_path: P) -> Result<(), String> {
+    open_with_compass_path(project_path.as_ref())
+}
+
+fn open_with_compass_path(path: &Path) -> Result<(), String> {
+    if !std::fs::exists(path).unwrap() {
+        Err("Provided path does not exist!".to_string())
     } else {
         Command::new("explorer")
-            .args([project_path])
+            .args([path])
             .spawn()
             .expect("Expected to launch compass software");
         Ok(())
@@ -155,8 +159,7 @@ mod tests {
     }
     #[test]
     fn launch_compass_project() {
-        let project_path =PathBuf::from_str( "./assets/test_data/Fulfords.mak").unwrap().canonicalize().unwrap();
-
-        open_with_compass(&project_path).unwrap();
+        let project_path = "assets/test_data/Fulfords.mak";
+        open_with_compass(project_path).unwrap();
     }
 }
