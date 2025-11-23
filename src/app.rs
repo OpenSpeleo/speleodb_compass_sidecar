@@ -75,7 +75,7 @@ pub fn app() -> Html {
     let error_msg = use_state(|| String::new());
     let error_is_403 = use_state(|| false);
     let active_tab = use_state(|| ActiveTab::Listing);
-    let selected_project: UseStateHandle<Option<String>> = use_state(|| None);
+    let selected_project: UseStateHandle<Option<(String, String)>> = use_state(|| None); // (id, name)
 
     // Validation helpers
     let validate_instance = |val: &str| -> bool {
@@ -319,8 +319,8 @@ pub fn app() -> Html {
     let on_project_selected = {
         let selected_project = selected_project.clone();
         let active_tab = active_tab.clone();
-        Callback::from(move |project_id: String| {
-            selected_project.set(Some(project_id));
+        Callback::from(move |(project_id, project_name): (String, String)| {
+            selected_project.set(Some((project_id, project_name)));
             active_tab.set(ActiveTab::Details);
         })
     };
@@ -371,8 +371,8 @@ pub fn app() -> Html {
                         if *active_tab == ActiveTab::Listing {
                             html!{ <ProjectListing on_select={on_project_selected.clone()} /> }
                         } else {
-                            if let Some(pid) = &*selected_project {
-                                html!{ <ProjectDetails project_id={pid.clone()} on_back={on_back_to_listing.clone()} /> }
+                            if let Some((pid, pname)) = &*selected_project {
+                                html!{ <ProjectDetails project_id={pid.clone()} project_name={pname.clone()} on_back={on_back_to_listing.clone()} /> }
                             } else {
                                 html!{ <p>{"Select a project from the listing first."}</p> }
                             }

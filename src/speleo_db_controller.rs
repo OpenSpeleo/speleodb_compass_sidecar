@@ -198,7 +198,145 @@ impl SpeleoDBController {
             ))
         }
     }
+
+    pub async fn acquire_project_mutex(&self, project_id: &str) -> Result<bool, String> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args<'a> {
+            project_id: &'a str,
+        }
+
+        let args = Args { project_id };
+        let serialized_args = serde_wasm_bindgen::to_value(&args)
+            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
+
+        let rv = invoke("acquire_project_mutex", serialized_args).await;
+
+        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
+            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
+
+        // Check if operation was successful
+        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+            let msg = json
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Failed to acquire mutex");
+            return Err(msg.to_string());
+        }
+
+        // Return whether the mutex was locked
+        let locked = json
+            .get("locked")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        Ok(locked)
+    }
+
+    pub async fn download_project(&self, project_id: &str) -> Result<String, String> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args<'a> {
+            project_id: &'a str,
+        }
+
+        let args = Args { project_id };
+        let serialized_args = serde_wasm_bindgen::to_value(&args)
+            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
+
+        let rv = invoke("download_project_zip", serialized_args).await;
+
+        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
+            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
+
+        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+            let err_msg = json
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Failed to download project");
+            
+            // Include URL if available for debugging
+            let debug_info = if let Some(url) = json.get("url").and_then(|v| v.as_str()) {
+                format!("{} (URL: {})", err_msg, url)
+            } else {
+                err_msg.to_string()
+            };
+            
+            return Err(debug_info);
+        }
+
+        let path = json
+            .get("path")
+            .and_then(|v| v.as_str())
+            .ok_or("No path in response")?;
+
+        Ok(path.to_string())
+    }
+
+    pub async fn unzip_project(&self, zip_path: &str, project_id: &str) -> Result<String, String> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args<'a> {
+            zip_path: &'a str,
+            project_id: &'a str,
+        }
+
+        let args = Args {
+            zip_path,
+            project_id,
+        };
+        let serialized_args = serde_wasm_bindgen::to_value(&args)
+            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
+
+        let rv = invoke("unzip_project", serialized_args).await;
+
+        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
+            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
+
+        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+            let err_msg = json
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Failed to unzip project");
+            return Err(err_msg.to_string());
+        }
+
+        let path = json
+            .get("path")
+            .and_then(|v| v.as_str())
+            .ok_or("No path in response")?;
+
+        Ok(path.to_string())
+    }
+
+    pub async fn open_folder(&self, project_id: &str) -> Result<(), String> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args<'a> {
+            project_id: &'a str,
+        }
+
+        let args = Args { project_id };
+        let serialized_args = serde_wasm_bindgen::to_value(&args)
+            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
+
+        let rv = invoke("open_project_folder", serialized_args).await;
+
+        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
+            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
+
+        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+            let err_msg = json
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Failed to open folder");
+            return Err(err_msg.to_string());
+        }
+
+        Ok(())
+    }
 }
+
 
 /// Try to parse an auth token from a JSON response body. Checks several common field names.
 // parse_auth_token removed; token parsing handled in native backend

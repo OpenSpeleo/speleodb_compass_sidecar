@@ -39,9 +39,6 @@ test-ui:
 # BUILD COMMANDS
 # ============================================================================ #
 
-build: clean
-	flit build --format wheel
-
 # Build Tauri app
 build-tauri:
 	cargo tauri build
