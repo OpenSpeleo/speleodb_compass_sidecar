@@ -8,6 +8,7 @@ edition = "2024"
 console_error_panic_hook = "0.1.7"
 getrandom = {version = "0.3.4", features = ["wasm_js"] }
 gloo-timers = { version = "0.3.0", features = ["futures"] }
+futures = "0.3"
 js-sys = "0.3"
 once_cell = "1"
 serde = { version = "1", features = ["derive"] }

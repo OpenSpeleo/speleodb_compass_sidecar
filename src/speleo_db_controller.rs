@@ -486,6 +486,17 @@ impl SpeleoDBController {
         .await;
         Ok(())
     }
+
+    /// Determine if auto-login should be attempted based on stored credentials.
+    pub fn should_auto_login(&self, email: &str, password: &str, oauth: &str) -> bool {
+        let oauth_ok = !oauth.is_empty() && validate_oauth(oauth);
+        let pass_ok = oauth.is_empty()
+            && !email.is_empty()
+            && !password.is_empty()
+            && validate_email_password(email, password);
+
+        oauth_ok || pass_ok
+    }
 }
 
 /// Try to parse an auth token from a JSON response body. Checks several common field names.
@@ -504,7 +515,7 @@ pub fn validate_email_password(email: &str, password: &str) -> bool {
         return false;
     }
     let parts: Vec<&str> = email.split('@').collect();
-    parts.len() == 2 && parts[1].contains('.')
+    parts.len() == 2 && !parts[0].is_empty() && parts[1].contains('.')
 }
 
 #[cfg(test)]
@@ -674,7 +685,10 @@ mod tests {
             "modified_date": "2025-01-02",
             "fork_from": null,
             "visibility": "PUBLIC",
-            "exclude_geojson": false
+            "exclude_geojson": false,
+            "is_active": true,
+            "latitude": null,
+            "longitude": null
         }"#;
 
         let project: Project = serde_json::from_str(json).unwrap();
@@ -689,22 +703,29 @@ mod tests {
             "name": "Test",
             "description": "Desc",
             "permission": "READ_AND_WRITE",
-            "active_mutex": "user@example.com",
+            "active_mutex": {
+                "user": "user@example.com",
+                "creation_date": "2025-01-01",
+                "modified_date": "2025-01-01"
+            },
             "country": "US",
             "created_by": "user",
             "creation_date": "2025-01-01",
             "modified_date": "2025-01-02",
             "fork_from": null,
             "visibility": "PRIVATE",
-            "exclude_geojson": true
+            "exclude_geojson": true,
+            "is_active": true,
+            "latitude": null,
+            "longitude": null
         }"#;
 
         let project: Project = serde_json::from_str(json).unwrap();
         assert_eq!(project.name, "Test");
         assert!(project.active_mutex.is_some());
         assert_eq!(
-            project.active_mutex.as_ref().unwrap().as_str(),
-            Some("user@example.com")
+            project.active_mutex.as_ref().unwrap().user,
+            "user@example.com"
         );
     }
 
@@ -723,10 +744,46 @@ mod tests {
             fork_from: None,
             visibility: "PUBLIC".to_string(),
             exclude_geojson: false,
+            is_active: true,
+            latitude: None,
+            longitude: None,
         };
 
         let cloned = project.clone();
         assert_eq!(project.id, cloned.id);
         assert_eq!(project.name, cloned.name);
+    }
+    #[test]
+    fn should_auto_login_oauth() {
+        let controller = SpeleoDBController {};
+        let valid_oauth = "0123456789abcdef0123456789abcdef01234567";
+        assert!(controller.should_auto_login("", "", valid_oauth));
+    }
+
+    #[test]
+    fn should_auto_login_email_password() {
+        let controller = SpeleoDBController {};
+        assert!(controller.should_auto_login("user@example.com", "password", ""));
+    }
+
+    #[test]
+    fn should_auto_login_fail_empty() {
+        let controller = SpeleoDBController {};
+        assert!(!controller.should_auto_login("", "", ""));
+    }
+
+    #[test]
+    fn should_auto_login_fail_partial_email() {
+        let controller = SpeleoDBController {};
+        assert!(!controller.should_auto_login("user@example.com", "", ""));
+        assert!(!controller.should_auto_login("", "password", ""));
+    }
+
+    #[test]
+    fn should_auto_login_conflict_uses_oauth() {
+        let controller = SpeleoDBController {};
+        let valid_oauth = "0123456789abcdef0123456789abcdef01234567";
+        // Should succeed and use OAuth if both are provided (OAuth takes precedence)
+        assert!(controller.should_auto_login("user@example.com", "password", valid_oauth));
     }
 }

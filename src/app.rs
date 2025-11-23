@@ -1,3 +1,5 @@
+use futures::future::{Either, select};
+use gloo_timers::future::TimeoutFuture;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::*;
@@ -41,12 +43,25 @@ pub fn app() -> Html {
         oauth: String,
     }
 
+    // UI state
+    let loading = use_state(|| false);
+    let logged_in = use_state(|| false);
+    let show_error = use_state(|| false);
+    let error_msg = use_state(|| String::new());
+    let error_is_403 = use_state(|| false);
+    let active_tab = use_state(|| ActiveTab::Listing);
+    let selected_project: UseStateHandle<Option<Project>> = use_state(|| None);
+    // Silent mode for validation errors (true on startup/auto-login, false on interaction)
+    let validation_silent = use_state(|| true);
+
     // Load saved prefs on startup (if any)
     {
         let instance = instance.clone();
         let email = email.clone();
         let password = password.clone();
         let oauth = oauth.clone();
+        let logged_in = logged_in.clone();
+
         use_effect_with((), move |_| {
             spawn_local(async move {
                 let rv = invoke("load_user_prefs", JsValue::NULL).await;
@@ -54,11 +69,46 @@ pub fn app() -> Html {
                     match serde_json::from_str::<Prefs>(&s) {
                         Ok(p) => {
                             if !p.instance.is_empty() {
-                                instance.set(p.instance);
+                                instance.set(p.instance.clone());
                             }
-                            email.set(p.email);
-                            password.set(p.password);
-                            oauth.set(p.oauth);
+                            email.set(p.email.clone());
+                            password.set(p.password.clone());
+                            oauth.set(p.oauth.clone());
+
+                            // Auto-login logic
+                            if SPELEO_DB_CONTROLLER.should_auto_login(
+                                &p.email,
+                                &p.password,
+                                &p.oauth,
+                            ) {
+                                web_sys::console::log_1(&"Attempting silent auto-login...".into());
+
+                                let auth_future = SPELEO_DB_CONTROLLER.authenticate(
+                                    &p.email,
+                                    &p.password,
+                                    &p.oauth,
+                                    &p.instance,
+                                );
+                                let timeout_future = TimeoutFuture::new(3_000);
+
+                                match select(Box::pin(auth_future), Box::pin(timeout_future)).await
+                                {
+                                    Either::Left((Ok(()), _)) => {
+                                        web_sys::console::log_1(&"Auto-login success".into());
+                                        logged_in.set(true);
+                                    }
+                                    Either::Left((Err(e), _)) => {
+                                        web_sys::console::log_1(
+                                            &format!("Auto-login failed: {}", e).into(),
+                                        );
+                                        // Silent failure - do not show error modal
+                                    }
+                                    Either::Right((_, _)) => {
+                                        web_sys::console::log_1(&"Auto-login timed out".into());
+                                        // Silent failure on timeout
+                                    }
+                                }
+                            }
                         }
                         Err(_) => {}
                     }
@@ -68,15 +118,6 @@ pub fn app() -> Html {
             || ()
         });
     }
-
-    // UI state
-    let loading = use_state(|| false);
-    let logged_in = use_state(|| false);
-    let show_error = use_state(|| false);
-    let error_msg = use_state(|| String::new());
-    let error_is_403 = use_state(|| false);
-    let active_tab = use_state(|| ActiveTab::Listing);
-    let selected_project: UseStateHandle<Option<Project>> = use_state(|| None);
 
     // Validation helpers
     let validate_instance = |val: &str| -> bool {
@@ -97,28 +138,6 @@ pub fn app() -> Html {
             return true;
         } // empty is ok
         val.len() == 40 && val.chars().all(|c| c.is_ascii_hexdigit())
-    };
-
-    let form_valid = {
-        let instance = instance.clone();
-        let oauth = oauth.clone();
-        let email = email.clone();
-        let password = password.clone();
-        move || {
-            // instance must start with http:// or https://
-            if !validate_instance(&instance) {
-                return false;
-            }
-            // exactly one auth method: either oauth or email+password
-            let oauth_ok = !oauth.is_empty()
-                && oauth.len() == 40
-                && oauth.chars().all(|c| c.is_ascii_hexdigit());
-            let pass_ok = oauth.is_empty()
-                && !email.is_empty()
-                && !password.is_empty()
-                && validate_email(&email);
-            oauth_ok ^ pass_ok
-        }
     };
 
     // Handlers
@@ -169,8 +188,10 @@ pub fn app() -> Html {
         let show_error = show_error.clone();
         let error_msg = error_msg.clone();
         let error_is_403 = error_is_403.clone();
+        let validation_silent = validation_silent.clone();
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
+            validation_silent.set(false);
             // quick validation
             if !validate_instance(&*instance) {
                 error_msg.set("SpeleoDB instance must start with http:// or https://".to_string());
@@ -232,36 +253,44 @@ pub fn app() -> Html {
     // UI pieces
     let on_instance_input = {
         let instance = instance.clone();
+        let validation_silent = validation_silent.clone();
         Callback::from(move |e: InputEvent| {
             let input: web_sys::HtmlInputElement = e.target_unchecked_into();
             let mut value = input.value();
             // Auto-trim trailing slash
             value = value.trim_end_matches('/').to_string();
             instance.set(value);
+            validation_silent.set(false);
         })
     };
 
     let on_email_input = {
         let email = email.clone();
+        let validation_silent = validation_silent.clone();
         Callback::from(move |e: InputEvent| {
             let input: web_sys::HtmlInputElement = e.target_unchecked_into();
             email.set(input.value());
+            validation_silent.set(false);
         })
     };
 
     let on_password_input = {
         let password = password.clone();
+        let validation_silent = validation_silent.clone();
         Callback::from(move |e: InputEvent| {
             let input: web_sys::HtmlInputElement = e.target_unchecked_into();
             password.set(input.value());
+            validation_silent.set(false);
         })
     };
 
     let on_oauth_input = {
         let oauth = oauth.clone();
+        let validation_silent = validation_silent.clone();
         Callback::from(move |e: InputEvent| {
             let input: web_sys::HtmlInputElement = e.target_unchecked_into();
             oauth.set(input.value());
+            validation_silent.set(false);
         })
     };
 
@@ -335,8 +364,8 @@ pub fn app() -> Html {
     };
 
     // Derived UI state
-    let is_form_valid = form_valid();
-    let is_connect_disabled = *loading || !is_form_valid;
+    // Enable connect button even if invalid, so user can click and see validation errors
+    let is_connect_disabled = *loading;
 
     // Check if both auth methods are being used (mutually exclusive)
     let has_oauth = !oauth.is_empty();
@@ -345,9 +374,11 @@ pub fn app() -> Html {
     let both_auth_methods_used = has_oauth && (has_email || has_password);
 
     // Field validation state for visual feedback
-    let instance_invalid = !instance.is_empty() && !validate_instance(&instance);
-    let email_invalid = !email.is_empty() && !validate_email(&email);
-    let oauth_invalid = !oauth.is_empty() && !validate_oauth(&oauth);
+    // Only show errors if not in silent mode
+    let show_errors = !*validation_silent;
+    let instance_invalid = show_errors && !instance.is_empty() && !validate_instance(&instance);
+    let email_invalid = show_errors && !email.is_empty() && !validate_email(&email);
+    let oauth_invalid = show_errors && !oauth.is_empty() && !validate_oauth(&oauth);
 
     // Show error on auth fields if both methods are used
     let email_conflict = both_auth_methods_used && has_email;
