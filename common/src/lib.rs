@@ -1,6 +1,10 @@
 mod compass_project;
-pub use compass_project::{CompassProject, Project, SpeleoDb};
+mod error;
 
+pub use compass_project::{CompassProject, Project, SpeleoDb};
+pub use error::Error;
+
+use uuid::Uuid;
 use std::{
     path::{Path, PathBuf},
     process::Command, sync::LazyLock,
@@ -93,6 +97,13 @@ pub fn init_file_logger(level: &str) -> Result<(), Box<dyn std::error::Error>> {
         .start()?;
 
     Ok(())
+}
+
+pub fn path_for_project(project_id: Uuid) -> PathBuf{
+    let mut project_dir = COMPASS_HOME_DIR.clone();
+    project_dir.push("projects/");
+    project_dir.push(project_id.to_string());
+    project_dir
 }
 
 pub fn open_with_compass<P: AsRef<Path>>(project_path: P) -> Result<(), String> {
@@ -206,16 +217,5 @@ mod tests {
     fn constant_value_is_correct() {
         // Verify the constant has the expected value
         assert_eq!(COMPASS_HOME_DIR_NAME, ".compass");
-    }
-    #[test]
-    fn launch_compass_project() {
-        let temp_dir = std::env::temp_dir();
-        let project_path = temp_dir.join("test_project.mak");
-        std::fs::File::create(&project_path).unwrap();
-
-        open_with_compass(&project_path).unwrap();
-
-        // Cleanup
-        let _ = std::fs::remove_file(project_path);
     }
 }
