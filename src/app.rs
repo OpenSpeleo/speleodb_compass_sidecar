@@ -6,6 +6,7 @@ use yew::prelude::*;
 
 use crate::components::project_details::ProjectDetails;
 use crate::components::project_listing::ProjectListing;
+use crate::speleo_db_controller::Project;
 use crate::speleo_db_controller::Prefs as ControllerPrefs;
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use serde_wasm_bindgen;
@@ -75,7 +76,7 @@ pub fn app() -> Html {
     let error_msg = use_state(|| String::new());
     let error_is_403 = use_state(|| false);
     let active_tab = use_state(|| ActiveTab::Listing);
-    let selected_project: UseStateHandle<Option<(String, String)>> = use_state(|| None); // (id, name)
+    let selected_project: UseStateHandle<Option<Project>> = use_state(|| None);
 
     // Validation helpers
     let validate_instance = |val: &str| -> bool {
@@ -319,8 +320,8 @@ pub fn app() -> Html {
     let on_project_selected = {
         let selected_project = selected_project.clone();
         let active_tab = active_tab.clone();
-        Callback::from(move |(project_id, project_name): (String, String)| {
-            selected_project.set(Some((project_id, project_name)));
+        Callback::from(move |project: Project| {
+            selected_project.set(Some(project));
             active_tab.set(ActiveTab::Details);
         })
     };
@@ -371,8 +372,8 @@ pub fn app() -> Html {
                         if *active_tab == ActiveTab::Listing {
                             html!{ <ProjectListing on_select={on_project_selected.clone()} /> }
                         } else {
-                            if let Some((pid, pname)) = &*selected_project {
-                                html!{ <ProjectDetails project_id={pid.clone()} project_name={pname.clone()} on_back={on_back_to_listing.clone()} /> }
+                            if let Some(project) = &*selected_project {
+                                html!{ <ProjectDetails project={project.clone()} on_back={on_back_to_listing.clone()} /> }
                             } else {
                                 html!{ <p>{"Select a project from the listing first."}</p> }
                             }

@@ -1,12 +1,11 @@
 use crate::components::modal::{Modal, ModalType};
-use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
+use crate::speleo_db_controller::{Project, SPELEO_DB_CONTROLLER};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct ProjectDetailsProps {
-    pub project_id: String,
-    pub project_name: String,
+    pub project: Project,
     #[prop_or_default]
     pub on_back: Callback<()>,
 }
@@ -23,7 +22,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
     // Run the download workflow automatically on mount
     {
-        let project_id = props.project_id.clone();
+        let project_id = props.project.id.clone();
         let downloading = downloading.clone();
         let show_readonly_modal = show_readonly_modal.clone();
         let error_message = error_message.clone();
@@ -101,10 +100,13 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let show_success_modal = show_success_modal.clone();
         let download_complete = download_complete.clone();
         let is_readonly = is_readonly.clone();
+        let show_readonly_modal = show_readonly_modal.clone();
+        
         use_effect_with(
-            (download_complete.clone(), is_readonly.clone()),
-            move |_| {
-                if *download_complete && !*is_readonly {
+            download_complete.clone(),
+            move |complete| {
+                // Only show success modal if download is complete, not readonly, and readonly modal isn't showing
+                if **complete && !*is_readonly && !*show_readonly_modal {
                     show_success_modal.set(true);
                 }
                 || ()
@@ -122,7 +124,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
     // Open folder handler
     let on_open_folder = {
-        let project_id = props.project_id.clone();
+        let project_id = props.project.id.clone();
         Callback::from(move |_| {
             let project_id = project_id.clone();
             spawn_local(async move {
@@ -138,8 +140,8 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
             </div>
             
             <h2>{"Project Details"}</h2>
-            <p><strong>{"Project: "}</strong>{&props.project_name}</p>
-            <p style="color: #6b7280; font-size: 14px;">{format!("ID: {}", props.project_id)}</p>
+            <p><strong>{"Project: "}</strong>{&props.project.name}</p>
+            <p style="color: #6b7280; font-size: 14px;">{format!("ID: {}", props.project.id)}</p>
             
             {
                 if *downloading {
@@ -176,21 +178,6 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                         ">
                             <strong style="color: #dc2626;">{"Error: "}</strong>
                             <span style="color: #991b1b;">{err}</span>
-                        </div>
-                    }
-                } else if project_folder_path.is_some() {
-                    html! {
-                        <div style="
-                            padding: 16px;
-                            background-color: #d1fae5;
-                            border: 1px solid #10b981;
-                            border-radius: 8px;
-                            margin: 20px 0;
-                        ">
-                            <strong style="color: #047857;">{"✓ Project downloaded successfully!"}</strong>
-                            <p style="color: #065f46; margin-top: 8px;">
-                                {"The project has been extracted to your .compass_folder directory."}
-                            </p>
                         </div>
                     }
                 } else {
@@ -231,7 +218,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                                 - the project is currently locked by another user\n\
                                 - you do not have edit permissions to the project\n\n\
                                 Contact a Project Administrator if you believe this is a mistake.",
-                                props.project_name
+                                props.project.name
                             )}
                             modal_type={ModalType::Warning}
                             show_close_button={true}

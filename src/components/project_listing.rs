@@ -5,7 +5,7 @@ use yew::prelude::*;
 #[derive(Properties, PartialEq, Clone)]
 pub struct ProjectListingProps {
     #[prop_or_default]
-    pub on_select: Callback<(String, String)>, // (id, name)
+    pub on_select: Callback<Project>,
 }
 
 #[function_component(ProjectListing)]
@@ -102,11 +102,10 @@ pub fn project_listing(props: &ProjectListingProps) -> Html {
                 </div>
                 <div class="projects-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
                     { for projects.iter().map(|project| {
-                        let project_id = project.id.clone();
-                        let project_name = project.name.clone();
+                        let project_clone = project.clone();
                         let on_select = props.on_select.clone();
                         let on_card_click = Callback::from(move |_| {
-                            on_select.emit((project_id.clone(), project_name.clone()));
+                            on_select.emit(project_clone.clone());
                         });
 
                         let is_locked = project.active_mutex.is_some();
