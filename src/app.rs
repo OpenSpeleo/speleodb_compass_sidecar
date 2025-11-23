@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
-use wasm_bindgen::JsValue;
 use yew::prelude::*;
 
 use crate::components::project_details::ProjectDetails;
 use crate::components::project_listing::ProjectListing;
-use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use crate::speleo_db_controller::Prefs as ControllerPrefs;
+use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use serde_wasm_bindgen;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -84,13 +84,17 @@ pub fn app() -> Html {
     };
 
     let validate_email = |val: &str| -> bool {
-        if val.is_empty() { return true; } // empty is ok
+        if val.is_empty() {
+            return true;
+        } // empty is ok
         let parts: Vec<&str> = val.split('@').collect();
         parts.len() == 2 && !parts[0].is_empty() && parts[1].contains('.') && parts[1].len() > 2
     };
 
     let validate_oauth = |val: &str| -> bool {
-        if val.is_empty() { return true; } // empty is ok
+        if val.is_empty() {
+            return true;
+        } // empty is ok
         val.len() == 40 && val.chars().all(|c| c.is_ascii_hexdigit())
     };
 
@@ -101,10 +105,17 @@ pub fn app() -> Html {
         let password = password.clone();
         move || {
             // instance must start with http:// or https://
-            if !validate_instance(&instance) { return false; }
+            if !validate_instance(&instance) {
+                return false;
+            }
             // exactly one auth method: either oauth or email+password
-            let oauth_ok = !oauth.is_empty() && oauth.len() == 40 && oauth.chars().all(|c| c.is_ascii_hexdigit());
-            let pass_ok = oauth.is_empty() && !email.is_empty() && !password.is_empty() && validate_email(&email);
+            let oauth_ok = !oauth.is_empty()
+                && oauth.len() == 40
+                && oauth.chars().all(|c| c.is_ascii_hexdigit());
+            let pass_ok = oauth.is_empty()
+                && !email.is_empty()
+                && !password.is_empty()
+                && validate_email(&email);
             oauth_ok ^ pass_ok
         }
     };
@@ -167,7 +178,9 @@ pub fn app() -> Html {
                 return;
             }
 
-            let oauth_ok = !oauth.is_empty() && oauth.len() == 40 && oauth.chars().all(|c| c.is_ascii_hexdigit());
+            let oauth_ok = !oauth.is_empty()
+                && oauth.len() == 40
+                && oauth.chars().all(|c| c.is_ascii_hexdigit());
             let pass_ok = oauth.is_empty() && !email.is_empty() && !password.is_empty() && {
                 let parts: Vec<&str> = email.split('@').collect();
                 parts.len() == 2 && parts[1].contains('.')
@@ -279,10 +292,16 @@ pub fn app() -> Html {
             let selected_project = selected_project.clone();
             spawn_local(async move {
                 // Persist prefs with empty token but keep the instance
-                let prefs = ControllerPrefs { instance: instance_val.clone(), oauth: String::new() };
+                let prefs = ControllerPrefs {
+                    instance: instance_val.clone(),
+                    oauth: String::new(),
+                };
                 #[derive(Serialize)]
-                struct SaveArgs<'a> { prefs: &'a ControllerPrefs }
-                let args = serde_wasm_bindgen::to_value(&SaveArgs { prefs: &prefs }).unwrap_or(JsValue::NULL);
+                struct SaveArgs<'a> {
+                    prefs: &'a ControllerPrefs,
+                }
+                let args = serde_wasm_bindgen::to_value(&SaveArgs { prefs: &prefs })
+                    .unwrap_or(JsValue::NULL);
                 let _ = invoke("save_user_prefs", args).await;
                 // Clear form fields
                 email.set(String::new());
@@ -317,23 +336,23 @@ pub fn app() -> Html {
     // Derived UI state
     let is_form_valid = form_valid();
     let is_connect_disabled = *loading || !is_form_valid;
-    
+
     // Check if both auth methods are being used (mutually exclusive)
     let has_oauth = !oauth.is_empty();
     let has_email = !email.is_empty();
     let has_password = !password.is_empty();
     let both_auth_methods_used = has_oauth && (has_email || has_password);
-    
+
     // Field validation state for visual feedback
     let instance_invalid = !instance.is_empty() && !validate_instance(&instance);
     let email_invalid = !email.is_empty() && !validate_email(&email);
     let oauth_invalid = !oauth.is_empty() && !validate_oauth(&oauth);
-    
+
     // Show error on auth fields if both methods are used
     let email_conflict = both_auth_methods_used && has_email;
     let password_conflict = both_auth_methods_used && has_password;
     let oauth_conflict = both_auth_methods_used && has_oauth;
-    
+
     // Show error if email/password incomplete
     let email_missing_password = has_email && !has_password && !has_oauth;
     let password_missing_email = has_password && !has_email && !has_oauth;
@@ -374,12 +393,12 @@ pub fn app() -> Html {
                 <form onsubmit={on_connect} class="auth-form">
                     <div class="auth-group">
                         <label for="instance">{"SpeleoDB instance"}</label>
-                        <input 
-                            id="instance" 
-                            type="text" 
+                        <input
+                            id="instance"
+                            type="text"
                             class={if instance_invalid { "full invalid" } else { "full" }}
-                            value={(*instance).clone()} 
-                            oninput={on_instance_input} 
+                            value={(*instance).clone()}
+                            oninput={on_instance_input}
                             placeholder="https://www.speleodb.org"
                         />
                         { if instance_invalid {
@@ -393,11 +412,11 @@ pub fn app() -> Html {
 
                     <div class="auth-group">
                         <label for="email">{"Email"}</label>
-                        <input 
-                            id="email" 
-                            type="email" 
+                        <input
+                            id="email"
+                            type="email"
                             class={if email_invalid || email_conflict || email_missing_password { "full invalid" } else { "full" }}
-                            value={(*email).clone()} 
+                            value={(*email).clone()}
                             oninput={on_email_input}
                             placeholder="your@email.com"
                         />
@@ -412,11 +431,11 @@ pub fn app() -> Html {
 
                     <div class="auth-group">
                         <label for="password">{"Password"}</label>
-                        <input 
-                            id="password" 
-                            type="password" 
+                        <input
+                            id="password"
+                            type="password"
                             class={if password_conflict || password_missing_email { "full invalid" } else { "full" }}
-                            value={(*password).clone()} 
+                            value={(*password).clone()}
                             oninput={on_password_input}
                         />
                         { if password_conflict {
@@ -430,11 +449,11 @@ pub fn app() -> Html {
 
                     <div class="auth-group">
                         <label for="oauth">{"OAUTH Token"}</label>
-                        <input 
-                            id="oauth" 
-                            type="text" 
+                        <input
+                            id="oauth"
+                            type="text"
                             class={if oauth_invalid || oauth_conflict { "full invalid" } else { "full" }}
-                            value={(*oauth).clone()} 
+                            value={(*oauth).clone()}
                             oninput={on_oauth_input}
                             placeholder="40-character hexadecimal token"
                         />

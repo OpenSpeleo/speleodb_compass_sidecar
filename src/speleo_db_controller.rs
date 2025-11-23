@@ -2,8 +2,8 @@
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen;
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsValue;
+use wasm_bindgen::prelude::*;
 use web_sys::Url;
 // serde_json::Value not required in this module; network logic moved to native backend
 
@@ -25,7 +25,7 @@ pub struct Project {
     pub name: String,
     pub description: String,
     pub permission: String,
-    pub active_mutex: Option<serde_json::Value>,  // Can be null, string, or object
+    pub active_mutex: Option<serde_json::Value>, // Can be null, string, or object
     pub country: String,
     pub created_by: String,
     pub creation_date: String,
@@ -49,27 +49,30 @@ impl SpeleoDBController {
         // Call the Tauri backend to fetch projects
         #[derive(Serialize)]
         struct FetchProjectsArgs {}
-        
+
         let args = FetchProjectsArgs {};
         let serialized_args = serde_wasm_bindgen::to_value(&args)
             .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
-        
+
         let rv = invoke("fetch_projects", serialized_args).await;
-        
+
         // First convert to serde_json::Value for debugging
         let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv.clone())
             .map_err(|e| format!("Failed to convert JsValue to JSON: {:?}", e))?;
-        
+
         // Check if it's an error response from our backend
         if json.get("ok").and_then(|v| v.as_bool()) == Some(false) {
-            let err_msg = json.get("error").and_then(|v| v.as_str()).unwrap_or("Failed to fetch projects");
+            let err_msg = json
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Failed to fetch projects");
             return Err(err_msg.to_string());
         }
-        
+
         // Now try to deserialize to ProjectsResponse using serde_json
         let response: ProjectsResponse = serde_json::from_value(json)
             .map_err(|e| format!("Failed to parse API response: {}", e))?;
-        
+
         if response.success {
             Ok(response.data)
         } else {
@@ -98,7 +101,7 @@ impl SpeleoDBController {
         }
 
         // Build auth URL (assume AUTH_TOKEN_ENDPOINT). Trim trailing slash on instance.
-    const AUTH_TOKEN_ENDPOINT: &str = "/api/v1/user/auth-token/"; // actual API path
+        const AUTH_TOKEN_ENDPOINT: &str = "/api/v1/user/auth-token/"; // actual API path
 
         let base = target_instance.trim_end_matches('/');
         let _url = format!("{}{}", base, AUTH_TOKEN_ENDPOINT);
@@ -122,7 +125,7 @@ impl SpeleoDBController {
         // Call the Tauri invoke - it's async and will return a JsValue
         let serialized_args = serde_wasm_bindgen::to_value(&args)
             .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
-        
+
         let rv = invoke("native_auth_request", serialized_args).await;
 
         // Try to accept either a plain string token or an object containing the token
@@ -134,12 +137,18 @@ impl SpeleoDBController {
             if let Ok(json) = serde_wasm_bindgen::from_value::<serde_json::Value>(rv.clone()) {
                 // If backend returned an {ok:false, error:...} object, surface the error to the user
                 if json.get("ok").and_then(|v| v.as_bool()) == Some(false) {
-                    let err_msg = json.get("error").and_then(|v| v.as_str()).unwrap_or("Authentication failed");
+                    let err_msg = json
+                        .get("error")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Authentication failed");
                     return Err(err_msg.to_string());
                 }
                 // Also check for success field from API response
                 if json.get("success").and_then(|v| v.as_bool()) == Some(false) {
-                    let err_msg = json.get("error").and_then(|v| v.as_str()).unwrap_or("Authentication failed");
+                    let err_msg = json
+                        .get("error")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Authentication failed");
                     return Err(err_msg.to_string());
                 }
 
@@ -176,10 +185,17 @@ impl SpeleoDBController {
                 prefs: &'a Prefs,
             }
             let args = SaveArgs { prefs: &prefs };
-            let _save_rv = invoke("save_user_prefs", serde_wasm_bindgen::to_value(&args).unwrap_or(JsValue::NULL)).await;
+            let _save_rv = invoke(
+                "save_user_prefs",
+                serde_wasm_bindgen::to_value(&args).unwrap_or(JsValue::NULL),
+            )
+            .await;
             Ok(())
         } else {
-            Err(format!("native_auth_request failed or returned non-token response: {:?}", rv))
+            Err(format!(
+                "native_auth_request failed or returned non-token response: {:?}",
+                rv
+            ))
         }
     }
 }
@@ -340,7 +356,7 @@ mod tests {
             instance: "https://test.com".to_string(),
             oauth: "0123456789abcdef0123456789abcdef01234567".to_string(),
         };
-        
+
         let json = serde_json::to_string(&prefs).unwrap();
         assert!(json.contains("https://test.com"));
         assert!(json.contains("0123456789abcdef0123456789abcdef01234567"));
@@ -350,7 +366,7 @@ mod tests {
     fn prefs_deserialization() {
         let json = r#"{"instance":"https://test.com","oauth":"token123"}"#;
         let prefs: Prefs = serde_json::from_str(json).unwrap();
-        
+
         assert_eq!(prefs.instance, "https://test.com");
         assert_eq!(prefs.oauth, "token123");
     }
@@ -372,7 +388,7 @@ mod tests {
             "visibility": "PUBLIC",
             "exclude_geojson": false
         }"#;
-        
+
         let project: Project = serde_json::from_str(json).unwrap();
         assert_eq!(project.name, "Test");
         assert!(project.active_mutex.is_none());
@@ -394,11 +410,14 @@ mod tests {
             "visibility": "PRIVATE",
             "exclude_geojson": true
         }"#;
-        
+
         let project: Project = serde_json::from_str(json).unwrap();
         assert_eq!(project.name, "Test");
         assert!(project.active_mutex.is_some());
-        assert_eq!(project.active_mutex.as_ref().unwrap().as_str(), Some("user@example.com"));
+        assert_eq!(
+            project.active_mutex.as_ref().unwrap().as_str(),
+            Some("user@example.com")
+        );
     }
 
     #[test]
@@ -417,7 +436,7 @@ mod tests {
             visibility: "PUBLIC".to_string(),
             exclude_geojson: false,
         };
-        
+
         let cloned = project.clone();
         assert_eq!(project.id, cloned.id);
         assert_eq!(project.name, cloned.name);

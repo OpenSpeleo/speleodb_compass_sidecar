@@ -67,38 +67,44 @@ async fn fetch_projects() -> serde_json::Value {
         // Load user prefs to get instance URL and OAuth token
         let mut path = speleodb_compass_common::SDB_USER_DIR.clone();
         path.push("user_prefs.json");
-        
+
         let prefs_str = match std::fs::read_to_string(&path) {
             Ok(s) => s,
-            Err(_) => return serde_json::json!({"ok": false, "error": "No saved credentials found"}),
+            Err(_) => {
+                return serde_json::json!({"ok": false, "error": "No saved credentials found"})
+            }
         };
-        
+
         let prefs: serde_json::Value = match serde_json::from_str(&prefs_str) {
             Ok(p) => p,
-            Err(e) => return serde_json::json!({"ok": false, "error": format!("Failed to parse preferences: {}", e)}),
+            Err(e) => {
+                return serde_json::json!({"ok": false, "error": format!("Failed to parse preferences: {}", e)})
+            }
         };
-        
+
         let instance = match prefs.get("instance").and_then(|v| v.as_str()) {
             Some(s) if !s.is_empty() => s.to_string(),
             _ => return serde_json::json!({"ok": false, "error": "No instance URL in preferences"}),
         };
-        
+
         let oauth = match prefs.get("oauth").and_then(|v| v.as_str()) {
             Some(s) if !s.is_empty() => s.to_string(),
             _ => return serde_json::json!({"ok": false, "error": "No OAuth token in preferences"}),
         };
-        
+
         (instance, oauth)
     };
-    
+
     let base = instance.trim_end_matches('/');
     let url = format!("{}{}", base, "/api/v1/projects/");
-    
+
     let client = match Client::builder().timeout(Duration::from_secs(10)).build() {
         Ok(c) => c,
-        Err(e) => return serde_json::json!({"ok": false, "error": format!("Failed to build HTTP client: {}", e)}),
+        Err(e) => {
+            return serde_json::json!({"ok": false, "error": format!("Failed to build HTTP client: {}", e)})
+        }
     };
-    
+
     let resp = match client
         .get(&url)
         .header("Authorization", format!("Token {}", oauth))
@@ -106,15 +112,19 @@ async fn fetch_projects() -> serde_json::Value {
         .await
     {
         Ok(r) => r,
-        Err(e) => return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)}),
+        Err(e) => {
+            return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)})
+        }
     };
-    
+
     let status = resp.status();
-    
+
     if status.is_success() {
         match resp.json::<serde_json::Value>().await {
             Ok(json) => json,
-            Err(e) => serde_json::json!({"ok": false, "error": format!("Failed to parse response: {}", e)}),
+            Err(e) => {
+                serde_json::json!({"ok": false, "error": format!("Failed to parse response: {}", e)})
+            }
         }
     } else {
         serde_json::json!({"ok": false, "error": format!("Request failed with status {}", status.as_u16()), "status": status.as_u16()})
@@ -140,24 +150,35 @@ async fn native_auth_request(
 
     let client = match Client::builder().timeout(Duration::from_secs(10)).build() {
         Ok(c) => c,
-        Err(e) => return serde_json::json!({"ok": false, "error": format!("Failed to build HTTP client: {}", e)}),
+        Err(e) => {
+            return serde_json::json!({"ok": false, "error": format!("Failed to build HTTP client: {}", e)})
+        }
     };
 
     let resp = if !oauth.is_empty() {
-        match client.get(&url).header("Authorization", format!("Token {}", oauth)).send().await {
+        match client
+            .get(&url)
+            .header("Authorization", format!("Token {}", oauth))
+            .send()
+            .await
+        {
             Ok(r) => r,
-            Err(e) => return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)}),
+            Err(e) => {
+                return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)})
+            }
         }
     } else {
         let body = serde_json::json!({"email": email, "password": password});
         match client.post(&url).json(&body).send().await {
             Ok(r) => r,
-            Err(e) => return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)}),
+            Err(e) => {
+                return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)})
+            }
         }
     };
 
     let status = resp.status();
-    
+
     if status.is_success() {
         // Prefer header named Auth-Token
         if let Some(hv) = resp.headers().get("Auth-Token") {
@@ -187,7 +208,7 @@ fn parse_token_from_json(v: &serde_json::Value) -> Option<String> {
             return None;
         }
     }
-    
+
     let candidates = ["token", "auth_token", "access_token", "token_value", "auth"];
     for key in &candidates {
         if let Some(val) = v.get(*key) {
@@ -208,11 +229,9 @@ fn parse_token_from_json(v: &serde_json::Value) -> Option<String> {
     None
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
     use serial_test::serial;
 
     // Load .env file before running tests
@@ -229,11 +248,13 @@ mod tests {
         // Fallback to current directory
         let _ = dotenvy::dotenv();
     }
-    
+
     // Helper function to ensure test env vars are loaded
     fn ensure_test_env_vars() {
         // If env vars are missing, try to reload from .env
-        if std::env::var("TEST_SPELEODB_INSTANCE").is_err() || std::env::var("TEST_SPELEODB_OAUTH").is_err() {
+        if std::env::var("TEST_SPELEODB_INSTANCE").is_err()
+            || std::env::var("TEST_SPELEODB_OAUTH").is_err()
+        {
             if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
                 let workspace_root = std::path::Path::new(&manifest_dir).parent().unwrap();
                 let env_path = workspace_root.join(".env");
@@ -259,7 +280,10 @@ mod tests {
     #[test]
     fn test_greet_special_chars() {
         let result = greet("Rust & Tauri!");
-        assert_eq!(result, "Hello, Rust & Tauri!! You've been greeted from Rust!");
+        assert_eq!(
+            result,
+            "Hello, Rust & Tauri!! You've been greeted from Rust!"
+        );
     }
 
     #[test]
@@ -326,18 +350,37 @@ mod tests {
 
         // Save preferences
         let save_result = save_user_prefs(prefs.clone());
-        assert!(save_result.is_ok(), "save_user_prefs should succeed: {:?}", save_result);
+        assert!(
+            save_result.is_ok(),
+            "save_user_prefs should succeed: {:?}",
+            save_result
+        );
 
         // Load preferences
         let load_result = load_user_prefs();
-        assert!(load_result.is_ok(), "load_user_prefs should succeed: {:?}", load_result);
+        assert!(
+            load_result.is_ok(),
+            "load_user_prefs should succeed: {:?}",
+            load_result
+        );
 
         let loaded = load_result.as_ref().unwrap();
-        assert!(loaded.is_some(), "Should have loaded preferences, got: {:?}", loaded);
+        assert!(
+            loaded.is_some(),
+            "Should have loaded preferences, got: {:?}",
+            loaded
+        );
 
-        let loaded_json: serde_json::Value = serde_json::from_str(loaded.as_ref().unwrap()).unwrap();
-        assert_eq!(loaded_json.get("instance").and_then(|v| v.as_str()), Some("https://test.example.com"));
-        assert_eq!(loaded_json.get("oauth").and_then(|v| v.as_str()), Some("0123456789abcdef0123456789abcdef01234567"));
+        let loaded_json: serde_json::Value =
+            serde_json::from_str(loaded.as_ref().unwrap()).unwrap();
+        assert_eq!(
+            loaded_json.get("instance").and_then(|v| v.as_str()),
+            Some("https://test.example.com")
+        );
+        assert_eq!(
+            loaded_json.get("oauth").and_then(|v| v.as_str()),
+            Some("0123456789abcdef0123456789abcdef01234567")
+        );
     }
 
     #[test]
@@ -367,7 +410,10 @@ mod tests {
     fn test_forget_user_prefs_when_none_exist() {
         // Should not error even if file doesn't exist
         let result = forget_user_prefs();
-        assert!(result.is_ok(), "forget_user_prefs should succeed even if file doesn't exist");
+        assert!(
+            result.is_ok(),
+            "forget_user_prefs should succeed even if file doesn't exist"
+        );
     }
 
     #[test]
@@ -378,7 +424,10 @@ mod tests {
 
         let result = load_user_prefs();
         assert!(result.is_ok());
-        assert!(result.unwrap().is_none(), "Should return None when no preferences exist");
+        assert!(
+            result.unwrap().is_none(),
+            "Should return None when no preferences exist"
+        );
     }
 
     #[cfg(unix)]
@@ -403,42 +452,71 @@ mod tests {
         let mode = permissions.mode();
 
         // Check that only owner has read/write (0o600 = 384 in decimal)
-        assert_eq!(mode & 0o777, 0o600, "File should have 0o600 permissions (owner read/write only)");
+        assert_eq!(
+            mode & 0o777,
+            0o600,
+            "File should have 0o600 permissions (owner read/write only)"
+        );
     }
 
     #[tokio::test]
     #[serial]
     async fn native_auth_request_with_real_oauth() {
         ensure_test_env_vars();
-        
+
         let instance = std::env::var("TEST_SPELEODB_INSTANCE")
             .expect("TEST_SPELEODB_INSTANCE must be set for integration tests");
         let oauth = std::env::var("TEST_SPELEODB_OAUTH")
             .expect("TEST_SPELEODB_OAUTH must be set for integration tests");
 
-        let res = native_auth_request(String::new(), String::new(), oauth.clone(), instance.clone()).await;
-        
-        assert!(res.get("ok").and_then(|v| v.as_bool()) == Some(true), 
-                "Auth should succeed, got: {:?}", res);
+        let res = native_auth_request(
+            String::new(),
+            String::new(),
+            oauth.clone(),
+            instance.clone(),
+        )
+        .await;
+
+        assert!(
+            res.get("ok").and_then(|v| v.as_bool()) == Some(true),
+            "Auth should succeed, got: {:?}",
+            res
+        );
         assert!(res.get("token").is_some(), "Should return a token");
     }
 
     #[tokio::test]
     async fn native_auth_request_empty_instance() {
-        let res = native_auth_request("u".to_string(), "p".to_string(), String::new(), "".to_string()).await;
+        let res = native_auth_request(
+            "u".to_string(),
+            "p".to_string(),
+            String::new(),
+            "".to_string(),
+        )
+        .await;
         assert!(res.get("ok").and_then(|v| v.as_bool()) == Some(false));
-        assert!(res.get("error").and_then(|v| v.as_str()).unwrap().contains("empty"));
+        assert!(res
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap()
+            .contains("empty"));
     }
 
     #[tokio::test]
     #[serial]
     async fn native_auth_request_with_invalid_oauth() {
         ensure_test_env_vars();
-        
+
         let instance = std::env::var("TEST_SPELEODB_INSTANCE")
             .expect("TEST_SPELEODB_INSTANCE must be set for integration tests");
 
-        let res = native_auth_request(String::new(), String::new(), "invalidtoken1234567890123456789012345".to_string(), instance).await;
+        let res = native_auth_request(
+            String::new(),
+            String::new(),
+            "invalidtoken1234567890123456789012345".to_string(),
+            instance,
+        )
+        .await;
         assert!(res.get("ok").and_then(|v| v.as_bool()) == Some(false));
         // Should fail with authentication error
     }
@@ -449,7 +527,7 @@ mod tests {
         // The actual fetch_projects function will check for missing credentials
         // We test this indirectly through the preference file tests
         // If no .env vars and no prefs file exist, it should return an error
-        
+
         // This is implicitly tested by load_user_prefs_when_none_exist
         // and the fact that fetch_projects checks for credentials
         assert!(true); // Placeholder to maintain test count
@@ -459,7 +537,7 @@ mod tests {
     #[serial]
     async fn fetch_projects_with_real_api() {
         ensure_test_env_vars();
-        
+
         let _instance = std::env::var("TEST_SPELEODB_INSTANCE")
             .expect("TEST_SPELEODB_INSTANCE must be set for integration tests");
         let _oauth = std::env::var("TEST_SPELEODB_OAUTH")
@@ -467,39 +545,50 @@ mod tests {
 
         // Fetch projects from real API (uses env vars directly)
         let result = fetch_projects().await;
-        
+
         // Verify response structure
-        assert!(result.get("success").and_then(|v| v.as_bool()) == Some(true), 
-                "API call should succeed, got: {:?}", result);
-        assert!(result.get("data").and_then(|v| v.as_array()).is_some(), 
-                "Response should have data array");
+        assert!(
+            result.get("success").and_then(|v| v.as_bool()) == Some(true),
+            "API call should succeed, got: {:?}",
+            result
+        );
+        assert!(
+            result.get("data").and_then(|v| v.as_array()).is_some(),
+            "Response should have data array"
+        );
     }
 
     #[tokio::test]
     #[serial]
     async fn fetch_projects_with_invalid_token() {
         ensure_test_env_vars();
-        
+
         // Save the valid oauth token
         let valid_oauth = std::env::var("TEST_SPELEODB_OAUTH")
             .expect("TEST_SPELEODB_OAUTH must be set for integration tests");
-        
+
         let instance = std::env::var("TEST_SPELEODB_INSTANCE")
             .expect("TEST_SPELEODB_INSTANCE must be set for integration tests");
 
         // Temporarily set environment variables with invalid token
         std::env::set_var("TEST_SPELEODB_INSTANCE", &instance);
-        std::env::set_var("TEST_SPELEODB_OAUTH", "0000000000000000000000000000000000000000");
+        std::env::set_var(
+            "TEST_SPELEODB_OAUTH",
+            "0000000000000000000000000000000000000000",
+        );
 
         let result = fetch_projects().await;
-        
+
         // Restore the valid token immediately
         std::env::set_var("TEST_SPELEODB_OAUTH", valid_oauth);
-        
+
         // The response should indicate failure (likely 401 or 403)
-        assert!(result.get("ok").and_then(|v| v.as_bool()) == Some(false) || 
-                result.get("success").is_none(),
-                "Should indicate failure with invalid token, got: {:?}", result);
+        assert!(
+            result.get("ok").and_then(|v| v.as_bool()) == Some(false)
+                || result.get("success").is_none(),
+            "Should indicate failure with invalid token, got: {:?}",
+            result
+        );
     }
 }
 
@@ -521,12 +610,22 @@ pub fn run() {
         eprintln!("Failed to initialize file logger: {:#}", e);
     } else {
         // Log a startup message once the logger is initialized.
-        log::info!("Application starting. Logging to: {}", speleodb_compass_common::SDB_USER_DIR.display());
+        log::info!(
+            "Application starting. Logging to: {}",
+            speleodb_compass_common::SDB_USER_DIR.display()
+        );
     }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, save_user_prefs, load_user_prefs, forget_user_prefs, native_auth_request, fetch_projects])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            save_user_prefs,
+            load_user_prefs,
+            forget_user_prefs,
+            native_auth_request,
+            fetch_projects
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

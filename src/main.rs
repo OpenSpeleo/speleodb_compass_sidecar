@@ -1,6 +1,6 @@
-mod speleo_db_controller;
 mod app;
 mod components;
+mod speleo_db_controller;
 
 use app::App;
 
