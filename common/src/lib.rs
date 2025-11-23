@@ -1,10 +1,9 @@
 mod compass_project;
 pub use compass_project::{CompassProject, Project, SpeleoDb};
 
-use once_cell::sync::Lazy;
 use std::{
     path::{Path, PathBuf},
-    process::Command,
+    process::Command, sync::LazyLock,
 };
 
 /// Name of the hidden application directory inside the user's home directory.
@@ -16,7 +15,7 @@ pub const COMPASS_PROJECT_DIR_NAME: &str = "projects";
 /// Lazily-initialized full path to the application directory (home + COMPASS_HOME_DIR_NAME).
 ///
 /// This is a runtime-initialized static because the user's home directory is not known at compile time.
-pub static COMPASS_HOME_DIR: Lazy<PathBuf> = Lazy::new(|| match dirs::home_dir() {
+pub static COMPASS_HOME_DIR: LazyLock<PathBuf> = LazyLock::new(|| match dirs::home_dir() {
     Some(mut p) => {
         p.push(COMPASS_HOME_DIR_NAME);
         p
@@ -25,7 +24,7 @@ pub static COMPASS_HOME_DIR: Lazy<PathBuf> = Lazy::new(|| match dirs::home_dir()
 });
 
 /// Lazily-initialized full path to the compass projects folder (~/.compass/projects).
-pub static COMPASS_PROJECT_DIR: Lazy<PathBuf> = Lazy::new(|| {
+pub static COMPASS_PROJECT_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     let mut p = COMPASS_HOME_DIR.clone(); // Use the home dir above
     p.push(COMPASS_PROJECT_DIR_NAME);
     p
@@ -116,7 +115,9 @@ fn open_with_compass_path(path: &Path) -> Result<(), String> {
         Command::new(cmd)
             .arg(path)
             .spawn()
-            .map_err(|e| format!("Failed to launch compass software: {}", e))?;
+            .expect("Expected to launch compass software")
+            .wait()
+            .expect("Compass exit successfully");
         Ok(())
     }
 }
