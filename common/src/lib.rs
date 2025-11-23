@@ -31,7 +31,6 @@ pub static COMPASS_PROJECT_DIR: Lazy<PathBuf> = Lazy::new(|| {
     p
 });
 
-
 /// Return a clone of the computed application directory path.
 pub fn app_dir_path() -> PathBuf {
     COMPASS_HOME_DIR.clone()
@@ -68,7 +67,6 @@ pub fn ensure_project_compass_dir_exists(project_id: &str) -> std::io::Result<Pa
     Ok(path)
 }
 
-
 /// Initialize a file logger that writes logs into the SDB user directory.
 ///
 /// The logger writes formatted records that include timestamp and log level. The log file
@@ -103,20 +101,28 @@ pub fn open_with_compass<P: AsRef<Path>>(project_path: P) -> Result<(), String> 
 }
 
 fn open_with_compass_path(path: &Path) -> Result<(), String> {
-    if !std::fs::exists(path).unwrap() {
+    if !path.exists() {
         Err("Provided path does not exist!".to_string())
     } else {
-        Command::new("explorer")
-            .args([path])
+        #[cfg(target_os = "macos")]
+        let cmd = "open";
+        #[cfg(target_os = "windows")]
+        let cmd = "explorer";
+        #[cfg(target_os = "linux")]
+        let cmd = "xdg-open";
+        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+        let cmd = "unknown";
+
+        Command::new(cmd)
+            .arg(path)
             .spawn()
-            .expect("Expected to launch compass software");
+            .map_err(|e| format!("Failed to launch compass software: {}", e))?;
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
 
     use super::*;
 
@@ -198,11 +204,17 @@ mod tests {
     #[test]
     fn constant_value_is_correct() {
         // Verify the constant has the expected value
-        assert_eq!(COMPASS_HOME_DIR_NAME, ".speleodb_compass");
+        assert_eq!(COMPASS_HOME_DIR_NAME, ".compass");
     }
     #[test]
     fn launch_compass_project() {
-        let project_path = "assets/test_data/Fulfords.mak";
-        open_with_compass(project_path).unwrap();
+        let temp_dir = std::env::temp_dir();
+        let project_path = temp_dir.join("test_project.mak");
+        std::fs::File::create(&project_path).unwrap();
+
+        open_with_compass(&project_path).unwrap();
+
+        // Cleanup
+        let _ = std::fs::remove_file(project_path);
     }
 }

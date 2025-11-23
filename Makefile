@@ -33,7 +33,11 @@ test-common:
 
 # Run WASM UI tests (requires wasm-pack)
 test-ui:
-	cd src && wasm-pack test --headless --firefox
+	@if command -v wasm-pack >/dev/null 2>&1; then \
+		cd src && wasm-pack test --headless --firefox; \
+	else \
+		echo "wasm-pack not found, skipping UI tests"; \
+	fi
 
 # ============================================================================ #
 # BUILD COMMANDS

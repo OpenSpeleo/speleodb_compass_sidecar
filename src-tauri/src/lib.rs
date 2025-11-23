@@ -226,12 +226,16 @@ async fn acquire_project_mutex(project_id: String) -> serde_json::Value {
 
     let instance = match prefs.get("instance").and_then(|v| v.as_str()) {
         Some(s) if !s.is_empty() => s.to_string(),
-        _ => return serde_json::json!({"ok": false, "locked": false, "message": "No instance URL in preferences"}),
+        _ => {
+            return serde_json::json!({"ok": false, "locked": false, "message": "No instance URL in preferences"})
+        }
     };
 
     let oauth = match prefs.get("oauth").and_then(|v| v.as_str()) {
         Some(s) if !s.is_empty() => s.to_string(),
-        _ => return serde_json::json!({"ok": false, "locked": false, "message": "No OAuth token in preferences"}),
+        _ => {
+            return serde_json::json!({"ok": false, "locked": false, "message": "No OAuth token in preferences"})
+        }
     };
 
     let base = instance.trim_end_matches('/');
@@ -282,9 +286,7 @@ async fn download_project_zip(project_id: String) -> serde_json::Value {
 
     let prefs_str = match std::fs::read_to_string(&path) {
         Ok(s) => s,
-        Err(_) => {
-            return serde_json::json!({"ok": false, "error": "No saved credentials found"})
-        }
+        Err(_) => return serde_json::json!({"ok": false, "error": "No saved credentials found"}),
     };
 
     let prefs: serde_json::Value = match serde_json::from_str(&prefs_str) {
@@ -305,7 +307,10 @@ async fn download_project_zip(project_id: String) -> serde_json::Value {
     };
 
     let base = instance.trim_end_matches('/');
-    let url = format!("{}/api/v1/projects/{}/download/compass_zip/", base, project_id);
+    let url = format!(
+        "{}/api/v1/projects/{}/download/compass_zip/",
+        base, project_id
+    );
 
     let client = match Client::builder().timeout(Duration::from_secs(60)).build() {
         Ok(c) => c,
@@ -332,8 +337,8 @@ async fn download_project_zip(project_id: String) -> serde_json::Value {
 
     if !status.is_success() {
         return serde_json::json!({
-            "ok": false, 
-            "error": format!("Download failed with status {}", status.as_u16()), 
+            "ok": false,
+            "error": format!("Download failed with status {}", status.as_u16()),
             "status": status.as_u16(),
             "url": url  // Include URL for debugging
         });
@@ -372,7 +377,6 @@ fn unzip_project(zip_path: String, project_id: String) -> serde_json::Value {
     use std::fs::File;
     use zip::ZipArchive;
 
-
     log::info!("Unzipping project {} from {}", project_id, zip_path);
 
     // Ensure compass directory exists
@@ -381,7 +385,8 @@ fn unzip_project(zip_path: String, project_id: String) -> serde_json::Value {
     }
 
     // Create project-specific directory
-    let project_path = match speleodb_compass_common::ensure_project_compass_dir_exists(&project_id) {
+    let project_path = match speleodb_compass_common::ensure_project_compass_dir_exists(&project_id)
+    {
         Ok(p) => p,
         Err(e) => {
             return serde_json::json!({"ok": false, "error": format!("Failed to create project directory: {}", e)})
@@ -429,7 +434,7 @@ fn unzip_project(zip_path: String, project_id: String) -> serde_json::Value {
                     return serde_json::json!({"ok": false, "error": format!("Failed to create parent directory {}: {}", p.display(), e)});
                 }
             }
-            
+
             let mut outfile = match File::create(&outpath) {
                 Ok(f) => f,
                 Err(e) => {
@@ -446,7 +451,10 @@ fn unzip_project(zip_path: String, project_id: String) -> serde_json::Value {
     // Clean up temp ZIP file
     let _ = std::fs::remove_file(&zip_path);
 
-    log::info!("Successfully unzipped project to: {}", project_path.display());
+    log::info!(
+        "Successfully unzipped project to: {}",
+        project_path.display()
+    );
 
     serde_json::json!({
         "ok": true,
@@ -490,8 +498,309 @@ fn open_project_folder(project_id: String) -> serde_json::Value {
     }
 }
 
-fn parse_token_from_json(v: &serde_json::Value) -> Option<String> {
+#[tauri::command]
+fn zip_project_folder(project_id: String) -> serde_json::Value {
+    use std::fs::{self, File};
+    use std::io::Write;
+    use zip::ZipWriter;
 
+    log::info!("Zipping project folder for project: {}", project_id);
+
+    // Get project folder path
+    let project_path = speleodb_compass_common::project_compass_path(&project_id);
+
+    if !project_path.exists() {
+        return serde_json::json!({
+            "ok": false,
+            "error": format!("Project folder does not exist: {}", project_path.display())
+        });
+    }
+
+    // Create temp zip file
+    let temp_dir = std::env::temp_dir();
+    let zip_filename = format!("project_{}.zip", project_id);
+    let zip_path = temp_dir.join(&zip_filename);
+
+    let zip_file = match File::create(&zip_path) {
+        Ok(f) => f,
+        Err(e) => {
+            return serde_json::json!({
+                "ok": false,
+                "error": format!("Failed to create ZIP file: {}", e)
+            });
+        }
+    };
+
+    let mut zip = ZipWriter::new(zip_file);
+
+    // Helper function to recursively add directory to ZIP
+    fn add_dir_to_zip(
+        zip: &mut ZipWriter<File>,
+        path: &std::path::Path,
+        prefix: &str,
+    ) -> std::io::Result<()> {
+        let entries = fs::read_dir(path)?;
+
+        for entry in entries {
+            let entry = entry?;
+            let entry_path = entry.path();
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            let zip_path = if prefix.is_empty() {
+                name_str.to_string()
+            } else {
+                format!("{}/{}", prefix, name_str)
+            };
+
+            if entry_path.is_dir() {
+                // Add directory - use () for default options
+                zip.add_directory::<_, ()>(&zip_path, Default::default())?;
+                // Recurse into subdirectory
+                add_dir_to_zip(zip, &entry_path, &zip_path)?;
+            } else {
+                // Add file - use () for default options
+                zip.start_file::<_, ()>(&zip_path, Default::default())?;
+                let contents = fs::read(&entry_path)?;
+                zip.write_all(&contents)?;
+            }
+        }
+        Ok(())
+    }
+
+    // Add all files to ZIP
+    if let Err(e) = add_dir_to_zip(&mut zip, &project_path, "") {
+        return serde_json::json!({
+            "ok": false,
+            "error": format!("Failed to add files to ZIP: {}", e)
+        });
+    }
+
+    // Finalize ZIP
+    if let Err(e) = zip.finish() {
+        return serde_json::json!({
+            "ok": false,
+            "error": format!("Failed to finalize ZIP: {}", e)
+        });
+    }
+
+    log::info!("Created ZIP file: {}", zip_path.display());
+
+    serde_json::json!({
+        "ok": true,
+        "path": zip_path.to_string_lossy().to_string()
+    })
+}
+
+// Global state for active project
+lazy_static::lazy_static! {
+    static ref ACTIVE_PROJECT_ID: std::sync::Arc<std::sync::Mutex<Option<String>>> = std::sync::Arc::new(std::sync::Mutex::new(None));
+}
+
+#[tauri::command]
+fn set_active_project(project_id: String) {
+    *ACTIVE_PROJECT_ID.lock().unwrap() = Some(project_id);
+}
+
+#[tauri::command]
+fn clear_active_project() {
+    *ACTIVE_PROJECT_ID.lock().unwrap() = None;
+}
+
+async fn release_project_mutex_internal(project_id: &str) {
+    use reqwest::Client;
+    use std::time::Duration;
+
+    log::info!("Releasing project mutex for project: {}", project_id);
+
+    // Load user prefs
+    let mut path = speleodb_compass_common::COMPASS_HOME_DIR.clone();
+    path.push("user_prefs.json");
+
+    let prefs_str = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(_) => {
+            log::warn!("No saved credentials found for mutex release");
+            return;
+        }
+    };
+
+    let prefs: serde_json::Value = match serde_json::from_str(&prefs_str) {
+        Ok(p) => p,
+        Err(e) => {
+            log::warn!("Failed to parse preferences for mutex release: {}", e);
+            return;
+        }
+    };
+
+    let instance = match prefs.get("instance").and_then(|v| v.as_str()) {
+        Some(s) if !s.is_empty() => s.to_string(),
+        _ => {
+            log::warn!("No instance URL in preferences");
+            return;
+        }
+    };
+
+    let oauth = match prefs.get("oauth").and_then(|v| v.as_str()) {
+        Some(s) if !s.is_empty() => s.to_string(),
+        _ => {
+            log::warn!("No OAuth token in preferences");
+            return;
+        }
+    };
+
+    let base = instance.trim_end_matches('/');
+    let url = format!("{}/api/v1/projects/{}/release/", base, project_id);
+
+    let client = match Client::builder().timeout(Duration::from_secs(5)).build() {
+        Ok(c) => c,
+        Err(e) => {
+            log::warn!("Failed to build HTTP client for mutex release: {}", e);
+            return;
+        }
+    };
+
+    // Fire and forget
+    match client
+        .post(&url)
+        .header("Authorization", format!("Token {}", oauth))
+        .send()
+        .await
+    {
+        Ok(resp) => {
+            let status = resp.status();
+            if status.is_success() {
+                log::info!("Successfully released mutex for project: {}", project_id);
+            } else {
+                log::warn!("Mutex release returned status {}: {}", status.as_u16(), url);
+            }
+        }
+        Err(e) => {
+            log::warn!("Failed to release mutex (network error): {}", e);
+        }
+    }
+}
+
+#[tauri::command]
+async fn release_project_mutex(project_id: String) -> serde_json::Value {
+    release_project_mutex_internal(&project_id).await;
+    // Always return success (fire and forget)
+    serde_json::json!({"ok": true, "message": "Mutex release attempted"})
+}
+
+#[tauri::command]
+async fn upload_project_zip(
+    project_id: String,
+    commit_message: String,
+    zip_path: String,
+) -> serde_json::Value {
+    use reqwest::Client;
+    use std::time::Duration;
+
+    log::info!("Uploading project ZIP for project: {}", project_id);
+
+    // Load user prefs
+    let mut path = speleodb_compass_common::COMPASS_HOME_DIR.clone();
+    path.push("user_prefs.json");
+
+    let prefs_str = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(_) => {
+            return serde_json::json!({"ok": false, "error": "No saved credentials found"});
+        }
+    };
+
+    let prefs: serde_json::Value = match serde_json::from_str(&prefs_str) {
+        Ok(p) => p,
+        Err(e) => {
+            return serde_json::json!({"ok": false, "error": format!("Failed to parse preferences: {}", e)});
+        }
+    };
+
+    let instance = match prefs.get("instance").and_then(|v| v.as_str()) {
+        Some(s) if !s.is_empty() => s.to_string(),
+        _ => return serde_json::json!({"ok": false, "error": "No instance URL in preferences"}),
+    };
+
+    let oauth = match prefs.get("oauth").and_then(|v| v.as_str()) {
+        Some(s) if !s.is_empty() => s.to_string(),
+        _ => return serde_json::json!({"ok": false, "error": "No OAuth token in preferences"}),
+    };
+
+    let base = instance.trim_end_matches('/');
+    let url = format!(
+        "{}/api/v1/projects/{}/upload/compass_zip/",
+        base, project_id
+    );
+
+    // Read ZIP file
+    let zip_bytes = match std::fs::read(&zip_path) {
+        Ok(b) => b,
+        Err(e) => {
+            return serde_json::json!({"ok": false, "error": format!("Failed to read ZIP file: {}", e)});
+        }
+    };
+
+    let client = match Client::builder().timeout(Duration::from_secs(120)).build() {
+        Ok(c) => c,
+        Err(e) => {
+            return serde_json::json!({"ok": false, "error": format!("Failed to build HTTP client: {}", e)});
+        }
+    };
+
+    // Create multipart form
+    let part = reqwest::multipart::Part::bytes(zip_bytes)
+        .file_name("project.zip")
+        .mime_str("application/zip")
+        .unwrap();
+
+    let form = reqwest::multipart::Form::new()
+        .text("message", commit_message)
+        .part("artifact", part);
+
+    log::info!("Uploading to: {}", url);
+
+    let resp = match client
+        .put(&url)
+        .header("Authorization", format!("Token {}", oauth))
+        .multipart(form)
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)});
+        }
+    };
+
+    let status = resp.status();
+
+    // Clean up temp ZIP file
+    let _ = std::fs::remove_file(&zip_path);
+
+    if status.is_success() {
+        log::info!("Successfully uploaded project: {}", project_id);
+        serde_json::json!({
+            "ok": true,
+            "message": "Project uploaded successfully",
+            "status": status.as_u16()
+        })
+    } else if status == reqwest::StatusCode::NOT_MODIFIED {
+        log::info!("Project upload returned 304 Not Modified: {}", project_id);
+        serde_json::json!({
+            "ok": true,
+            "message": "No changes detected",
+            "status": 304
+        })
+    } else {
+        serde_json::json!({
+            "ok": false,
+            "error": format!("Upload failed with status {}", status.as_u16()),
+            "status": status.as_u16()
+        })
+    }
+}
+
+fn parse_token_from_json(v: &serde_json::Value) -> Option<String> {
     // Check if the response has a "success" field that's false
     if let Some(success) = v.get("success").and_then(|v| v.as_bool()) {
         if !success {
@@ -539,8 +848,8 @@ mod tests {
         let _ = dotenvy::dotenv();
     }
 
-    // Helper function to ensure test env vars are loaded
-    fn ensure_test_env_vars() {
+    // Helper function to ensure test env vars are loaded. Returns true if loaded, false otherwise.
+    fn ensure_test_env_vars() -> bool {
         // If env vars are missing, try to reload from .env
         if std::env::var("TEST_SPELEODB_INSTANCE").is_err()
             || std::env::var("TEST_SPELEODB_OAUTH").is_err()
@@ -553,6 +862,9 @@ mod tests {
                 }
             }
         }
+
+        std::env::var("TEST_SPELEODB_INSTANCE").is_ok()
+            && std::env::var("TEST_SPELEODB_OAUTH").is_ok()
     }
 
     #[test]
@@ -737,7 +1049,7 @@ mod tests {
         let mut path = speleodb_compass_common::COMPASS_HOME_DIR.clone();
         path.push("user_prefs.json");
 
-        let metadata = fs::metadata(&path).expect("Should be able to read file metadata");
+        let metadata = std::fs::metadata(&path).expect("Should be able to read file metadata");
         let permissions = metadata.permissions();
         let mode = permissions.mode();
 
@@ -752,12 +1064,13 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn native_auth_request_with_real_oauth() {
-        ensure_test_env_vars();
+        if !ensure_test_env_vars() {
+            println!("Skipping test: TEST_SPELEODB_INSTANCE or TEST_SPELEODB_OAUTH not set");
+            return;
+        }
 
-        let instance = std::env::var("TEST_SPELEODB_INSTANCE")
-            .expect("TEST_SPELEODB_INSTANCE must be set for integration tests");
-        let oauth = std::env::var("TEST_SPELEODB_OAUTH")
-            .expect("TEST_SPELEODB_OAUTH must be set for integration tests");
+        let instance = std::env::var("TEST_SPELEODB_INSTANCE").unwrap();
+        let oauth = std::env::var("TEST_SPELEODB_OAUTH").unwrap();
 
         let res = native_auth_request(
             String::new(),
@@ -795,10 +1108,12 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn native_auth_request_with_invalid_oauth() {
-        ensure_test_env_vars();
+        if !ensure_test_env_vars() {
+            println!("Skipping test: TEST_SPELEODB_INSTANCE or TEST_SPELEODB_OAUTH not set");
+            return;
+        }
 
-        let instance = std::env::var("TEST_SPELEODB_INSTANCE")
-            .expect("TEST_SPELEODB_INSTANCE must be set for integration tests");
+        let instance = std::env::var("TEST_SPELEODB_INSTANCE").unwrap();
 
         let res = native_auth_request(
             String::new(),
@@ -826,12 +1141,13 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn fetch_projects_with_real_api() {
-        ensure_test_env_vars();
+        if !ensure_test_env_vars() {
+            println!("Skipping test: TEST_SPELEODB_INSTANCE or TEST_SPELEODB_OAUTH not set");
+            return;
+        }
 
-        let _instance = std::env::var("TEST_SPELEODB_INSTANCE")
-            .expect("TEST_SPELEODB_INSTANCE must be set for integration tests");
-        let _oauth = std::env::var("TEST_SPELEODB_OAUTH")
-            .expect("TEST_SPELEODB_OAUTH must be set for integration tests");
+        let _instance = std::env::var("TEST_SPELEODB_INSTANCE").unwrap();
+        let _oauth = std::env::var("TEST_SPELEODB_OAUTH").unwrap();
 
         // Fetch projects from real API (uses env vars directly)
         let result = fetch_projects().await;
@@ -851,14 +1167,15 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn fetch_projects_with_invalid_token() {
-        ensure_test_env_vars();
+        if !ensure_test_env_vars() {
+            println!("Skipping test: TEST_SPELEODB_INSTANCE or TEST_SPELEODB_OAUTH not set");
+            return;
+        }
 
         // Save the valid oauth token
-        let valid_oauth = std::env::var("TEST_SPELEODB_OAUTH")
-            .expect("TEST_SPELEODB_OAUTH must be set for integration tests");
+        let valid_oauth = std::env::var("TEST_SPELEODB_OAUTH").unwrap();
 
-        let instance = std::env::var("TEST_SPELEODB_INSTANCE")
-            .expect("TEST_SPELEODB_INSTANCE must be set for integration tests");
+        let instance = std::env::var("TEST_SPELEODB_INSTANCE").unwrap();
 
         // Temporarily set environment variables with invalid token
         std::env::set_var("TEST_SPELEODB_INSTANCE", &instance);
@@ -882,6 +1199,28 @@ mod tests {
     }
 }
 
+#[tauri::command]
+async fn select_zip_file(app: tauri::AppHandle) -> serde_json::Value {
+    use tauri_plugin_dialog::DialogExt;
+
+    let file_path = app
+        .dialog()
+        .file()
+        .add_filter("ZIP", &["zip"])
+        .blocking_pick_file();
+
+    match file_path {
+        Some(path) => serde_json::json!({
+            "ok": true,
+            "path": path.to_string()
+        }),
+        None => serde_json::json!({
+            "ok": false,
+            "error": "No file selected"
+        }),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Ensure the hidden application directory exists in the user's home directory.
@@ -894,12 +1233,15 @@ pub fn run() {
         );
     }
 
-    // Initialize file logging (info level by default). If logger initialization fails,
-    // fallback to stderr printing the error.
-    if let Err(e) = speleodb_compass_common::init_file_logger("info") {
-        eprintln!("Failed to initialize file logger: {:#}", e);
-    } else {
-        // Log a startup message once the logger is initialized.
+    // Initialize logging
+    let _ = speleodb_compass_common::init_file_logger("info");
+
+    if let Ok(path) = std::env::current_dir() {
+        log::info!("Current working directory: {}", path.display());
+    }
+
+    // Log where we are logging to
+    if speleodb_compass_common::COMPASS_HOME_DIR.exists() {
         log::info!(
             "Application starting. Logging to: {}",
             speleodb_compass_common::COMPASS_HOME_DIR.display()
@@ -908,6 +1250,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             save_user_prefs,
@@ -918,9 +1261,28 @@ pub fn run() {
             acquire_project_mutex,
             download_project_zip,
             unzip_project,
-            open_project_folder
+            open_project_folder,
+            zip_project_folder,
+            release_project_mutex,
+            upload_project_zip,
+            select_zip_file,
+            set_active_project,
+            clear_active_project
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
-
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                if let Some(project_id) = ACTIVE_PROJECT_ID.lock().unwrap().as_ref() {
+                    log::info!(
+                        "App exit requested, releasing mutex for project: {}",
+                        project_id
+                    );
+                    let runtime = tokio::runtime::Runtime::new().unwrap();
+                    runtime.block_on(async {
+                        release_project_mutex_internal(project_id).await;
+                    });
+                }
+            }
+        });
 }

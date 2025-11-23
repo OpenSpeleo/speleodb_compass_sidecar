@@ -6,8 +6,8 @@ use yew::prelude::*;
 
 use crate::components::project_details::ProjectDetails;
 use crate::components::project_listing::ProjectListing;
-use crate::speleo_db_controller::Project;
 use crate::speleo_db_controller::Prefs as ControllerPrefs;
+use crate::speleo_db_controller::Project;
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use serde_wasm_bindgen;
 

@@ -76,7 +76,7 @@ pub fn modal(props: &ModalProps) -> Html {
                     {
                         if props.show_close_button {
                             html! {
-                                <button 
+                                <button
                                     onclick={close_handler.clone()}
                                     style="
                                         padding: 8px 16px;
@@ -99,7 +99,7 @@ pub fn modal(props: &ModalProps) -> Html {
                     {
                         if let Some(btn_text) = &props.primary_button_text {
                             html! {
-                                <button 
+                                <button
                                     onclick={primary_action_handler}
                                     style={format!("
                                         padding: 8px 16px;

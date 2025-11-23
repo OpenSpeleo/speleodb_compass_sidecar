@@ -266,14 +266,14 @@ impl SpeleoDBController {
                 .get("error")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Failed to download project");
-            
+
             // Include URL if available for debugging
             let debug_info = if let Some(url) = json.get("url").and_then(|v| v.as_str()) {
                 format!("{} (URL: {})", err_msg, url)
             } else {
                 err_msg.to_string()
             };
-            
+
             return Err(debug_info);
         }
 
@@ -347,8 +347,146 @@ impl SpeleoDBController {
 
         Ok(())
     }
-}
 
+    pub async fn zip_project(&self, project_id: &str) -> Result<String, String> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args<'a> {
+            project_id: &'a str,
+        }
+
+        let args = Args { project_id };
+        let serialized_args = serde_wasm_bindgen::to_value(&args)
+            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
+
+        let rv = invoke("zip_project_folder", serialized_args).await;
+
+        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
+            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
+
+        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+            let err_msg = json
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Failed to ZIP project");
+            return Err(err_msg.to_string());
+        }
+
+        let path = json
+            .get("path")
+            .and_then(|v| v.as_str())
+            .ok_or("No path in response")?;
+
+        Ok(path.to_string())
+    }
+
+    pub async fn upload_project(
+        &self,
+        project_id: &str,
+        message: &str,
+        zip_path: &str,
+    ) -> Result<u16, String> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args<'a> {
+            project_id: &'a str,
+            commit_message: &'a str,
+            zip_path: &'a str,
+        }
+
+        let args = Args {
+            project_id,
+            commit_message: message,
+            zip_path,
+        };
+
+        let serialized_args = serde_wasm_bindgen::to_value(&args)
+            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
+
+        let rv = invoke("upload_project_zip", serialized_args).await;
+
+        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
+            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
+
+        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+            let err_msg = json
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Failed to upload project");
+            return Err(err_msg.to_string());
+        }
+
+        let status = json.get("status").and_then(|v| v.as_u64()).unwrap_or(200) as u16;
+        Ok(status)
+    }
+
+    pub async fn release_mutex(&self, project_id: &str) -> Result<(), String> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args<'a> {
+            project_id: &'a str,
+        }
+
+        let args = Args { project_id };
+        let serialized_args = serde_wasm_bindgen::to_value(&args)
+            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
+
+        let rv = invoke("release_project_mutex", serialized_args).await;
+
+        // Fire and forget - always succeeds
+        let _ = serde_wasm_bindgen::from_value::<serde_json::Value>(rv);
+
+        Ok(())
+    }
+
+    pub async fn select_zip_file(&self) -> Result<String, String> {
+        let rv = invoke(
+            "select_zip_file",
+            serde_wasm_bindgen::to_value(&()).unwrap(),
+        )
+        .await;
+
+        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
+            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
+
+        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+            let err_msg = json
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Failed to select file");
+            return Err(err_msg.to_string());
+        }
+
+        let path = json
+            .get("path")
+            .and_then(|v| v.as_str())
+            .ok_or("No path in response")?;
+
+        Ok(path.to_string())
+    }
+
+    pub async fn set_active_project(&self, project_id: &str) -> Result<(), String> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args<'a> {
+            project_id: &'a str,
+        }
+        let args = Args { project_id };
+        let serialized_args = serde_wasm_bindgen::to_value(&args)
+            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
+        invoke("set_active_project", serialized_args).await;
+        Ok(())
+    }
+
+    pub async fn clear_active_project(&self) -> Result<(), String> {
+        invoke(
+            "clear_active_project",
+            serde_wasm_bindgen::to_value(&()).unwrap(),
+        )
+        .await;
+        Ok(())
+    }
+}
 
 /// Try to parse an auth token from a JSON response body. Checks several common field names.
 // parse_auth_token removed; token parsing handled in native backend
