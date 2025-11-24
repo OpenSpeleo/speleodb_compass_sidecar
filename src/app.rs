@@ -1,6 +1,7 @@
 use futures::future::{Either, select};
 use gloo_timers::future::TimeoutFuture;
 use serde::{Deserialize, Serialize};
+use speleodb_compass_common::UserPrefs;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
@@ -8,7 +9,6 @@ use yew::prelude::*;
 
 use crate::components::project_details::ProjectDetails;
 use crate::components::project_listing::ProjectListing;
-use crate::speleo_db_controller::Prefs as ControllerPrefs;
 use crate::speleo_db_controller::Project;
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use serde_wasm_bindgen;
@@ -333,13 +333,13 @@ pub fn app() -> Html {
             let selected_project = selected_project.clone();
             spawn_local(async move {
                 // Persist prefs with empty token but keep the instance
-                let prefs = ControllerPrefs {
+                let prefs = UserPrefs {
                     instance: instance_val.clone(),
-                    oauth: String::new(),
+                    oauth_token: None,
                 };
                 #[derive(Serialize)]
                 struct SaveArgs<'a> {
-                    prefs: &'a ControllerPrefs,
+                    prefs: &'a UserPrefs,
                 }
                 let args = serde_wasm_bindgen::to_value(&SaveArgs { prefs: &prefs })
                     .unwrap_or(JsValue::NULL);

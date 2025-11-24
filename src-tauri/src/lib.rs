@@ -1,12 +1,14 @@
 mod api;
-
 mod commands;
+
 use commands::{
     acquire_project_mutex, clear_active_project, create_project, download_project_zip,
     fetch_projects, forget_user_prefs, load_user_prefs, native_auth_request, open_project_folder,
     release_project_mutex, save_user_prefs, select_zip_file, set_active_project, unzip_project,
     upload_project_zip, zip_project_folder,
 };
+use log::error;
+use speleodb_compass_common::{compass_home, UserPrefs};
 
 // Global state for active project
 lazy_static::lazy_static! {
@@ -20,42 +22,30 @@ async fn release_project_mutex_internal(project_id: &str) {
     log::info!("Releasing project mutex for project: {}", project_id);
 
     // Load user prefs
-    let mut path = speleodb_compass_common::COMPASS_HOME_DIR.clone();
-    path.push("user_prefs.json");
-
-    let prefs_str = match std::fs::read_to_string(&path) {
-        Ok(s) => s,
-        Err(_) => {
-            log::warn!("No saved credentials found for mutex release");
-            return;
-        }
-    };
-
-    let prefs: serde_json::Value = match serde_json::from_str(&prefs_str) {
+    let prefs = match UserPrefs::load() {
         Ok(p) => p,
         Err(e) => {
-            log::warn!("Failed to parse preferences for mutex release: {}", e);
+            error!("Failed to load user preferences for mutex release: {}", e);
             return;
         }
     };
 
-    let instance = match prefs.get("instance").and_then(|v| v.as_str()) {
-        Some(s) if !s.is_empty() => s.to_string(),
+    let prefs = match prefs {
+        Some(p) => p,
         _ => {
-            log::warn!("No instance URL in preferences");
+            error!("No user preferences found for mutex release");
             return;
         }
     };
 
-    let oauth = match prefs.get("oauth").and_then(|v| v.as_str()) {
-        Some(s) if !s.is_empty() => s.to_string(),
+    let oauth = match prefs.oauth_token {
+        Some(t) => t,
         _ => {
-            log::warn!("No OAuth token in preferences");
+            log::warn!("No OAuth token found in user preferences for mutex release");
             return;
         }
     };
-
-    let base = instance.trim_end_matches('/');
+    let base = prefs.instance.trim_end_matches('/');
     let url = format!("{}/api/v1/projects/{}/release/", base, project_id);
 
     let client = match Client::builder().timeout(Duration::from_secs(5)).build() {
@@ -203,130 +193,6 @@ mod tests {
         assert_eq!(parse_token_from_json(&v), Some("first".to_string()));
     }
 
-    #[test]
-    #[serial]
-    fn test_save_and_load_user_prefs() {
-        // Ensure directory exists and clear any existing preferences
-        let _ = speleodb_compass_common::ensure_app_dir_exists();
-        let _ = forget_user_prefs();
-
-        // Create test preferences
-        let prefs = serde_json::json!({
-            "instance": "https://test.example.com",
-            "oauth": "0123456789abcdef0123456789abcdef01234567"
-        });
-
-        // Save preferences
-        let save_result = save_user_prefs(prefs.clone());
-        assert!(
-            save_result.is_ok(),
-            "save_user_prefs should succeed: {:?}",
-            save_result
-        );
-
-        // Load preferences
-        let load_result = load_user_prefs();
-        assert!(
-            load_result.is_ok(),
-            "load_user_prefs should succeed: {:?}",
-            load_result
-        );
-
-        let loaded = load_result.as_ref().unwrap();
-        assert!(
-            loaded.is_some(),
-            "Should have loaded preferences, got: {:?}",
-            loaded
-        );
-
-        let loaded_json: serde_json::Value =
-            serde_json::from_str(loaded.as_ref().unwrap()).unwrap();
-        assert_eq!(
-            loaded_json.get("instance").and_then(|v| v.as_str()),
-            Some("https://test.example.com")
-        );
-        assert_eq!(
-            loaded_json.get("oauth").and_then(|v| v.as_str()),
-            Some("0123456789abcdef0123456789abcdef01234567")
-        );
-    }
-
-    #[test]
-    #[serial]
-    fn test_forget_user_prefs() {
-        // Ensure directory exists
-        let _ = speleodb_compass_common::ensure_app_dir_exists();
-
-        // Create and save test preferences
-        let prefs = serde_json::json!({
-            "instance": "https://test.example.com",
-            "oauth": "testtoken123"
-        });
-        let _ = save_user_prefs(prefs);
-
-        // Forget preferences
-        let forget_result = forget_user_prefs();
-        assert!(forget_result.is_ok(), "forget_user_prefs should succeed");
-
-        // Try to load - should get None
-        let load_result = load_user_prefs().unwrap();
-        assert!(load_result.is_none(), "Preferences should be deleted");
-    }
-
-    #[test]
-    #[serial]
-    fn test_forget_user_prefs_when_none_exist() {
-        // Should not error even if file doesn't exist
-        let result = forget_user_prefs();
-        assert!(
-            result.is_ok(),
-            "forget_user_prefs should succeed even if file doesn't exist"
-        );
-    }
-
-    #[test]
-    #[serial]
-    fn test_load_user_prefs_when_none_exist() {
-        // Delete prefs first
-        let _ = forget_user_prefs();
-
-        let result = load_user_prefs();
-        assert!(result.is_ok());
-        assert!(
-            result.unwrap().is_none(),
-            "Should return None when no preferences exist"
-        );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    #[serial]
-    fn test_save_user_prefs_sets_permissions() {
-        use std::os::unix::fs::PermissionsExt;
-
-        // Ensure directory exists
-        let _ = speleodb_compass_common::ensure_app_dir_exists();
-
-        // Save preferences
-        let prefs = serde_json::json!({"instance": "https://test.com", "oauth": "token123"});
-        let _ = save_user_prefs(prefs);
-
-        // Check file permissions
-        let mut path = speleodb_compass_common::COMPASS_HOME_DIR.clone();
-        path.push("user_prefs.json");
-
-        let metadata = std::fs::metadata(&path).expect("Should be able to read file metadata");
-        let permissions = metadata.permissions();
-        let mode = permissions.mode();
-
-        // Check that only owner has read/write (0o600 = 384 in decimal)
-        assert_eq!(
-            mode & 0o777,
-            0o600,
-            "File should have 0o600 permissions (owner read/write only)"
-        );
-    }
-
     #[tokio::test]
     #[serial]
     async fn native_auth_request_with_real_oauth() {
@@ -458,9 +324,8 @@ pub fn run() {
     // Ensure the hidden application directory exists in the user's home directory.
     if let Err(e) = speleodb_compass_common::ensure_app_dir_exists() {
         eprintln!(
-            "Failed to create application directory '{}', full path '{}': {:#}",
-            speleodb_compass_common::COMPASS_HOME_DIR_NAME,
-            speleodb_compass_common::COMPASS_HOME_DIR.display(),
+            "Failed to create application directory '{:?}': {:#}",
+            compass_home(),
             e
         );
     }
@@ -476,11 +341,8 @@ pub fn run() {
     }
 
     // Log where we are logging to
-    if speleodb_compass_common::COMPASS_HOME_DIR.exists() {
-        log::info!(
-            "Application starting. Logging to: {}",
-            speleodb_compass_common::COMPASS_HOME_DIR.display()
-        );
+    if compass_home().exists() {
+        log::info!("Application starting. Logging to: {:?}", compass_home());
     }
 
     let mut builder = tauri::Builder::default()

@@ -1,50 +1,22 @@
 use crate::{parse_token_from_json, release_project_mutex_internal, ACTIVE_PROJECT_ID};
+use log::info;
+use speleodb_compass_common::UserPrefs;
 
 #[tauri::command]
-pub fn save_user_prefs(prefs: serde_json::Value) -> Result<(), String> {
-    let mut path = speleodb_compass_common::COMPASS_HOME_DIR.clone();
-    path.push("user_prefs.json");
-    let s = serde_json::to_string_pretty(&prefs).map_err(|e| e.to_string())?;
-    std::fs::write(&path, s).map_err(|e| e.to_string())?;
-
-    // On Unix, tighten permissions so only the owner can read/write the prefs file.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if let Ok(meta) = std::fs::metadata(&path) {
-            let mut perms = meta.permissions();
-            // rw------- (owner read/write)
-            perms.set_mode(0o600);
-            let _ = std::fs::set_permissions(&path, perms).map_err(|e| e.to_string())?;
-        }
-    }
-
-    // Log the successful save with full path so the frontend/devs can verify persistence.
-    log::info!("Preferences saved in {}", path.display());
-
+pub fn save_user_prefs(prefs: UserPrefs) -> Result<(), String> {
+    info!("Saving user preferences: {prefs:?}");
+    UserPrefs::save(&prefs).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
-pub fn load_user_prefs() -> Result<Option<String>, String> {
-    let mut path = speleodb_compass_common::COMPASS_HOME_DIR.clone();
-    path.push("user_prefs.json");
-    if path.exists() {
-        let s = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        Ok(Some(s))
-    } else {
-        Ok(None)
-    }
+pub fn load_user_prefs() -> Result<Option<UserPrefs>, String> {
+    UserPrefs::load().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn forget_user_prefs() -> Result<(), String> {
-    let mut path = speleodb_compass_common::COMPASS_HOME_DIR.clone();
-    path.push("user_prefs.json");
-    if path.exists() {
-        std::fs::remove_file(&path).map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    UserPrefs::forget().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -60,35 +32,20 @@ pub async fn fetch_projects() -> serde_json::Value {
         // Use test environment variables
         (instance.unwrap(), oauth.unwrap())
     } else {
-        // Load user prefs to get instance URL and OAuth token
-        let mut path = speleodb_compass_common::COMPASS_HOME_DIR.clone();
-        path.push("user_prefs.json");
-
-        let prefs_str = match std::fs::read_to_string(&path) {
-            Ok(s) => s,
-            Err(_) => {
-                return serde_json::json!({"ok": false, "error": "No saved credentials found"})
-            }
-        };
-
-        let prefs: serde_json::Value = match serde_json::from_str(&prefs_str) {
+        let prefs = match UserPrefs::load() {
             Ok(p) => p,
             Err(e) => {
-                return serde_json::json!({"ok": false, "error": format!("Failed to parse preferences: {}", e)})
+                return serde_json::json!({"ok": false, "error": format!("Failed to load user preferences: {}", e)})
             }
         };
 
-        let instance = match prefs.get("instance").and_then(|v| v.as_str()) {
-            Some(s) if !s.is_empty() => s.to_string(),
-            _ => return serde_json::json!({"ok": false, "error": "No instance URL in preferences"}),
+        let prefs = match prefs {
+            Some(p) => p,
+            _ => {
+                return serde_json::json!({"ok": false, "error": "No instance URL in user preferences"});
+            }
         };
-
-        let oauth = match prefs.get("oauth").and_then(|v| v.as_str()) {
-            Some(s) if !s.is_empty() => s.to_string(),
-            _ => return serde_json::json!({"ok": false, "error": "No OAuth token in preferences"}),
-        };
-
-        (instance, oauth)
+        (prefs.instance, prefs.oauth_token.unwrap().to_string())
     };
 
     let base = instance.trim_end_matches('/');
@@ -140,7 +97,7 @@ pub async fn native_auth_request(
     if instance.trim().is_empty() {
         return serde_json::json!({"ok": false, "error": "Instance URL is empty"});
     }
-
+    info!("Attempting to authorize with instance: {}", instance);
     let base = instance.trim_end_matches('/');
     let url = format!("{}{}", base, "/api/v1/user/auth-token/");
 
@@ -176,6 +133,7 @@ pub async fn native_auth_request(
     let status = resp.status();
 
     if status.is_success() {
+        info!("Auth Request success");
         // Prefer header named Auth-Token
         if let Some(hv) = resp.headers().get("Auth-Token") {
             if let Ok(s) = hv.to_str() {
@@ -203,38 +161,28 @@ pub async fn acquire_project_mutex(project_id: String) -> serde_json::Value {
     use std::time::Duration;
 
     // Load user prefs to get instance URL and OAuth token
-    let mut path = speleodb_compass_common::COMPASS_HOME_DIR.clone();
-    path.push("user_prefs.json");
-
-    let prefs_str = match std::fs::read_to_string(&path) {
-        Ok(s) => s,
-        Err(_) => {
-            return serde_json::json!({"ok": false, "locked": false, "message": "No saved credentials found"})
-        }
-    };
-
-    let prefs: serde_json::Value = match serde_json::from_str(&prefs_str) {
+    let prefs = match UserPrefs::load() {
         Ok(p) => p,
         Err(e) => {
-            return serde_json::json!({"ok": false, "locked": false, "message": format!("Failed to parse preferences: {}", e)})
+            return serde_json::json!({"ok": false, "error": format!("Failed to load user preferences: {}", e)})
         }
     };
 
-    let instance = match prefs.get("instance").and_then(|v| v.as_str()) {
-        Some(s) if !s.is_empty() => s.to_string(),
+    let prefs = match prefs {
+        Some(p) => p,
         _ => {
-            return serde_json::json!({"ok": false, "locked": false, "message": "No instance URL in preferences"})
+            return serde_json::json!({"ok": false, "error": "No instance URL in user preferences"});
         }
     };
 
-    let oauth = match prefs.get("oauth").and_then(|v| v.as_str()) {
-        Some(s) if !s.is_empty() => s.to_string(),
+    let oauth = match prefs.oauth_token {
+        Some(t) => t.to_string(),
         _ => {
-            return serde_json::json!({"ok": false, "locked": false, "message": "No OAuth token in preferences"})
+            return serde_json::json!({"ok": false, "error": "No OAuth token in user preferences"});
         }
     };
 
-    let base = instance.trim_end_matches('/');
+    let base = prefs.instance.trim_end_matches('/');
     // NOTE: Using /acquire/ endpoint - adjust if actual API endpoint differs
     let url = format!("{}/api/v1/projects/{}/acquire/", base, project_id);
 
@@ -277,32 +225,28 @@ pub async fn download_project_zip(project_id: String) -> serde_json::Value {
     use std::time::Duration;
 
     // Load user prefs
-    let mut path = speleodb_compass_common::COMPASS_HOME_DIR.clone();
-    path.push("user_prefs.json");
-
-    let prefs_str = match std::fs::read_to_string(&path) {
-        Ok(s) => s,
-        Err(_) => return serde_json::json!({"ok": false, "error": "No saved credentials found"}),
-    };
-
-    let prefs: serde_json::Value = match serde_json::from_str(&prefs_str) {
+    let prefs = match UserPrefs::load() {
         Ok(p) => p,
         Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to parse preferences: {}", e)})
+            return serde_json::json!({"ok": false, "error": format!("Failed to load user preferences: {}", e)})
         }
     };
 
-    let instance = match prefs.get("instance").and_then(|v| v.as_str()) {
-        Some(s) if !s.is_empty() => s.to_string(),
-        _ => return serde_json::json!({"ok": false, "error": "No instance URL in preferences"}),
+    let prefs = match prefs {
+        Some(p) => p,
+        _ => {
+            return serde_json::json!({"ok": false, "error": "No instance URL in user preferences"});
+        }
     };
 
-    let oauth = match prefs.get("oauth").and_then(|v| v.as_str()) {
-        Some(s) if !s.is_empty() => s.to_string(),
-        _ => return serde_json::json!({"ok": false, "error": "No OAuth token in preferences"}),
+    let oauth = match prefs.oauth_token {
+        Some(t) => t,
+        _ => {
+            return serde_json::json!({"ok": false, "error": "No OAuth token in user preferences"});
+        }
     };
 
-    let base = instance.trim_end_matches('/');
+    let base = prefs.instance.trim_end_matches('/');
     let url = format!(
         "{}/api/v1/projects/{}/download/compass_zip/",
         base, project_id
@@ -656,35 +600,28 @@ pub async fn upload_project_zip(
 
     log::info!("Uploading project ZIP for project: {}", project_id);
 
-    // Load user prefs
-    let mut path = speleodb_compass_common::COMPASS_HOME_DIR.clone();
-    path.push("user_prefs.json");
-
-    let prefs_str = match std::fs::read_to_string(&path) {
-        Ok(s) => s,
-        Err(_) => {
-            return serde_json::json!({"ok": false, "error": "No saved credentials found"});
-        }
-    };
-
-    let prefs: serde_json::Value = match serde_json::from_str(&prefs_str) {
+    let prefs = match UserPrefs::load() {
         Ok(p) => p,
         Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to parse preferences: {}", e)});
+            return serde_json::json!({"ok": false, "error": format!("Failed to load user preferences: {}", e)})
         }
     };
 
-    let instance = match prefs.get("instance").and_then(|v| v.as_str()) {
-        Some(s) if !s.is_empty() => s.to_string(),
-        _ => return serde_json::json!({"ok": false, "error": "No instance URL in preferences"}),
+    let prefs = match prefs {
+        Some(p) => p,
+        _ => {
+            return serde_json::json!({"ok": false, "error": "No instance URL in user preferences"});
+        }
     };
 
-    let oauth = match prefs.get("oauth").and_then(|v| v.as_str()) {
-        Some(s) if !s.is_empty() => s.to_string(),
-        _ => return serde_json::json!({"ok": false, "error": "No OAuth token in preferences"}),
+    let oauth = match prefs.oauth_token {
+        Some(t) => t,
+        _ => {
+            return serde_json::json!({"ok": false, "error": "No OAuth token in user preferences"});
+        }
     };
 
-    let base = instance.trim_end_matches('/');
+    let base = prefs.instance.trim_end_matches('/');
     let url = format!(
         "{}/api/v1/projects/{}/upload/compass_zip/",
         base, project_id
@@ -770,32 +707,28 @@ pub async fn create_project(
     use std::time::Duration;
 
     // Load user prefs
-    let mut path = speleodb_compass_common::COMPASS_HOME_DIR.clone();
-    path.push("user_prefs.json");
-
-    let prefs_str = match std::fs::read_to_string(&path) {
-        Ok(s) => s,
-        Err(_) => return serde_json::json!({"ok": false, "error": "No saved credentials found"}),
-    };
-
-    let prefs: serde_json::Value = match serde_json::from_str(&prefs_str) {
+    let prefs = match UserPrefs::load() {
         Ok(p) => p,
         Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to parse preferences: {}", e)})
+            return serde_json::json!({"ok": false, "error": format!("Failed to load user preferences: {}", e)})
         }
     };
 
-    let instance = match prefs.get("instance").and_then(|v| v.as_str()) {
-        Some(s) if !s.is_empty() => s.to_string(),
-        _ => return serde_json::json!({"ok": false, "error": "No instance URL in preferences"}),
+    let prefs = match prefs {
+        Some(p) => p,
+        _ => {
+            return serde_json::json!({"ok": false, "error": "No instance URL in user preferences"});
+        }
     };
 
-    let oauth = match prefs.get("oauth").and_then(|v| v.as_str()) {
-        Some(s) if !s.is_empty() => s.to_string(),
-        _ => return serde_json::json!({"ok": false, "error": "No OAuth token in preferences"}),
+    let oauth = match prefs.oauth_token {
+        Some(t) => t,
+        _ => {
+            return serde_json::json!({"ok": false, "error": "No OAuth token in user preferences"});
+        }
     };
 
-    let base = instance.trim_end_matches('/');
+    let base = prefs.instance.trim_end_matches('/');
     let url = format!("{}{}", base, "/api/v1/projects/");
 
     let client = match Client::builder().timeout(Duration::from_secs(30)).build() {

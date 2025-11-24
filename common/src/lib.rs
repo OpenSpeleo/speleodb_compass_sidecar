@@ -1,8 +1,10 @@
 mod compass_project;
 mod error;
+mod user_prefs;
 
 pub use compass_project::{CompassProject, Project, SpeleoDb};
 pub use error::Error;
+pub use user_prefs::{OauthToken, UserPrefs};
 
 use std::{
     path::{Path, PathBuf},
@@ -12,15 +14,15 @@ use std::{
 use uuid::Uuid;
 
 /// Name of the hidden application directory inside the user's home directory.
-pub const COMPASS_HOME_DIR_NAME: &str = ".compass";
+const COMPASS_HOME_DIR_NAME: &str = ".compass";
 
 /// Name of the compass projects folder inside the user's home directory.
-pub const COMPASS_PROJECT_DIR_NAME: &str = "projects";
+const COMPASS_PROJECT_DIR_NAME: &str = "projects";
 
 /// Lazily-initialized full path to the application directory (home + COMPASS_HOME_DIR_NAME).
 ///
 /// This is a runtime-initialized static because the user's home directory is not known at compile time.
-pub static COMPASS_HOME_DIR: LazyLock<PathBuf> = LazyLock::new(|| match dirs::home_dir() {
+static COMPASS_HOME_DIR: LazyLock<PathBuf> = LazyLock::new(|| match dirs::home_dir() {
     Some(mut p) => {
         p.push(COMPASS_HOME_DIR_NAME);
         p
@@ -29,33 +31,32 @@ pub static COMPASS_HOME_DIR: LazyLock<PathBuf> = LazyLock::new(|| match dirs::ho
 });
 
 /// Lazily-initialized full path to the compass projects folder (~/.compass/projects).
-pub static COMPASS_PROJECT_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+static COMPASS_PROJECT_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     let mut p = COMPASS_HOME_DIR.clone(); // Use the home dir above
     p.push(COMPASS_PROJECT_DIR_NAME);
     p
 });
 
 /// Return a clone of the computed application directory path.
-pub fn app_dir_path() -> PathBuf {
-    COMPASS_HOME_DIR.clone()
+pub fn compass_home() -> &'static Path {
+    &COMPASS_HOME_DIR
 }
 
 /// Return a clone of the compass projects folder path.
-pub fn compass_dir_path() -> PathBuf {
-    COMPASS_PROJECT_DIR.clone()
+pub fn compass_dir_path() -> &'static Path {
+    &COMPASS_PROJECT_DIR
 }
 
 /// Get the path for a specific project in the compass folder.
 pub fn project_compass_path(project_id: &str) -> PathBuf {
-    let mut path = compass_dir_path();
+    let mut path = compass_dir_path().to_path_buf();
     path.push(project_id);
     path
 }
 
 /// Ensure the application directory exists, creating it if necessary.
 pub fn ensure_app_dir_exists() -> std::io::Result<()> {
-    let p = COMPASS_HOME_DIR.as_path();
-    std::fs::create_dir_all(p)
+    std::fs::create_dir_all(compass_home())
 }
 
 /// Ensure the compass folder exists, creating it if necessary.
@@ -141,15 +142,15 @@ mod tests {
 
     #[test]
     fn konst_and_path() {
-        let p = app_dir_path();
+        let p = compass_home();
         assert!(p.ends_with(COMPASS_HOME_DIR_NAME));
     }
 
     #[test]
     fn app_dir_path_returns_clone() {
         // Test that app_dir_path returns a clone and both paths are equal
-        let path1 = app_dir_path();
-        let path2 = app_dir_path();
+        let path1 = compass_home();
+        let path2 = compass_home();
         assert_eq!(path1, path2);
         assert!(path1.ends_with(COMPASS_HOME_DIR_NAME));
     }
@@ -157,7 +158,7 @@ mod tests {
     #[test]
     fn app_dir_path_is_absolute_or_relative() {
         // The path should end with the directory name
-        let p = app_dir_path();
+        let p = compass_home();
         let path_str = p.to_string_lossy();
         assert!(path_str.contains(COMPASS_HOME_DIR_NAME));
     }
@@ -170,7 +171,7 @@ mod tests {
         assert!(result.is_ok(), "ensure_app_dir_exists should succeed");
 
         // Verify the directory was created
-        let path = app_dir_path();
+        let path = compass_home();
         assert!(
             path.exists(),
             "Directory should exist after ensure_app_dir_exists"
@@ -197,14 +198,14 @@ mod tests {
         assert!(result.is_ok() || result.is_err()); // Logger can only be init once per process
 
         // Verify the log directory exists after initialization
-        let log_dir = app_dir_path();
+        let log_dir = compass_home();
         assert!(log_dir.exists());
     }
 
     #[test]
     fn init_file_logger_creates_directory() {
         // The logger should create the directory if it doesn't exist
-        let log_dir = app_dir_path();
+        let log_dir = compass_home();
 
         // Try to initialize logger (may fail if already initialized)
         let _ = init_file_logger("debug");

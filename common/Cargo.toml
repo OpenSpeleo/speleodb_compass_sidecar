@@ -12,3 +12,7 @@ thiserror = { version = "2"}
 toml = {version = "0.9.8"}
 uuid = {version = "1", features = ["serde","v4", "rng-rand" ]}
 semver = { version = "1.0.27", features = ["serde"] }
+
+[dev-dependencies]
+serial_test = "3"
+ctor = "0.2"

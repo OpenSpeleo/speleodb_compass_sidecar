@@ -2,6 +2,7 @@
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen;
+use speleodb_compass_common::UserPrefs;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::*;
 use web_sys::Url;
@@ -11,12 +12,6 @@ use web_sys::Url;
 extern "C" {
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
     async fn invoke(cmd: &str, args: JsValue) -> JsValue;
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Prefs {
-    pub instance: String,
-    pub oauth: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -188,13 +183,13 @@ impl SpeleoDBController {
 
         if let Some(token) = token_opt {
             // Save prefs with instance and token only (no email/password)
-            let prefs = Prefs {
+            let prefs = UserPrefs {
                 instance: target_instance.to_string(),
-                oauth: token,
+                oauth_token: Some(token),
             };
             #[derive(Serialize)]
             struct SaveArgs<'a> {
-                prefs: &'a Prefs,
+                prefs: &'a UserPrefs,
             }
             let args = SaveArgs { prefs: &prefs };
             let _save_rv = invoke(
@@ -710,9 +705,9 @@ mod tests {
     // Prefs struct tests
     #[test]
     fn prefs_serialization() {
-        let prefs = Prefs {
+        let prefs = UserPrefs {
             instance: "https://test.com".to_string(),
-            oauth: "0123456789abcdef0123456789abcdef01234567".to_string(),
+            oauth_token: Some("0123456789abcdef0123456789abcdef01234567".to_string()),
         };
 
         let json = serde_json::to_string(&prefs).unwrap();
@@ -723,10 +718,10 @@ mod tests {
     #[test]
     fn prefs_deserialization() {
         let json = r#"{"instance":"https://test.com","oauth":"token123"}"#;
-        let prefs: Prefs = serde_json::from_str(json).unwrap();
+        let prefs: UserPrefs = serde_json::from_str(json).unwrap();
 
         assert_eq!(prefs.instance, "https://test.com");
-        assert_eq!(prefs.oauth, "token123");
+        assert_eq!(prefs.oauth_token, Some("token123".to_string()));
     }
 
     // Project struct tests
