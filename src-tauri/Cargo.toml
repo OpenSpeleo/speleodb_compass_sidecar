@@ -35,4 +35,4 @@ lazy_static = "1.4"
 [dev-dependencies]
 serial_test = "3"
 dotenvy = "0.15"
-ctor = "0.2"
+ctor = "0.6"
