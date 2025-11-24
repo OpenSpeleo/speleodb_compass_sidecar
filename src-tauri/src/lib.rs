@@ -1,3 +1,5 @@
+mod api;
+
 mod commands;
 use commands::{
     acquire_project_mutex, clear_active_project, create_project, download_project_zip,
