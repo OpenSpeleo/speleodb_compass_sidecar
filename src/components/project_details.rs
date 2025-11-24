@@ -281,7 +281,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
     };
 
     // Load from Disk Handler
-    let on_load_from_disk = {
+    let on_import_from_disk = {
         let selected_zip = selected_zip.clone();
         let show_load_confirm = show_load_confirm.clone();
         let error_message = error_message.clone();
@@ -292,16 +292,13 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
             let error_message = error_message.clone();
 
             spawn_local(async move {
-                match SPELEO_DB_CONTROLLER.select_zip_file().await {
+                match SPELEO_DB_CONTROLLER.import_compass_project().await {
                     Ok(path) => {
                         selected_zip.set(Some(path));
                         show_load_confirm.set(true);
                     }
                     Err(e) => {
-                        // Ignore "No file selected" error or log it
-                        if !e.contains("No file selected") {
-                            error_message.set(Some(format!("Failed to select file: {}", e)));
-                        }
+                        error_message.set(Some(format!("Failed to select file: {}", e)));
                     }
                 }
             });
@@ -494,7 +491,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                             </div>
                             <div style="display: flex; justify-content: center; margin-top: 12px;">
                                 <button
-                                    onclick={on_load_from_disk}
+                                    onclick={on_import_from_disk}
                                     style="background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
                                 >
                                     {"Import from Disk"}

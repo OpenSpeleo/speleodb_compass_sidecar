@@ -1,6 +1,7 @@
 use crate::{parse_token_from_json, release_project_mutex_internal, ACTIVE_PROJECT_ID};
 use log::info;
-use speleodb_compass_common::UserPrefs;
+use speleodb_compass_common::{Error, UserPrefs};
+use tauri_plugin_dialog::{DialogExt, FilePath};
 
 #[tauri::command]
 pub fn save_user_prefs(prefs: UserPrefs) -> Result<(), String> {
@@ -11,6 +12,7 @@ pub fn save_user_prefs(prefs: UserPrefs) -> Result<(), String> {
 
 #[tauri::command]
 pub fn load_user_prefs() -> Result<Option<UserPrefs>, String> {
+    info!("Loading user preferences");
     UserPrefs::load().map_err(|e| e.to_string())
 }
 
@@ -551,25 +553,21 @@ pub fn zip_project_folder(project_id: String) -> serde_json::Value {
 }
 
 #[tauri::command]
-pub async fn select_zip_file(app: tauri::AppHandle) -> serde_json::Value {
-    use tauri_plugin_dialog::DialogExt;
-
-    let file_path = app
-        .dialog()
-        .file()
-        .add_filter("ZIP", &["zip"])
-        .blocking_pick_file();
-
-    match file_path {
-        Some(path) => serde_json::json!({
-            "ok": true,
-            "path": path.to_string()
-        }),
-        None => serde_json::json!({
-            "ok": false,
-            "error": "No file selected"
-        }),
-    }
+pub async fn import_compass_project(app: tauri::AppHandle) -> Result<String, Error> {
+    tauri::async_runtime::spawn(async move {
+        let Some(FilePath::Path(file_path)) = app
+            .dialog()
+            .file()
+            .add_filter("MAK", &["mak"])
+            .blocking_pick_file()
+        else {
+            return Err(Error::NoProjectSelected);
+        };
+        info!("Selected MAK file: {}", file_path.display());
+        Ok(file_path.to_str().unwrap().to_owned())
+    })
+    .await
+    .unwrap()
 }
 
 #[tauri::command]

@@ -44,7 +44,7 @@ pub fn app() -> Html {
         email: String,
         #[serde(default)]
         password: String,
-        oauth: String,
+        oauth_token: String,
     }
 
     // UI state
@@ -78,20 +78,20 @@ pub fn app() -> Html {
                             }
                             email.set(p.email.clone());
                             password.set(p.password.clone());
-                            oauth.set(p.oauth.clone());
+                            oauth.set(p.oauth_token.clone());
 
                             // Auto-login logic
                             if SPELEO_DB_CONTROLLER.should_auto_login(
                                 &p.email,
                                 &p.password,
-                                &p.oauth,
+                                &p.oauth_token,
                             ) {
                                 web_sys::console::log_1(&"Attempting silent auto-login...".into());
 
                                 let auth_future = SPELEO_DB_CONTROLLER.authenticate(
                                     &p.email,
                                     &p.password,
-                                    &p.oauth,
+                                    &p.oauth_token,
                                     &p.instance,
                                 );
                                 let timeout_future = TimeoutFuture::new(3_000);

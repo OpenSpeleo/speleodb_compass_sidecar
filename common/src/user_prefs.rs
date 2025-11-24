@@ -46,8 +46,8 @@ impl Default for UserPrefs {
 
 impl UserPrefs {
     pub fn save(prefs: &Self) -> Result<(), Error> {
-        let s = toml::to_string_pretty(&prefs).map_err(Error::Serialization)?;
-        std::fs::write(user_prefs_file_path(), s).map_err(Error::UserPrefsWrite)?;
+        let s = toml::to_string_pretty(&prefs).map_err(|_| Error::Serialization)?;
+        std::fs::write(user_prefs_file_path(), s).map_err(|_| Error::UserPrefsWrite)?;
 
         // On Unix, tighten permissions so only the owner can read/write the prefs file.
         #[cfg(unix)]
@@ -58,7 +58,7 @@ impl UserPrefs {
                 // rw------- (owner read/write)
                 perms.set_mode(0o600);
                 let _ = std::fs::set_permissions(user_prefs_file_path(), perms)
-                    .map_err(Error::FilePermissionSet)?;
+                    .map_err(|_| Error::FilePermissionSet)?;
             }
         }
 
@@ -73,9 +73,9 @@ impl UserPrefs {
 
     pub fn load() -> Result<Option<Self>, Error> {
         if user_prefs_file_path().exists() {
-            let s =
-                std::fs::read_to_string(user_prefs_file_path()).map_err(Error::UserPrefsRead)?;
-            let s: UserPrefs = toml::from_str(&s).map_err(Error::Deserialization)?;
+            let s = std::fs::read_to_string(user_prefs_file_path())
+                .map_err(|_| Error::UserPrefsRead)?;
+            let s: UserPrefs = toml::from_str(&s).map_err(|_| Error::Deserialization)?;
             Ok(Some(s))
         } else {
             Ok(None)
@@ -84,7 +84,7 @@ impl UserPrefs {
 
     pub fn forget() -> Result<(), Error> {
         if user_prefs_file_path().exists() {
-            std::fs::remove_file(&user_prefs_file_path()).map_err(Error::UserPrefsWrite)?;
+            std::fs::remove_file(&user_prefs_file_path()).map_err(|_| Error::UserPrefsWrite)?;
         }
         Ok(())
     }
@@ -172,9 +172,8 @@ mod tests {
     #[test]
     #[serial]
     fn test_save_user_prefs_sets_permissions() {
-
         use std::os::unix::fs::PermissionsExt;
-        
+
         // Ensure directory exists
         let _ = ensure_app_dir_exists();
 

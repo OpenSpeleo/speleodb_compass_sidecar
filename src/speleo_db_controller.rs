@@ -3,7 +3,7 @@ use crate::{invoke, invoke_without_args};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen;
-use speleodb_compass_common::UserPrefs;
+use speleodb_compass_common::{Error, UserPrefs};
 use wasm_bindgen::JsValue;
 use web_sys::Url;
 
@@ -433,30 +433,10 @@ impl SpeleoDBController {
         Ok(())
     }
 
-    pub async fn select_zip_file(&self) -> Result<String, String> {
-        let rv = invoke(
-            "select_zip_file",
-            serde_wasm_bindgen::to_value(&()).unwrap(),
-        )
-        .await;
-
-        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
-            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
-
-        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
-            let err_msg = json
-                .get("error")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Failed to select file");
-            return Err(err_msg.to_string());
-        }
-
-        let path = json
-            .get("path")
-            .and_then(|v| v.as_str())
-            .ok_or("No path in response")?;
-
-        Ok(path.to_string())
+    pub async fn import_compass_project(&self) -> Result<String, Error> {
+        let js_val = invoke_without_args("import_compass_project").await;
+        serde_wasm_bindgen::from_value::<Result<String, Error>>(js_val)
+            .map_err(|_| Error::Deserialization)?
     }
 
     pub async fn set_active_project(&self, project_id: &str) -> Result<(), String> {

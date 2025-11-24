@@ -1,23 +1,26 @@
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Deserialize, Error, Serialize)]
 pub enum Error {
     #[error("Project directory already exists at {0}")]
     ProjectAlreadyExists(PathBuf),
-    #[error("Couldn't create storage directory for project: {0}")]
-    CreateProjectDirectory(#[source] std::io::Error),
-    #[error("Error deserializing TOML: {0}")]
-    Deserialization(#[from] toml::de::Error),
-    #[error("Error serializing TOML: {0}")]
-    Serialization(#[from] toml::ser::Error),
-    #[error("Error reading user preferece file: {0}")]
-    UserPrefsRead(#[source] std::io::Error),
-    #[error("Error writing user preference file: {0}")]
-    UserPrefsWrite(#[source] std::io::Error),
-    #[error("Error writing project file: {0}")]
-    ProjectWrite(#[source] std::io::Error),
-    #[error("Error setting file permissions: {0}")]
-    FilePermissionSet(#[source] std::io::Error),
+    #[error("Couldn't create storage directory for project")]
+    CreateProjectDirectory,
+    #[error("Error deserializing TOML")]
+    Deserialization,
+    #[error("Error serializing TOML")]
+    Serialization,
+    #[error("Error reading user preferece file")]
+    UserPrefsRead,
+    #[error("Error writing user preference file")]
+    UserPrefsWrite,
+    #[error("Error writing project file")]
+    ProjectWrite,
+    #[error("Error setting file permissions")]
+    FilePermissionSet,
+    #[error("No project selected")]
+    NoProjectSelected,
 }

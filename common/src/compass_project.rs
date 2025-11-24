@@ -61,7 +61,7 @@ impl CompassProject {
         if project_path.exists() {
             return Err(Error::ProjectAlreadyExists(project_path));
         }
-        std::fs::create_dir_all(&project_path).map_err(Error::CreateProjectDirectory)?;
+        std::fs::create_dir_all(&project_path).map_err(|_| Error::CreateProjectDirectory)?;
         let new_project = Self {
             speleodb: SpeleoDb {
                 id,
@@ -71,8 +71,8 @@ impl CompassProject {
         };
         project_path.push(SPELEODB_COMPASS_PROJECT_FILE);
         let serialized_project =
-            toml::to_string_pretty(&new_project).map_err(Error::Serialization)?;
-        std::fs::write(project_path, &serialized_project).map_err(Error::ProjectWrite)?;
+            toml::to_string_pretty(&new_project).map_err(|_| Error::Serialization)?;
+        std::fs::write(project_path, &serialized_project).map_err(|_| Error::ProjectWrite)?;
         Ok(new_project)
     }
 }
