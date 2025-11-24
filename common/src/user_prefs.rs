@@ -95,7 +95,6 @@ mod tests {
     use super::*;
     use crate::ensure_app_dir_exists;
     use serial_test::serial;
-    use std::os::unix::fs::PermissionsExt;
 
     #[test]
     #[serial]
@@ -173,6 +172,9 @@ mod tests {
     #[test]
     #[serial]
     fn test_save_user_prefs_sets_permissions() {
+
+        use std::os::unix::fs::PermissionsExt;
+        
         // Ensure directory exists
         let _ = ensure_app_dir_exists();
 
