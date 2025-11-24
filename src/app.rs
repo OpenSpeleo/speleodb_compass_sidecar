@@ -23,6 +23,10 @@ enum ActiveTab {
 extern "C" {
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
     async fn invoke(cmd: &str, args: JsValue) -> JsValue;
+
+    // invoke without arguments
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], js_name = invoke)]
+    async fn invoke_without_args(cmd: &str) -> JsValue;
 }
 
 #[function_component(App)]
@@ -65,7 +69,7 @@ pub fn app() -> Html {
 
         use_effect_with((), move |_| {
             spawn_local(async move {
-                let rv = invoke("load_user_prefs", JsValue::NULL).await;
+                let rv = invoke_without_args("load_user_prefs").await;
                 if let Some(s) = rv.as_string() {
                     match serde_json::from_str::<Prefs>(&s) {
                         Ok(p) => {

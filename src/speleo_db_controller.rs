@@ -1,18 +1,11 @@
 // WASM controller now delegates network calls to native Tauri backend.
+use crate::{invoke, invoke_without_args};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen;
 use speleodb_compass_common::UserPrefs;
 use wasm_bindgen::JsValue;
-use wasm_bindgen::prelude::*;
 use web_sys::Url;
-// serde_json::Value not required in this module; network logic moved to native backend
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
-    async fn invoke(cmd: &str, args: JsValue) -> JsValue;
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ActiveMutex {
