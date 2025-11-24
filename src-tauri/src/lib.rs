@@ -464,6 +464,9 @@ pub fn run() {
             e
         );
     }
+    // This should be called as early in the execution of the app as possible
+    #[cfg(debug_assertions)] // only enable instrumentation in development builds
+    let devtools = tauri_plugin_devtools::init();
 
     // Initialize logging
     let _ = speleodb_compass_common::init_file_logger("info");
@@ -480,7 +483,7 @@ pub fn run() {
         );
     }
 
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
@@ -500,7 +503,12 @@ pub fn run() {
             upload_project_zip,
             zip_project_folder,
             create_project,
-        ])
+        ]);
+    #[cfg(debug_assertions)]
+    {
+        builder = builder.plugin(devtools);
+    }
+    builder
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app_handle, event| {
