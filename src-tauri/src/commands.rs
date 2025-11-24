@@ -331,6 +331,25 @@ pub async fn download_project_zip(project_id: String) -> serde_json::Value {
 
     let status = resp.status();
 
+    // Handle 422 - Project has no compass data yet (new/empty project)
+    if status.as_u16() == 422 {
+        // Create the project directory even though there's no data to download
+        if let Err(e) = speleodb_compass_common::ensure_project_compass_dir_exists(&project_id) {
+            return serde_json::json!({
+                "ok": false,
+                "error": format!("Failed to create project directory: {}", e)
+            });
+        }
+
+        log::info!("Created directory for empty project: {}", project_id);
+
+        return serde_json::json!({
+            "ok": true,
+            "empty_project": true,
+            "message": "Project contains no Compass data. Use 'Import from Disk' to initialize the project."
+        });
+    }
+
     if !status.is_success() {
         return serde_json::json!({
             "ok": false,
@@ -734,6 +753,140 @@ pub async fn upload_project_zip(
         serde_json::json!({
             "ok": false,
             "error": format!("Upload failed with status {}", status.as_u16()),
+            "status": status.as_u16()
+        })
+    }
+}
+
+#[tauri::command]
+pub async fn create_project(
+    name: String,
+    description: String,
+    country: String,
+    latitude: Option<String>,
+    longitude: Option<String>,
+) -> serde_json::Value {
+    use reqwest::Client;
+    use std::time::Duration;
+
+    // Load user prefs
+    let mut path = speleodb_compass_common::COMPASS_HOME_DIR.clone();
+    path.push("user_prefs.json");
+
+    let prefs_str = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(_) => return serde_json::json!({"ok": false, "error": "No saved credentials found"}),
+    };
+
+    let prefs: serde_json::Value = match serde_json::from_str(&prefs_str) {
+        Ok(p) => p,
+        Err(e) => {
+            return serde_json::json!({"ok": false, "error": format!("Failed to parse preferences: {}", e)})
+        }
+    };
+
+    let instance = match prefs.get("instance").and_then(|v| v.as_str()) {
+        Some(s) if !s.is_empty() => s.to_string(),
+        _ => return serde_json::json!({"ok": false, "error": "No instance URL in preferences"}),
+    };
+
+    let oauth = match prefs.get("oauth").and_then(|v| v.as_str()) {
+        Some(s) if !s.is_empty() => s.to_string(),
+        _ => return serde_json::json!({"ok": false, "error": "No OAuth token in preferences"}),
+    };
+
+    let base = instance.trim_end_matches('/');
+    let url = format!("{}{}", base, "/api/v1/projects/");
+
+    let client = match Client::builder().timeout(Duration::from_secs(30)).build() {
+        Ok(c) => c,
+        Err(e) => {
+            return serde_json::json!({"ok": false, "error": format!("Failed to build HTTP client: {}", e)})
+        }
+    };
+
+    let mut body = serde_json::Map::new();
+    body.insert("name".to_string(), serde_json::json!(name));
+    body.insert("description".to_string(), serde_json::json!(description));
+    body.insert("country".to_string(), serde_json::json!(country));
+    if let Some(lat) = latitude {
+        if !lat.is_empty() {
+            body.insert("latitude".to_string(), serde_json::json!(lat));
+        }
+    }
+    if let Some(lon) = longitude {
+        if !lon.is_empty() {
+            body.insert("longitude".to_string(), serde_json::json!(lon));
+        }
+    }
+
+    log::info!("Creating project: {}", name);
+
+    let resp = match client
+        .post(&url)
+        .header("Authorization", format!("Token {}", oauth))
+        .json(&body)
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)})
+        }
+    };
+
+    let status = resp.status();
+
+    if status.is_success() {
+        let json: serde_json::Value = match resp.json().await {
+            Ok(j) => j,
+            Err(e) => {
+                return serde_json::json!({"ok": false, "error": format!("Failed to parse response: {}", e)})
+            }
+        };
+
+        // Extract the project data from the API response
+        let project_data = match json.get("data") {
+            Some(data) => data.clone(),
+            None => {
+                return serde_json::json!({"ok": false, "error": "No data field in API response"});
+            }
+        };
+
+        // Extract project ID to create local folder
+        if let Some(project_id) = project_data.get("id").and_then(|v| v.as_str()) {
+            // Ensure compass directory exists
+            if let Err(e) = speleodb_compass_common::ensure_compass_dir_exists() {
+                return serde_json::json!({"ok": false, "error": format!("Failed to create compass directory: {}", e)});
+            }
+
+            // Create project-specific directory
+            if let Err(e) = speleodb_compass_common::ensure_project_compass_dir_exists(project_id) {
+                return serde_json::json!({"ok": false, "error": format!("Failed to create project directory: {}", e)});
+            }
+
+            log::info!(
+                "Created local project directory for project: {}",
+                project_id
+            );
+        }
+
+        // Return the project data wrapped in our standard format
+        serde_json::json!({
+            "ok": true,
+            "data": project_data
+        })
+    } else {
+        // Try to get error message from body
+        let error_msg = if let Ok(err_json) = resp.json::<serde_json::Value>().await {
+            err_json.to_string()
+        } else {
+            format!("Status {}", status.as_u16())
+        };
+
+        serde_json::json!({
+            "ok": false,
+            "error": format!("Create failed: {}", error_msg),
             "status": status.as_u16()
         })
     }

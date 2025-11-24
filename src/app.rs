@@ -51,6 +51,7 @@ pub fn app() -> Html {
     let error_is_403 = use_state(|| false);
     let active_tab = use_state(|| ActiveTab::Listing);
     let selected_project: UseStateHandle<Option<Project>> = use_state(|| None);
+    let refresh_trigger = use_state(|| 0u32);
     // Silent mode for validation errors (true on startup/auto-login, false on interaction)
     let validation_silent = use_state(|| true);
 
@@ -256,11 +257,21 @@ pub fn app() -> Html {
         let validation_silent = validation_silent.clone();
         Callback::from(move |e: InputEvent| {
             let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-            let mut value = input.value();
-            // Auto-trim trailing slash
-            value = value.trim_end_matches('/').to_string();
-            instance.set(value);
+            instance.set(input.value());
             validation_silent.set(false);
+        })
+    };
+
+    let on_instance_blur = {
+        let instance = instance.clone();
+        Callback::from(move |e: FocusEvent| {
+            let input: web_sys::HtmlInputElement = e.target_unchecked_into();
+            let mut value = input.value();
+            // Auto-trim trailing slash on blur
+            if value.ends_with('/') {
+                value = value.trim_end_matches('/').to_string();
+                instance.set(value);
+            }
         })
     };
 
@@ -358,8 +369,11 @@ pub fn app() -> Html {
     // Back to project listing
     let on_back_to_listing = {
         let active_tab = active_tab.clone();
+        let refresh_trigger = refresh_trigger.clone();
         Callback::from(move |_| {
             active_tab.set(ActiveTab::Listing);
+            // Increment refresh trigger to force project list refresh
+            refresh_trigger.set(*refresh_trigger + 1);
         })
     };
 
@@ -401,7 +415,7 @@ pub fn app() -> Html {
                 <section style="width:100%;">
                     {
                         if *active_tab == ActiveTab::Listing {
-                            html!{ <ProjectListing on_select={on_project_selected.clone()} /> }
+                            html!{ <ProjectListing on_select={on_project_selected.clone()} refresh_trigger={*refresh_trigger} /> }
                         } else {
                             if let Some(project) = &*selected_project {
                                 html!{ <ProjectDetails project={project.clone()} on_back={on_back_to_listing.clone()} /> }
@@ -431,6 +445,7 @@ pub fn app() -> Html {
                             class={if instance_invalid { "full invalid" } else { "full" }}
                             value={(*instance).clone()}
                             oninput={on_instance_input}
+                            onblur={on_instance_blur}
                             placeholder="https://www.speleodb.org"
                         />
                         { if instance_invalid {
@@ -466,6 +481,7 @@ pub fn app() -> Html {
                         <input
                             id="password"
                             type="password"
+                            placeholder="Your SpeleoDB Password"
                             class={if password_conflict || password_missing_email { "full invalid" } else { "full" }}
                             value={(*password).clone()}
                             oninput={on_password_input}
@@ -487,7 +503,7 @@ pub fn app() -> Html {
                             class={if oauth_invalid || oauth_conflict { "full invalid" } else { "full" }}
                             value={(*oauth).clone()}
                             oninput={on_oauth_input}
-                            placeholder="40-character hexadecimal token"
+                            placeholder="Your SpeleoDB OAuth token"
                         />
                         { if oauth_invalid {
                             html!{ <span class="field-error">{"Must be 40 hexadecimal characters"}</span> }
@@ -499,9 +515,9 @@ pub fn app() -> Html {
                     <div class="accent-bar" aria-hidden="true" />
 
                     <div class="actions">
-                        <button type="button" onclick={on_reset}>{"Reset Form"}</button>
-                        <button type="button" onclick={on_forget}>{"Forget Credentials"}</button>
-                        <button type="submit" disabled={is_connect_disabled}>{ if *loading { "Connecting..." } else { "Connect" } }</button>
+                        <button type="button" onclick={on_forget} style="background-color:#c84d4d;color:white;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:500;width: 14em;">{"Delete Saved Credentials"}</button>
+                        <button type="button" onclick={on_reset} style="background-color:#6b7280;color:white;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:500;width: 14em;">{"Reset Form"}</button>
+                        <button type="submit" disabled={is_connect_disabled} style="background-color:#2563eb;color:white;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:500;width: 14em;">{ if *loading { "Connecting..." } else { "Connect" } }</button>
                     </div>
                 </form>
 

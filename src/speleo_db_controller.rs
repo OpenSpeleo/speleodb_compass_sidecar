@@ -277,6 +277,12 @@ impl SpeleoDBController {
             return Err(debug_info);
         }
 
+        // Check if this is an empty project (422 response)
+        if json.get("empty_project").and_then(|v| v.as_bool()) == Some(true) {
+            // Return a special error that the frontend can detect
+            return Err("EMPTY_PROJECT_422".to_string());
+        }
+
         let path = json
             .get("path")
             .and_then(|v| v.as_str())
@@ -496,6 +502,59 @@ impl SpeleoDBController {
             && validate_email_password(email, password);
 
         oauth_ok || pass_ok
+    }
+
+    pub async fn create_project(
+        &self,
+        name: &str,
+        description: &str,
+        country: &str,
+        latitude: Option<&str>,
+        longitude: Option<&str>,
+    ) -> Result<Project, String> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args<'a> {
+            name: &'a str,
+            description: &'a str,
+            country: &'a str,
+            latitude: Option<&'a str>,
+            longitude: Option<&'a str>,
+        }
+
+        let args = Args {
+            name,
+            description,
+            country,
+            latitude,
+            longitude,
+        };
+
+        let serialized_args = serde_wasm_bindgen::to_value(&args)
+            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
+
+        let rv = invoke("create_project", serialized_args).await;
+
+        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
+            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
+
+        // Check if operation was successful
+        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+            let msg = json
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Failed to create project");
+            return Err(msg.to_string());
+        }
+
+        // Extract project data
+        let project_data = json.get("data").ok_or("No project data in response")?;
+
+        // Deserialize to Project
+        let project: Project = serde_json::from_value(project_data.clone())
+            .map_err(|e| format!("Failed to parse project data: {}", e))?;
+
+        Ok(project)
     }
 }
 

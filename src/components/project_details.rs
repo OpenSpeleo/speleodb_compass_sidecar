@@ -20,6 +20,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
     let show_load_confirm = use_state(|| false);
     let show_upload_success = use_state(|| false);
     let show_no_changes_modal = use_state(|| false);
+    let show_empty_project_modal = use_state(|| false);
     let error_message: UseStateHandle<Option<String>> = use_state(|| None);
     let upload_error: UseStateHandle<Option<String>> = use_state(|| None);
     let project_folder_path: UseStateHandle<Option<String>> = use_state(|| None);
@@ -34,11 +35,11 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let project_id = props.project.id.clone();
         let downloading = downloading.clone();
         let show_readonly_modal = show_readonly_modal.clone();
+        let show_empty_project_modal_effect = show_empty_project_modal.clone();
         let error_message = error_message.clone();
         let project_folder_path = project_folder_path.clone();
         let is_readonly = is_readonly.clone();
         let download_complete = download_complete.clone();
-        let project_id_cleanup = props.project.id.clone();
 
         use_effect_with((), move |_| {
             let project_id = project_id.clone();
@@ -68,9 +69,18 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                 }
 
                 // Step 2: Download the project (regardless of mutex status)
-                let zip_path = match SPELEO_DB_CONTROLLER.download_project(&project_id).await {
+                let zip_result = SPELEO_DB_CONTROLLER.download_project(&project_id).await;
+
+                let zip_path = match zip_result {
                     Ok(path) => path,
                     Err(e) => {
+                        // Check if this is an empty project error (422)
+                        if e == "EMPTY_PROJECT_422" {
+                            // Empty project - show info modal instead of error
+                            downloading.set(false);
+                            show_empty_project_modal_effect.set(true);
+                            return;
+                        }
                         error_message.set(Some(format!("Download failed: {}", e)));
                         downloading.set(false);
                         return;
@@ -96,11 +106,10 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                 download_complete.set(true);
             });
 
-            // Cleanup: Release mutex when component unmounts
+            // Cleanup: Clear active project when component unmounts
             move || {
-                let project_id = project_id_cleanup.clone();
                 spawn_local(async move {
-                    let _ = SPELEO_DB_CONTROLLER.release_mutex(&project_id).await;
+                    // Only clear active project; mutex already released via back button
                     let _ = SPELEO_DB_CONTROLLER.clear_active_project().await;
                 });
             }
@@ -341,10 +350,30 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         })
     };
 
+    // Back button handler - release mutex before navigating back
+    let on_back_click = {
+        let project_id = props.project.id.clone();
+        let on_back = props.on_back.clone();
+
+        Callback::from(move |_| {
+            let project_id = project_id.clone();
+            let on_back = on_back.clone();
+
+            spawn_local(async move {
+                // Release mutex and clear active project first
+                let _ = SPELEO_DB_CONTROLLER.release_mutex(&project_id).await;
+                let _ = SPELEO_DB_CONTROLLER.clear_active_project().await;
+
+                // Then navigate back (which will trigger refresh)
+                on_back.emit(());
+            });
+        })
+    };
+
     html! {
         <section style="width:100%;">
             <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-                <button onclick={props.on_back.reform(|_| ())}>{"← Back to Projects"}</button>
+                <button onclick={on_back_click}>{"← Back to Projects"}</button>
                 <button
                     onclick={on_open_folder.reform(|_| ())}
                     style="background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
@@ -614,6 +643,26 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                     }
                 } else {
                     html! {}
+                }
+            }
+
+            // Empty Project Modal (422)
+            {
+                {
+                    let show_empty_project_modal_clone = show_empty_project_modal.clone();
+                    if *show_empty_project_modal {
+                        html! {
+                            <Modal
+                                title="Empty Project"
+                                message="This project contains no Compass data yet.\n\nTo initialize the project, use the 'Import from Disk' button to upload your local project files."
+                                modal_type={ModalType::Info}
+                                show_close_button={true}
+                                on_close={move |_| show_empty_project_modal_clone.set(false)}
+                            />
+                        }
+                    } else {
+                        html! {}
+                    }
                 }
             }
 

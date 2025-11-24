@@ -4,11 +4,12 @@ mod error;
 pub use compass_project::{CompassProject, Project, SpeleoDb};
 pub use error::Error;
 
-use uuid::Uuid;
 use std::{
     path::{Path, PathBuf},
-    process::Command, sync::LazyLock,
+    process::Command,
+    sync::LazyLock,
 };
+use uuid::Uuid;
 
 /// Name of the hidden application directory inside the user's home directory.
 pub const COMPASS_HOME_DIR_NAME: &str = ".compass";
@@ -99,7 +100,7 @@ pub fn init_file_logger(level: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-pub fn path_for_project(project_id: Uuid) -> PathBuf{
+pub fn path_for_project(project_id: Uuid) -> PathBuf {
     let mut project_dir = COMPASS_HOME_DIR.clone();
     project_dir.push("projects/");
     project_dir.push(project_id.to_string());

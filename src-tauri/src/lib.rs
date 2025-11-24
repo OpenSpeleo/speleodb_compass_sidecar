@@ -1,7 +1,7 @@
 mod commands;
 use commands::{
-    acquire_project_mutex, clear_active_project, download_project_zip, fetch_projects,
-    forget_user_prefs, load_user_prefs, native_auth_request, open_project_folder,
+    acquire_project_mutex, clear_active_project, create_project, download_project_zip,
+    fetch_projects, forget_user_prefs, load_user_prefs, native_auth_request, open_project_folder,
     release_project_mutex, save_user_prefs, select_zip_file, set_active_project, unzip_project,
     upload_project_zip, zip_project_folder,
 };
@@ -390,18 +390,6 @@ mod tests {
         // Should fail with authentication error
     }
 
-    #[test]
-    fn fetch_projects_no_credentials_check() {
-        // This test just verifies the error handling logic without clearing env vars
-        // The actual fetch_projects function will check for missing credentials
-        // We test this indirectly through the preference file tests
-        // If no .env vars and no prefs file exist, it should return an error
-
-        // This is implicitly tested by load_user_prefs_when_none_exist
-        // and the fact that fetch_projects checks for credentials
-        assert!(true); // Placeholder to maintain test count
-    }
-
     #[tokio::test]
     #[serial]
     async fn fetch_projects_with_real_api() {
@@ -509,6 +497,7 @@ pub fn run() {
             unzip_project,
             upload_project_zip,
             zip_project_folder,
+            create_project,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
