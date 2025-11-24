@@ -73,7 +73,7 @@ impl CompassProject {
         let serialized_project =
             toml::to_string_pretty(&new_project).map_err(Error::Serialization)?;
         std::fs::write(project_path, &serialized_project).map_err(Error::ProjectWrite)?;
-        Err(Error::TestFail)
+        Ok(new_project)
     }
 }
 
