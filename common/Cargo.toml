@@ -15,4 +15,4 @@ semver = { version = "1.0.27", features = ["serde"] }
 
 [dev-dependencies]
 serial_test = "3"
-ctor = "0.2"
+ctor = "0.6"

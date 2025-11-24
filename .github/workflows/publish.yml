@@ -35,7 +35,7 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: setup node
         uses: actions/setup-node@v6
@@ -60,7 +60,7 @@ jobs:
 
       # Setup sccache for faster Rust compilation
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.7
+        uses: mozilla-actions/sccache-action@v0.0.9
         
       - name: Configure sccache
         run: |
