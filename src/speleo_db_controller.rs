@@ -3,7 +3,7 @@ use crate::{invoke, invoke_without_args};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen;
-use speleodb_compass_common::{Error, UserPrefs};
+use speleodb_compass_common::{CompassProject, Error, ProjectMetadata, UserPrefs};
 use wasm_bindgen::JsValue;
 use web_sys::Url;
 
@@ -433,9 +433,19 @@ impl SpeleoDBController {
         Ok(())
     }
 
-    pub async fn import_compass_project(&self) -> Result<String, Error> {
-        let js_val = invoke_without_args("import_compass_project").await;
-        serde_wasm_bindgen::from_value::<Result<String, Error>>(js_val)
+    pub async fn import_compass_project(
+        &self,
+        project_metadata: ProjectMetadata,
+    ) -> Result<CompassProject, Error> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args {
+            project_metadata: ProjectMetadata,
+        }
+        let args = Args { project_metadata };
+        let args = serde_wasm_bindgen::to_value(&args).map_err(|_| Error::Serialization)?;
+        let js_val = invoke("import_compass_project", args).await;
+        serde_wasm_bindgen::from_value::<Result<CompassProject, Error>>(js_val)
             .map_err(|_| Error::Deserialization)?
     }
 

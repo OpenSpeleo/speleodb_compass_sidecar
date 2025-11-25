@@ -1,5 +1,6 @@
 use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::{Project, SPELEO_DB_CONTROLLER};
+use speleodb_compass_common::{CompassProject, ProjectMetadata};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
@@ -285,16 +286,26 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let selected_zip = selected_zip.clone();
         let show_load_confirm = show_load_confirm.clone();
         let error_message = error_message.clone();
+        let name = props.project.name.clone();
+        let description = props.project.description.clone();
+        let project_id = props.project.id.clone();
 
         Callback::from(move |_| {
             let selected_zip = selected_zip.clone();
             let show_load_confirm = show_load_confirm.clone();
             let error_message = error_message.clone();
-
+            let compass_project = ProjectMetadata {
+                id: project_id.parse().unwrap(),
+                name: name.clone(),
+                description: description.clone(),
+            };
             spawn_local(async move {
-                match SPELEO_DB_CONTROLLER.import_compass_project().await {
-                    Ok(path) => {
-                        selected_zip.set(Some(path));
+                match SPELEO_DB_CONTROLLER
+                    .import_compass_project(compass_project)
+                    .await
+                {
+                    Ok(project) => {
+                        selected_zip.set(project.project.mak_file);
                         show_load_confirm.set(true);
                     }
                     Err(e) => {

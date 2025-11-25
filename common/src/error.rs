@@ -7,6 +7,8 @@ use thiserror::Error;
 pub enum Error {
     #[error("Project directory already exists at {0}")]
     ProjectAlreadyExists(PathBuf),
+    #[error("Project not found: {0}")]
+    ProjectNotFound(PathBuf),
     #[error("Couldn't create storage directory for project")]
     CreateProjectDirectory,
     #[error("Error deserializing TOML")]
@@ -23,4 +25,6 @@ pub enum Error {
     FilePermissionSet,
     #[error("No project selected")]
     NoProjectSelected,
+    #[error("Referenced file not found: {0}")]
+    ProjectFileNotFound(PathBuf),
 }

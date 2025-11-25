@@ -1,6 +1,6 @@
 use crate::{parse_token_from_json, release_project_mutex_internal, ACTIVE_PROJECT_ID};
 use log::info;
-use speleodb_compass_common::{Error, UserPrefs};
+use speleodb_compass_common::{CompassProject, Error, ProjectMetadata, UserPrefs};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 
 #[tauri::command]
@@ -553,7 +553,10 @@ pub fn zip_project_folder(project_id: String) -> serde_json::Value {
 }
 
 #[tauri::command]
-pub async fn import_compass_project(app: tauri::AppHandle) -> Result<String, Error> {
+pub async fn import_compass_project(
+    app: tauri::AppHandle,
+    project_metadata: ProjectMetadata,
+) -> Result<CompassProject, Error> {
     tauri::async_runtime::spawn(async move {
         let Some(FilePath::Path(file_path)) = app
             .dialog()
@@ -564,7 +567,9 @@ pub async fn import_compass_project(app: tauri::AppHandle) -> Result<String, Err
             return Err(Error::NoProjectSelected);
         };
         info!("Selected MAK file: {}", file_path.display());
-        Ok(file_path.to_str().unwrap().to_owned())
+        info!("Importing into Compass project: {:?}", project_metadata);
+        let project = CompassProject::import_compass_project(&file_path, project_metadata)?;
+        Ok(project)
     })
     .await
     .unwrap()
