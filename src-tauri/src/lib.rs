@@ -210,7 +210,8 @@ mod tests {
             oauth.clone(),
             instance.clone(),
         )
-        .await;
+        .await
+        .unwrap();
 
         assert!(
             res.get("ok").and_then(|v| v.as_bool()) == Some(true),
@@ -228,7 +229,8 @@ mod tests {
             String::new(),
             "".to_string(),
         )
-        .await;
+        .await
+        .unwrap();
         assert!(res.get("ok").and_then(|v| v.as_bool()) == Some(false));
         assert!(res
             .get("error")
@@ -253,7 +255,8 @@ mod tests {
             "invalidtoken1234567890123456789012345".to_string(),
             instance,
         )
-        .await;
+        .await
+        .unwrap();
         assert!(res.get("ok").and_then(|v| v.as_bool()) == Some(false));
         // Should fail with authentication error
     }

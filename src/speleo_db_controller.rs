@@ -1,10 +1,8 @@
 // WASM controller now delegates network calls to native Tauri backend.
-use crate::{invoke, invoke_without_args};
+use crate::{Error, invoke};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use serde_wasm_bindgen;
-use speleodb_compass_common::{CompassProject, Error, ProjectMetadata, UserPrefs};
-use wasm_bindgen::JsValue;
+use speleodb_compass_common::{CompassProject, ProjectMetadata, UserPrefs};
 use web_sys::Url;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -51,14 +49,8 @@ impl SpeleoDBController {
         struct FetchProjectsArgs {}
 
         let args = FetchProjectsArgs {};
-        let serialized_args = serde_wasm_bindgen::to_value(&args)
-            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
 
-        let rv = invoke("fetch_projects", serialized_args).await;
-
-        // First convert to serde_json::Value for debugging
-        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv.clone())
-            .map_err(|e| format!("Failed to convert JsValue to JSON: {:?}", e))?;
+        let json: serde_json::Value = invoke("fetch_projects", &args).await.unwrap();
 
         // Check if it's an error response from our backend
         if json.get("ok").and_then(|v| v.as_bool()) == Some(false) {
@@ -122,52 +114,40 @@ impl SpeleoDBController {
             instance: target_instance,
         };
 
-        // Call the Tauri invoke - it's async and will return a JsValue
-        let serialized_args = serde_wasm_bindgen::to_value(&args)
-            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
+        let json: serde_json::Value = invoke("native_auth_request", &args).await.unwrap();
+        let mut token_opt = None;
+        // If backend returned an {ok:false, error:...} object, surface the error to the user
+        if json.get("ok").and_then(|v| v.as_bool()) == Some(false) {
+            let err_msg = json
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Authentication failed");
+            return Err(err_msg.to_string());
+        }
 
-        let rv = invoke("native_auth_request", serialized_args).await;
+        // Also check for success field from API response
+        if json.get("success").and_then(|v| v.as_bool()) == Some(false) {
+            let err_msg = json
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Authentication failed");
+            return Err(err_msg.to_string());
+        }
 
-        // Try to accept either a plain string token or an object containing the token
-        let mut token_opt: Option<String> = None;
-        if let Some(s) = rv.as_string() {
-            token_opt = Some(s);
-        } else {
-            // Attempt to deserialize the JS value into JSON and search for common token fields
-            if let Ok(json) = serde_wasm_bindgen::from_value::<serde_json::Value>(rv.clone()) {
-                // If backend returned an {ok:false, error:...} object, surface the error to the user
-                if json.get("ok").and_then(|v| v.as_bool()) == Some(false) {
-                    let err_msg = json
-                        .get("error")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("Authentication failed");
-                    return Err(err_msg.to_string());
+        let candidates = ["token", "auth_token", "access_token", "token_value", "auth"];
+        for key in &candidates {
+            if let Some(v) = json.get(*key) {
+                if let Some(s) = v.as_str() {
+                    if !s.is_empty() {
+                        token_opt = Some(s.to_string());
+                        break;
+                    }
                 }
-                // Also check for success field from API response
-                if json.get("success").and_then(|v| v.as_bool()) == Some(false) {
-                    let err_msg = json
-                        .get("error")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("Authentication failed");
-                    return Err(err_msg.to_string());
-                }
-
-                let candidates = ["token", "auth_token", "access_token", "token_value", "auth"];
-                for key in &candidates {
-                    if let Some(v) = json.get(*key) {
-                        if let Some(s) = v.as_str() {
-                            if !s.is_empty() {
-                                token_opt = Some(s.to_string());
-                                break;
-                            }
-                        }
-                        if v.is_object() {
-                            if let Some(s) = v.get("value").and_then(|vv| vv.as_str()) {
-                                if !s.is_empty() {
-                                    token_opt = Some(s.to_string());
-                                    break;
-                                }
-                            }
+                if v.is_object() {
+                    if let Some(s) = v.get("value").and_then(|vv| vv.as_str()) {
+                        if !s.is_empty() {
+                            token_opt = Some(s.to_string());
+                            break;
                         }
                     }
                 }
@@ -178,6 +158,8 @@ impl SpeleoDBController {
             // Save prefs with instance and token only (no email/password)
             let prefs = UserPrefs {
                 instance: target_instance.to_string(),
+                email: None,
+                password: None,
                 oauth_token: Some(token),
             };
             #[derive(Serialize)]
@@ -185,16 +167,11 @@ impl SpeleoDBController {
                 prefs: &'a UserPrefs,
             }
             let args = SaveArgs { prefs: &prefs };
-            let _save_rv = invoke(
-                "save_user_prefs",
-                serde_wasm_bindgen::to_value(&args).unwrap_or(JsValue::NULL),
-            )
-            .await;
+            let _save_rv: () = invoke("save_user_prefs", &args).await.unwrap();
             Ok(())
         } else {
             Err(format!(
-                "native_auth_request failed or returned non-token response: {:?}",
-                rv
+                "native_auth_request failed or returned non-token response",
             ))
         }
     }
@@ -207,13 +184,8 @@ impl SpeleoDBController {
         }
 
         let args = Args { project_id };
-        let serialized_args = serde_wasm_bindgen::to_value(&args)
-            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
 
-        let rv = invoke("acquire_project_mutex", serialized_args).await;
-
-        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
-            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
+        let json: serde_json::Value = invoke("acquire_project_mutex", &args).await.unwrap();
 
         // Check if operation was successful
         if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
@@ -241,13 +213,8 @@ impl SpeleoDBController {
         }
 
         let args = Args { project_id };
-        let serialized_args = serde_wasm_bindgen::to_value(&args)
-            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
 
-        let rv = invoke("download_project_zip", serialized_args).await;
-
-        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
-            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
+        let json: serde_json::Value = invoke("download_project_zip", &args).await.unwrap();
 
         if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
             let err_msg = json
@@ -291,13 +258,8 @@ impl SpeleoDBController {
             zip_path,
             project_id,
         };
-        let serialized_args = serde_wasm_bindgen::to_value(&args)
-            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
 
-        let rv = invoke("unzip_project", serialized_args).await;
-
-        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
-            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
+        let json: serde_json::Value = invoke("unzip_project", &args).await.unwrap();
 
         if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
             let err_msg = json
@@ -323,13 +285,8 @@ impl SpeleoDBController {
         }
 
         let args = Args { project_id };
-        let serialized_args = serde_wasm_bindgen::to_value(&args)
-            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
 
-        let rv = invoke("open_project_folder", serialized_args).await;
-
-        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
-            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
+        let json: serde_json::Value = invoke("open_project_folder", &args).await.unwrap();
 
         if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
             let err_msg = json
@@ -350,13 +307,8 @@ impl SpeleoDBController {
         }
 
         let args = Args { project_id };
-        let serialized_args = serde_wasm_bindgen::to_value(&args)
-            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
 
-        let rv = invoke("zip_project_folder", serialized_args).await;
-
-        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
-            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
+        let json: serde_json::Value = invoke("zip_project_folder", &args).await.unwrap();
 
         if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
             let err_msg = json
@@ -394,13 +346,7 @@ impl SpeleoDBController {
             zip_path,
         };
 
-        let serialized_args = serde_wasm_bindgen::to_value(&args)
-            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
-
-        let rv = invoke("upload_project_zip", serialized_args).await;
-
-        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
-            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
+        let json: serde_json::Value = invoke("upload_project_zip", &args).await.unwrap();
 
         if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
             let err_msg = json
@@ -422,14 +368,8 @@ impl SpeleoDBController {
         }
 
         let args = Args { project_id };
-        let serialized_args = serde_wasm_bindgen::to_value(&args)
-            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
 
-        let rv = invoke("release_project_mutex", serialized_args).await;
-
-        // Fire and forget - always succeeds
-        let _ = serde_wasm_bindgen::from_value::<serde_json::Value>(rv);
-
+        let _json: serde_json::Value = invoke("release_project_mutex", &args).await.unwrap();
         Ok(())
     }
 
@@ -443,10 +383,7 @@ impl SpeleoDBController {
             project_metadata: ProjectMetadata,
         }
         let args = Args { project_metadata };
-        let args = serde_wasm_bindgen::to_value(&args).map_err(|_| Error::Serialization)?;
-        let js_val = invoke("import_compass_project", args).await;
-        serde_wasm_bindgen::from_value::<Result<CompassProject, Error>>(js_val)
-            .map_err(|_| Error::Deserialization)?
+        invoke("import_compass_project", &args).await
     }
 
     pub async fn set_active_project(&self, project_id: &str) -> Result<(), String> {
@@ -456,18 +393,12 @@ impl SpeleoDBController {
             project_id: &'a str,
         }
         let args = Args { project_id };
-        let serialized_args = serde_wasm_bindgen::to_value(&args)
-            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
-        invoke("set_active_project", serialized_args).await;
+        let _: () = invoke("set_active_project", &args).await.unwrap();
         Ok(())
     }
 
     pub async fn clear_active_project(&self) -> Result<(), String> {
-        invoke(
-            "clear_active_project",
-            serde_wasm_bindgen::to_value(&()).unwrap(),
-        )
-        .await;
+        let _: () = invoke("clear_active_project", &()).await.unwrap();
         Ok(())
     }
 
@@ -508,13 +439,7 @@ impl SpeleoDBController {
             longitude,
         };
 
-        let serialized_args = serde_wasm_bindgen::to_value(&args)
-            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
-
-        let rv = invoke("create_project", serialized_args).await;
-
-        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
-            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
+        let json: serde_json::Value = invoke("create_project", &args).await.unwrap();
 
         // Check if operation was successful
         if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
@@ -690,6 +615,8 @@ mod tests {
     fn prefs_serialization() {
         let prefs = UserPrefs {
             instance: "https://test.com".to_string(),
+            email: None,
+            password: None,
             oauth_token: Some("0123456789abcdef0123456789abcdef01234567".to_string()),
         };
 

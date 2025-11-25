@@ -92,12 +92,12 @@ pub async fn native_auth_request(
     password: String,
     oauth: String,
     instance: String,
-) -> serde_json::Value {
+) -> Result<serde_json::Value, String> {
     use reqwest::Client;
     use std::time::Duration;
 
     if instance.trim().is_empty() {
-        return serde_json::json!({"ok": false, "error": "Instance URL is empty"});
+        return Ok(serde_json::json!({"ok": false, "error": "Instance URL is empty"}));
     }
     info!("Attempting to authorize with instance: {}", instance);
     let base = instance.trim_end_matches('/');
@@ -106,7 +106,9 @@ pub async fn native_auth_request(
     let client = match Client::builder().timeout(Duration::from_secs(10)).build() {
         Ok(c) => c,
         Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to build HTTP client: {}", e)})
+            return Ok(
+                serde_json::json!({"ok": false, "error": format!("Failed to build HTTP client: {}", e)}),
+            )
         }
     };
 
@@ -119,7 +121,9 @@ pub async fn native_auth_request(
         {
             Ok(r) => r,
             Err(e) => {
-                return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)})
+                return Ok(
+                    serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)}),
+                )
             }
         }
     } else {
@@ -127,7 +131,9 @@ pub async fn native_auth_request(
         match client.post(&url).json(&body).send().await {
             Ok(r) => r,
             Err(e) => {
-                return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)})
+                return Ok(
+                    serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)}),
+                )
             }
         }
     };
@@ -140,7 +146,7 @@ pub async fn native_auth_request(
         if let Some(hv) = resp.headers().get("Auth-Token") {
             if let Ok(s) = hv.to_str() {
                 if !s.is_empty() {
-                    return serde_json::json!({"ok": true, "token": s.to_string()});
+                    return Ok(serde_json::json!({"ok": true, "token": s.to_string()}));
                 }
             }
         }
@@ -148,17 +154,21 @@ pub async fn native_auth_request(
         // Fall back to JSON body parsing
         let json: serde_json::Value = resp.json().await.unwrap_or(serde_json::json!(null));
         if let Some(token) = parse_token_from_json(&json) {
-            return serde_json::json!({"ok": true, "token": token});
+            return Ok(serde_json::json!({"ok": true, "token": token}));
         }
 
-        serde_json::json!({"ok": false, "error": "Authentication succeeded but token not found in response"})
+        Ok(
+            serde_json::json!({"ok": false, "error": "Authentication succeeded but token not found in response"}),
+        )
     } else {
-        serde_json::json!({"ok": false, "error": format!("Authentication failed with status {}", status.as_u16()), "status": status.as_u16()})
+        Ok(
+            serde_json::json!({"ok": false, "error": format!("Authentication failed with status {}", status.as_u16()), "status": status.as_u16()}),
+        )
     }
 }
 
 #[tauri::command]
-pub async fn acquire_project_mutex(project_id: String) -> serde_json::Value {
+pub async fn acquire_project_mutex(project_id: String) -> Result<serde_json::Value, String> {
     use reqwest::Client;
     use std::time::Duration;
 
@@ -166,21 +176,27 @@ pub async fn acquire_project_mutex(project_id: String) -> serde_json::Value {
     let prefs = match UserPrefs::load() {
         Ok(p) => p,
         Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to load user preferences: {}", e)})
+            return Ok(
+                serde_json::json!({"ok": false, "error": format!("Failed to load user preferences: {}", e)}),
+            )
         }
     };
 
     let prefs = match prefs {
         Some(p) => p,
         _ => {
-            return serde_json::json!({"ok": false, "error": "No instance URL in user preferences"});
+            return Ok(
+                serde_json::json!({"ok": false, "error": "No instance URL in user preferences"}),
+            );
         }
     };
 
     let oauth = match prefs.oauth_token {
         Some(t) => t.to_string(),
         _ => {
-            return serde_json::json!({"ok": false, "error": "No OAuth token in user preferences"});
+            return Ok(
+                serde_json::json!({"ok": false, "error": "No OAuth token in user preferences"}),
+            );
         }
     };
 
@@ -191,7 +207,9 @@ pub async fn acquire_project_mutex(project_id: String) -> serde_json::Value {
     let client = match Client::builder().timeout(Duration::from_secs(10)).build() {
         Ok(c) => c,
         Err(e) => {
-            return serde_json::json!({"ok": false, "locked": false, "message": format!("Failed to build HTTP client: {}", e)})
+            return Ok(
+                serde_json::json!({"ok": false, "locked": false, "message": format!("Failed to build HTTP client: {}", e)}),
+            )
         }
     };
 
@@ -203,7 +221,9 @@ pub async fn acquire_project_mutex(project_id: String) -> serde_json::Value {
     {
         Ok(r) => r,
         Err(e) => {
-            return serde_json::json!({"ok": false, "locked": false, "message": format!("Network request failed: {}", e)})
+            return Ok(
+                serde_json::json!({"ok": false, "locked": false, "message": format!("Network request failed: {}", e)}),
+            )
         }
     };
 
@@ -211,13 +231,19 @@ pub async fn acquire_project_mutex(project_id: String) -> serde_json::Value {
 
     if status.is_success() {
         // Successfully acquired the mutex
-        serde_json::json!({"ok": true, "locked": true, "message": "Project mutex acquired successfully"})
+        Ok(
+            serde_json::json!({"ok": true, "locked": true, "message": "Project mutex acquired successfully"}),
+        )
     } else if status.as_u16() == 409 || status.as_u16() == 423 {
         // 409 Conflict or 423 Locked - mutex is already held by another user
-        serde_json::json!({"ok": true, "locked": false, "message": "Project is already locked by another user"})
+        Ok(
+            serde_json::json!({"ok": true, "locked": false, "message": "Project is already locked by another user"}),
+        )
     } else {
         // Other error
-        serde_json::json!({"ok": false, "locked": false, "message": format!("Mutex acquisition failed with status {}", status.as_u16()), "status": status.as_u16()})
+        Ok(
+            serde_json::json!({"ok": false, "locked": false, "message": format!("Mutex acquisition failed with status {}", status.as_u16()), "status": status.as_u16()}),
+        )
     }
 }
 
@@ -569,6 +595,7 @@ pub async fn import_compass_project(
         info!("Selected MAK file: {}", file_path.display());
         info!("Importing into Compass project: {:?}", project_metadata);
         let project = CompassProject::import_compass_project(&file_path, project_metadata)?;
+        info!("Successfully imported Compass project: {project:?}");
         Ok(project)
     })
     .await
@@ -576,20 +603,22 @@ pub async fn import_compass_project(
 }
 
 #[tauri::command]
-pub fn set_active_project(project_id: String) {
+pub fn set_active_project(project_id: String) -> Result<(), String> {
     *ACTIVE_PROJECT_ID.lock().unwrap() = Some(project_id);
+    Ok(())
 }
 
 #[tauri::command]
-pub fn clear_active_project() {
+pub fn clear_active_project() -> Result<(), String> {
     *ACTIVE_PROJECT_ID.lock().unwrap() = None;
+    Ok(())
 }
 
 #[tauri::command]
-pub async fn release_project_mutex(project_id: String) -> serde_json::Value {
+pub async fn release_project_mutex(project_id: String) -> Result<serde_json::Value, String> {
     release_project_mutex_internal(&project_id).await;
     // Always return success (fire and forget)
-    serde_json::json!({"ok": true, "message": "Mutex release attempted"})
+    Ok(serde_json::json!({"ok": true, "message": "Mutex release attempted"}))
 }
 
 #[tauri::command]

@@ -4,7 +4,7 @@ mod error;
 mod speleo_db_controller;
 
 use app::App;
-use error::Error;
+pub use error::Error;
 use serde::{Serialize, de::DeserializeOwned};
 
 pub(crate) type Result<T> = core::result::Result<T, Error>;
@@ -14,7 +14,6 @@ pub(crate) type Result<T> = core::result::Result<T, Error>;
 /// # Example
 ///
 /// ```rust,no_run
-/// use tauri_api::tauri::invoke;
 ///
 /// struct User<'a> {
 ///     user: &'a str,

@@ -1,6 +1,6 @@
 use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::{Project, SPELEO_DB_CONTROLLER};
-use speleodb_compass_common::{CompassProject, ProjectMetadata};
+use speleodb_compass_common::ProjectMetadata;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 

@@ -339,6 +339,8 @@ pub fn app() -> Html {
                 // Persist prefs with empty token but keep the instance
                 let prefs = UserPrefs {
                     instance: instance_val.clone(),
+                    email: None,
+                    password: None,
                     oauth_token: None,
                 };
                 #[derive(Serialize)]

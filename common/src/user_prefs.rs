@@ -32,6 +32,8 @@ impl AsRef<str> for OauthToken {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct UserPrefs {
     pub instance: String,
+    pub email: Option<String>,
+    pub password: Option<String>,
     pub oauth_token: Option<String>,
 }
 
@@ -39,6 +41,8 @@ impl Default for UserPrefs {
     fn default() -> Self {
         Self {
             instance: "https://speleodb.com".to_string(),
+            email: None,
+            password: None,
             oauth_token: None,
         }
     }
@@ -46,6 +50,9 @@ impl Default for UserPrefs {
 
 impl UserPrefs {
     pub fn save(prefs: &Self) -> Result<(), Error> {
+        if prefs.email.is_some() || prefs.password.is_some() {
+            panic!("We should never try to persist a user's password to disk!");
+        }
         let s = toml::to_string_pretty(&prefs).map_err(|_| Error::Serialization)?;
         std::fs::write(user_prefs_file_path(), s).map_err(|_| Error::UserPrefsWrite)?;
 
@@ -107,6 +114,8 @@ mod tests {
         // Create test preferences
         let prefs = UserPrefs {
             instance: INSTANCE_URL.to_string(),
+            email: None,
+            password: None,
             oauth_token: Some(OAUTH_TOKEN.to_string()),
         };
 
