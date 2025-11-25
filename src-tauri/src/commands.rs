@@ -87,12 +87,13 @@ pub async fn fetch_projects() -> serde_json::Value {
 }
 
 #[tauri::command]
-pub async fn native_auth_request(
-    email: String,
-    password: String,
-    oauth: String,
+pub async fn auth_request(
+    email: Option<String>,
+    password: Option<String>,
+    oauth: Option<String>,
     instance: String,
 ) -> Result<serde_json::Value, String> {
+    info!("Starting auth request");
     use reqwest::Client;
     use std::time::Duration;
 
@@ -112,7 +113,7 @@ pub async fn native_auth_request(
         }
     };
 
-    let resp = if !oauth.is_empty() {
+    let resp = if let Some(oauth) = oauth {
         match client
             .get(&url)
             .header("Authorization", format!("Token {}", oauth))

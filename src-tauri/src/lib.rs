@@ -2,9 +2,9 @@ mod api;
 mod commands;
 
 use commands::{
-    acquire_project_mutex, clear_active_project, create_project, download_project_zip,
-    fetch_projects, forget_user_prefs, import_compass_project, load_user_prefs,
-    native_auth_request, open_project_folder, release_project_mutex, save_user_prefs,
+    acquire_project_mutex, auth_request, clear_active_project, create_project,
+    download_project_zip, fetch_projects, forget_user_prefs, import_compass_project,
+    load_user_prefs, open_project_folder, release_project_mutex, save_user_prefs,
     set_active_project, unzip_project, upload_project_zip, zip_project_folder,
 };
 use log::error;
@@ -204,14 +204,9 @@ mod tests {
         let instance = std::env::var("TEST_SPELEODB_INSTANCE").unwrap();
         let oauth = std::env::var("TEST_SPELEODB_OAUTH").unwrap();
 
-        let res = native_auth_request(
-            String::new(),
-            String::new(),
-            oauth.clone(),
-            instance.clone(),
-        )
-        .await
-        .unwrap();
+        let res = auth_request(None, None, Some(oauth.clone()), instance.clone())
+            .await
+            .unwrap();
 
         assert!(
             res.get("ok").and_then(|v| v.as_bool()) == Some(true),
@@ -223,10 +218,10 @@ mod tests {
 
     #[tokio::test]
     async fn native_auth_request_empty_instance() {
-        let res = native_auth_request(
-            "u".to_string(),
-            "p".to_string(),
-            String::new(),
+        let res = auth_request(
+            Some("u".to_string()),
+            Some("p".to_string()),
+            None,
             "".to_string(),
         )
         .await
@@ -249,10 +244,10 @@ mod tests {
 
         let instance = std::env::var("TEST_SPELEODB_INSTANCE").unwrap();
 
-        let res = native_auth_request(
-            String::new(),
-            String::new(),
-            "invalidtoken1234567890123456789012345".to_string(),
+        let res = auth_request(
+            None,
+            None,
+            Some("invalidtoken1234567890123456789012345".to_string()),
             instance,
         )
         .await
@@ -358,7 +353,7 @@ pub fn run() {
             fetch_projects,
             forget_user_prefs,
             load_user_prefs,
-            native_auth_request,
+            auth_request,
             open_project_folder,
             release_project_mutex,
             save_user_prefs,

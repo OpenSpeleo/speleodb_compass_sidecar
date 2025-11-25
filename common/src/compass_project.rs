@@ -1,4 +1,4 @@
-use std::{panic, path::Path};
+use std::path::Path;
 
 use log::{error, info};
 use semver::Version;

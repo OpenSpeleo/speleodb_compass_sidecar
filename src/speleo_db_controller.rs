@@ -1,5 +1,6 @@
 // WASM controller now delegates network calls to native Tauri backend.
 use crate::{Error, invoke};
+use log::info;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use speleodb_compass_common::{CompassProject, ProjectMetadata, UserPrefs};
@@ -74,36 +75,33 @@ impl SpeleoDBController {
 
     pub async fn authenticate(
         &self,
-        email: &str,
-        password: &str,
-        oauth: &str,
+        email: Option<&str>,
+        password: Option<&str>,
+        oauth: Option<&str>,
         target_instance: &str,
     ) -> Result<(), String> {
         // Validate instance URL
         if Url::new(target_instance).is_err() {
             return Err("SpeleoDB instance must be a valid URL".into());
         }
-
+        info!("token: {oauth:?}");
         // Validation: either oauth token (40 hex) OR email+password
-        let oauth_ok = validate_oauth(oauth);
-        let pass_ok = validate_email_password(email, password);
+        let oauth_ok = oauth.is_some_and(|oauth| validate_oauth(&oauth));
+        let pass_ok = email.is_some_and(|email| {
+            password.is_some_and(|password| validate_email_password(&email, &password))
+        });
+        info!("Auth Ok: {oauth_ok}, Pass Ok: {pass_ok}");
 
         if !(oauth_ok ^ pass_ok) {
             return Err("Must provide exactly one auth method: either email+password or a 40-char OAUTH token".into());
         }
 
-        // Build auth URL (assume AUTH_TOKEN_ENDPOINT). Trim trailing slash on instance.
-        const AUTH_TOKEN_ENDPOINT: &str = "/api/v1/user/auth-token/"; // actual API path
-
-        let base = target_instance.trim_end_matches('/');
-        let _url = format!("{}{}", base, AUTH_TOKEN_ENDPOINT);
-
         // Use the native Tauri backend to perform the network request to avoid CORS and webview restrictions.
         #[derive(Serialize)]
         struct NativeArgs<'a> {
-            email: &'a str,
-            password: &'a str,
-            oauth: &'a str,
+            email: Option<&'a str>,
+            password: Option<&'a str>,
+            oauth: Option<&'a str>,
             instance: &'a str,
         }
 
@@ -114,7 +112,7 @@ impl SpeleoDBController {
             instance: target_instance,
         };
 
-        let json: serde_json::Value = invoke("native_auth_request", &args).await.unwrap();
+        let json: serde_json::Value = invoke("auth_request", &args).await.unwrap();
         let mut token_opt = None;
         // If backend returned an {ok:false, error:...} object, surface the error to the user
         if json.get("ok").and_then(|v| v.as_bool()) == Some(false) {
@@ -403,13 +401,17 @@ impl SpeleoDBController {
     }
 
     /// Determine if auto-login should be attempted based on stored credentials.
-    pub fn should_auto_login(&self, email: &str, password: &str, oauth: &str) -> bool {
-        let oauth_ok = !oauth.is_empty() && validate_oauth(oauth);
-        let pass_ok = oauth.is_empty()
-            && !email.is_empty()
-            && !password.is_empty()
-            && validate_email_password(email, password);
-
+    pub fn should_auto_login(
+        &self,
+        email: Option<&str>,
+        password: Option<&str>,
+        oauth: Option<&str>,
+    ) -> bool {
+        info!("email: {email:?}, password: {password:?}, oauth: {oauth:?}");
+        let oauth_ok = oauth.is_some_and(|token| validate_oauth(&token));
+        let pass_ok = email.is_some_and(|email| {
+            password.is_some_and(|password| validate_email_password(&email, &password))
+        });
         oauth_ok || pass_ok
     }
 
@@ -627,7 +629,7 @@ mod tests {
 
     #[test]
     fn prefs_deserialization() {
-        let json = r#"{"instance":"https://test.com","oauth":"token123"}"#;
+        let json = r#"{"instance":"https://test.com","oauth_token":"token123"}"#;
         let prefs: UserPrefs = serde_json::from_str(json).unwrap();
 
         assert_eq!(prefs.instance, "https://test.com");
@@ -721,26 +723,26 @@ mod tests {
     fn should_auto_login_oauth() {
         let controller = SpeleoDBController {};
         let valid_oauth = "0123456789abcdef0123456789abcdef01234567";
-        assert!(controller.should_auto_login("", "", valid_oauth));
+        assert!(controller.should_auto_login(None, None, Some(valid_oauth)));
     }
 
     #[test]
     fn should_auto_login_email_password() {
         let controller = SpeleoDBController {};
-        assert!(controller.should_auto_login("user@example.com", "password", ""));
+        assert!(controller.should_auto_login(Some("user@example.com"), Some("password"), None));
     }
 
     #[test]
     fn should_auto_login_fail_empty() {
         let controller = SpeleoDBController {};
-        assert!(!controller.should_auto_login("", "", ""));
+        assert!(!controller.should_auto_login(None, None, None));
     }
 
     #[test]
     fn should_auto_login_fail_partial_email() {
         let controller = SpeleoDBController {};
-        assert!(!controller.should_auto_login("user@example.com", "", ""));
-        assert!(!controller.should_auto_login("", "password", ""));
+        assert!(!controller.should_auto_login(Some("user@example.com"), None, None));
+        assert!(!controller.should_auto_login(None, Some("password"), None));
     }
 
     #[test]
@@ -748,6 +750,10 @@ mod tests {
         let controller = SpeleoDBController {};
         let valid_oauth = "0123456789abcdef0123456789abcdef01234567";
         // Should succeed and use OAuth if both are provided (OAuth takes precedence)
-        assert!(controller.should_auto_login("user@example.com", "password", valid_oauth));
+        assert!(controller.should_auto_login(
+            Some("user@example.com"),
+            Some("password"),
+            Some(valid_oauth)
+        ));
     }
 }

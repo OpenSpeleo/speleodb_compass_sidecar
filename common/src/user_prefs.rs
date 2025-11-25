@@ -1,4 +1,5 @@
 use crate::{COMPASS_HOME_DIR, Error};
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
@@ -83,8 +84,10 @@ impl UserPrefs {
             let s = std::fs::read_to_string(user_prefs_file_path())
                 .map_err(|_| Error::UserPrefsRead)?;
             let s: UserPrefs = toml::from_str(&s).map_err(|_| Error::Deserialization)?;
+            info!("User preferences loaded successfully");
             Ok(Some(s))
         } else {
+            info!("No user preferences found");
             Ok(None)
         }
     }

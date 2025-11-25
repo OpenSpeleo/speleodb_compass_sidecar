@@ -1,17 +1,16 @@
 use futures::future::{Either, select};
 use gloo_timers::future::TimeoutFuture;
+use log::info;
 use serde::{Deserialize, Serialize};
 use speleodb_compass_common::UserPrefs;
-use wasm_bindgen::JsValue;
-use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
 use crate::components::project_details::ProjectDetails;
 use crate::components::project_listing::ProjectListing;
+use crate::invoke;
 use crate::speleo_db_controller::Project;
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
-use serde_wasm_bindgen;
 
 #[derive(Clone, Copy, PartialEq)]
 enum ActiveTab {
@@ -19,23 +18,23 @@ enum ActiveTab {
     Details,
 }
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
-    async fn invoke(cmd: &str, args: JsValue) -> JsValue;
-
-    // invoke without arguments
-    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], js_name = invoke)]
-    async fn invoke_without_args(cmd: &str) -> JsValue;
-}
-
 #[function_component(App)]
 pub fn app() -> Html {
     // Fields
     let instance = use_state(|| "https://www.speleoDB.org".to_string());
-    let email = use_state(|| String::new());
-    let password = use_state(|| String::new());
-    let oauth = use_state(|| String::new());
+    // Kinda dorky to force type inference
+    let email = use_state(|| {
+        let initial_state: Option<String> = None;
+        initial_state
+    });
+    let password = use_state(|| {
+        let initial_state: Option<String> = None;
+        initial_state
+    });
+    let oauth = use_state(|| {
+        let initial_state: Option<String> = None;
+        initial_state
+    });
 
     #[derive(Serialize, Deserialize)]
     struct Prefs {
@@ -69,58 +68,52 @@ pub fn app() -> Html {
 
         use_effect_with((), move |_| {
             spawn_local(async move {
-                let rv = invoke_without_args("load_user_prefs").await;
-                if let Some(s) = rv.as_string() {
-                    match serde_json::from_str::<Prefs>(&s) {
-                        Ok(p) => {
-                            if !p.instance.is_empty() {
-                                instance.set(p.instance.clone());
-                            }
-                            email.set(p.email.clone());
-                            password.set(p.password.clone());
-                            oauth.set(p.oauth_token.clone());
+                match invoke::<(), UserPrefs>("load_user_prefs", &()).await {
+                    Ok(prefs) => {
+                        info!("User prefs loaded successfully: {prefs:?}");
+                        if !prefs.instance.is_empty() {
+                            instance.set(prefs.instance.clone());
+                        }
 
-                            // Auto-login logic
-                            if SPELEO_DB_CONTROLLER.should_auto_login(
-                                &p.email,
-                                &p.password,
-                                &p.oauth_token,
-                            ) {
-                                web_sys::console::log_1(&"Attempting silent auto-login...".into());
+                        // Auto-login logic
+                        if SPELEO_DB_CONTROLLER.should_auto_login(
+                            None,
+                            None,
+                            prefs.oauth_token.as_deref(),
+                        ) {
+                            info!("Attempting silent auto-login...");
+                            let email = (*email).clone();
+                            let password = (*password).clone();
+                            let oauth_token = prefs.oauth_token.clone();
+                            let auth_future = SPELEO_DB_CONTROLLER.authenticate(
+                                email.as_deref(),
+                                password.as_deref(),
+                                oauth_token.as_deref(),
+                                &prefs.instance,
+                            );
+                            let timeout_future = TimeoutFuture::new(3_000);
 
-                                let auth_future = SPELEO_DB_CONTROLLER.authenticate(
-                                    &p.email,
-                                    &p.password,
-                                    &p.oauth_token,
-                                    &p.instance,
-                                );
-                                let timeout_future = TimeoutFuture::new(3_000);
-
-                                match select(Box::pin(auth_future), Box::pin(timeout_future)).await
-                                {
-                                    Either::Left((Ok(()), _)) => {
-                                        web_sys::console::log_1(&"Auto-login success".into());
-                                        logged_in.set(true);
-                                    }
-                                    Either::Left((Err(e), _)) => {
-                                        web_sys::console::log_1(
-                                            &format!("Auto-login failed: {}", e).into(),
-                                        );
-                                        // Silent failure - do not show error modal
-                                    }
-                                    Either::Right((_, _)) => {
-                                        web_sys::console::log_1(&"Auto-login timed out".into());
-                                        // Silent failure on timeout
-                                    }
+                            match select(Box::pin(auth_future), Box::pin(timeout_future)).await {
+                                Either::Left((Ok(()), _)) => {
+                                    web_sys::console::log_1(&"Auto-login success".into());
+                                    logged_in.set(true);
+                                }
+                                Either::Left((Err(e), _)) => {
+                                    web_sys::console::log_1(
+                                        &format!("Auto-login failed: {}", e).into(),
+                                    );
+                                    // Silent failure - do not show error modal
+                                }
+                                Either::Right((_, _)) => {
+                                    web_sys::console::log_1(&"Auto-login timed out".into());
+                                    // Silent failure on timeout
                                 }
                             }
                         }
-                        Err(_) => {}
                     }
+                    Err(_) => {}
                 }
             });
-
-            || ()
         });
     }
 
@@ -155,9 +148,9 @@ pub fn app() -> Html {
         let error_msg = error_msg.clone();
         Callback::from(move |_| {
             instance.set("https://www.speleoDB.org".to_string());
-            email.set(String::new());
-            password.set(String::new());
-            oauth.set(String::new());
+            email.set(None);
+            password.set(None);
+            oauth.set(None);
             show_error.set(false);
             error_msg.set(String::new());
         })
@@ -174,11 +167,11 @@ pub fn app() -> Html {
             let password = password.clone();
             let oauth = oauth.clone();
             spawn_local(async move {
-                let _ = invoke("forget_user_prefs", JsValue::NULL).await;
+                let _: () = invoke("forget_user_prefs", &()).await.unwrap();
                 instance.set("https://www.speleoDB.org".to_string());
-                email.set(String::new());
-                password.set(String::new());
-                oauth.set(String::new());
+                email.set(None);
+                password.set(None);
+                oauth.set(None);
             });
         })
     };
@@ -205,13 +198,16 @@ pub fn app() -> Html {
                 return;
             }
 
-            let oauth_ok = !oauth.is_empty()
-                && oauth.len() == 40
-                && oauth.chars().all(|c| c.is_ascii_hexdigit());
-            let pass_ok = oauth.is_empty() && !email.is_empty() && !password.is_empty() && {
-                let parts: Vec<&str> = email.split('@').collect();
-                parts.len() == 2 && parts[1].contains('.')
-            };
+            let oauth_ok = oauth.as_deref().is_some_and(|oauth| {
+                oauth.len() == 40 && oauth.chars().all(|c| c.is_ascii_hexdigit())
+            });
+
+            let pass_ok = email.as_deref().is_some_and(|email| {
+                password.as_deref().is_some_and(|_password| {
+                    let parts: Vec<&str> = email.split('@').collect();
+                    parts.len() == 2 && parts[1].contains('.')
+                })
+            });
 
             if !(oauth_ok ^ pass_ok) {
                 error_msg.set("Must provide exactly one auth method: either email+password or a 40-char OAUTH token".to_string());
@@ -236,7 +232,12 @@ pub fn app() -> Html {
             spawn_local(async move {
                 // use the singleton controller to authenticate; it will save prefs on success
                 match SPELEO_DB_CONTROLLER
-                    .authenticate(&email_val, &password_val, &oauth_val, &instance_val)
+                    .authenticate(
+                        email_val.as_deref(),
+                        password_val.as_deref(),
+                        oauth_val.as_deref(),
+                        &instance_val,
+                    )
                     .await
                 {
                     Ok(()) => {
@@ -284,7 +285,7 @@ pub fn app() -> Html {
         let validation_silent = validation_silent.clone();
         Callback::from(move |e: InputEvent| {
             let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-            email.set(input.value());
+            email.set(Some(input.value()));
             validation_silent.set(false);
         })
     };
@@ -294,7 +295,7 @@ pub fn app() -> Html {
         let validation_silent = validation_silent.clone();
         Callback::from(move |e: InputEvent| {
             let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-            password.set(input.value());
+            password.set(Some(input.value()));
             validation_silent.set(false);
         })
     };
@@ -304,7 +305,7 @@ pub fn app() -> Html {
         let validation_silent = validation_silent.clone();
         Callback::from(move |e: InputEvent| {
             let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-            oauth.set(input.value());
+            oauth.set(Some(input.value()));
             validation_silent.set(false);
         })
     };
@@ -347,13 +348,12 @@ pub fn app() -> Html {
                 struct SaveArgs<'a> {
                     prefs: &'a UserPrefs,
                 }
-                let args = serde_wasm_bindgen::to_value(&SaveArgs { prefs: &prefs })
-                    .unwrap_or(JsValue::NULL);
-                let _ = invoke("save_user_prefs", args).await;
+                let args = SaveArgs { prefs: &prefs };
+                let _: () = invoke("save_user_prefs", &args).await.unwrap();
                 // Clear form fields
-                email.set(String::new());
-                password.set(String::new());
-                oauth.set(String::new());
+                email.set(None);
+                password.set(None);
+                oauth.set(None);
                 // Reset in-app state
                 selected_project.set(None);
                 active_tab.set(ActiveTab::Listing);
@@ -388,17 +388,23 @@ pub fn app() -> Html {
     let is_connect_disabled = *loading;
 
     // Check if both auth methods are being used (mutually exclusive)
-    let has_oauth = !oauth.is_empty();
-    let has_email = !email.is_empty();
-    let has_password = !password.is_empty();
+    let has_oauth = oauth.is_some();
+    let has_email = email.is_some();
+    let has_password = password.is_some();
     let both_auth_methods_used = has_oauth && (has_email || has_password);
 
     // Field validation state for visual feedback
     // Only show errors if not in silent mode
     let show_errors = !*validation_silent;
     let instance_invalid = show_errors && !instance.is_empty() && !validate_instance(&instance);
-    let email_invalid = show_errors && !email.is_empty() && !validate_email(&email);
-    let oauth_invalid = show_errors && !oauth.is_empty() && !validate_oauth(&oauth);
+    let email_invalid = show_errors
+        && email
+            .as_deref()
+            .is_some_and(|email| !validate_email(&email));
+    let oauth_invalid = show_errors
+        && oauth
+            .as_deref()
+            .is_some_and(|oauth| !validate_oauth(&oauth));
 
     // Show error on auth fields if both methods are used
     let email_conflict = both_auth_methods_used && has_email;
