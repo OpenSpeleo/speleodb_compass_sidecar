@@ -1,14 +1,23 @@
 mod api;
 mod commands;
+mod state;
 
-use commands::{
-    acquire_project_mutex, auth_request, clear_active_project, create_project,
-    download_project_zip, fetch_projects, forget_user_prefs, import_compass_project,
-    load_user_prefs, open_project_folder, release_project_mutex, save_user_prefs,
-    set_active_project, unzip_project, upload_project_zip, zip_project_folder,
+use crate::{
+    commands::{
+        acquire_project_mutex, auth_request, clear_active_project, create_project,
+        download_project_zip, fetch_projects, forget_user_prefs, import_compass_project,
+        load_user_prefs, open_project_folder, release_project_mutex, save_user_prefs,
+        set_active_project, unzip_project, upload_project_zip, zip_project_folder,
+    },
+    state::ApiInfo,
 };
 use log::error;
 use speleodb_compass_common::{compass_home, UserPrefs};
+
+#[cfg(debug_assertions)]
+const API_BASE_URL: &str = "https://stage.speleodb.org";
+#[cfg(not(debug_assertions))]
+const API_BASE_URL: &str = "https://www.speleodb.com";
 
 // Global state for active project
 lazy_static::lazy_static! {
@@ -204,9 +213,15 @@ mod tests {
         let instance = std::env::var("TEST_SPELEODB_INSTANCE").unwrap();
         let oauth = std::env::var("TEST_SPELEODB_OAUTH").unwrap();
 
-        let res = auth_request(None, None, Some(oauth.clone()), instance.clone())
-            .await
-            .unwrap();
+        let res = auth_request(
+            &ApiInfo::default(),
+            None,
+            None,
+            Some(oauth.clone()),
+            instance.clone(),
+        )
+        .await
+        .unwrap();
 
         assert!(
             res.get("ok").and_then(|v| v.as_bool()) == Some(true),
@@ -363,7 +378,8 @@ pub fn run() {
             upload_project_zip,
             zip_project_folder,
             create_project,
-        ]);
+        ])
+        .manage(ApiInfo::default());
     #[cfg(debug_assertions)]
     {
         builder = builder.plugin(devtools);

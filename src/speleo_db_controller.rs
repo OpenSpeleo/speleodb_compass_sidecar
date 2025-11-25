@@ -1,6 +1,6 @@
 // WASM controller now delegates network calls to native Tauri backend.
 use crate::{Error, invoke};
-use log::info;
+use log::{error, info};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use speleodb_compass_common::{CompassProject, ProjectMetadata, UserPrefs};
@@ -112,66 +112,15 @@ impl SpeleoDBController {
             instance: target_instance,
         };
 
-        let json: serde_json::Value = invoke("auth_request", &args).await.unwrap();
-        let mut token_opt = None;
-        // If backend returned an {ok:false, error:...} object, surface the error to the user
-        if json.get("ok").and_then(|v| v.as_bool()) == Some(false) {
-            let err_msg = json
-                .get("error")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Authentication failed");
-            return Err(err_msg.to_string());
-        }
-
-        // Also check for success field from API response
-        if json.get("success").and_then(|v| v.as_bool()) == Some(false) {
-            let err_msg = json
-                .get("error")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Authentication failed");
-            return Err(err_msg.to_string());
-        }
-
-        let candidates = ["token", "auth_token", "access_token", "token_value", "auth"];
-        for key in &candidates {
-            if let Some(v) = json.get(*key) {
-                if let Some(s) = v.as_str() {
-                    if !s.is_empty() {
-                        token_opt = Some(s.to_string());
-                        break;
-                    }
-                }
-                if v.is_object() {
-                    if let Some(s) = v.get("value").and_then(|vv| vv.as_str()) {
-                        if !s.is_empty() {
-                            token_opt = Some(s.to_string());
-                            break;
-                        }
-                    }
-                }
+        let _token: String = match invoke::<_, String>("auth_request", &args).await {
+            Ok(token) => token,
+            Err(e) => {
+                error!("Authentication failed: {}", e);
+                return Err(e.to_string());
             }
-        }
-
-        if let Some(token) = token_opt {
-            // Save prefs with instance and token only (no email/password)
-            let prefs = UserPrefs {
-                instance: target_instance.to_string(),
-                email: None,
-                password: None,
-                oauth_token: Some(token),
-            };
-            #[derive(Serialize)]
-            struct SaveArgs<'a> {
-                prefs: &'a UserPrefs,
-            }
-            let args = SaveArgs { prefs: &prefs };
-            let _save_rv: () = invoke("save_user_prefs", &args).await.unwrap();
-            Ok(())
-        } else {
-            Err(format!(
-                "native_auth_request failed or returned non-token response",
-            ))
-        }
+        };
+        info!("{_token}");
+        Ok(())
     }
 
     pub async fn acquire_project_mutex(&self, project_id: &str) -> Result<bool, String> {

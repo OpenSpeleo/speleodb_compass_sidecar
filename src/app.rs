@@ -1,16 +1,16 @@
 use futures::future::{Either, select};
 use gloo_timers::future::TimeoutFuture;
-use log::info;
-use serde::{Deserialize, Serialize};
+use log::{error, info};
+use serde::Serialize;
 use speleodb_compass_common::UserPrefs;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
-use crate::components::project_details::ProjectDetails;
-use crate::components::project_listing::ProjectListing;
-use crate::invoke;
-use crate::speleo_db_controller::Project;
-use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
+use crate::{
+    components::{project_details::ProjectDetails, project_listing::ProjectListing},
+    invoke,
+    speleo_db_controller::{Project, SPELEO_DB_CONTROLLER},
+};
 
 #[derive(Clone, Copy, PartialEq)]
 enum ActiveTab {
@@ -36,16 +36,6 @@ pub fn app() -> Html {
         initial_state
     });
 
-    #[derive(Serialize, Deserialize)]
-    struct Prefs {
-        instance: String,
-        #[serde(default)]
-        email: String,
-        #[serde(default)]
-        password: String,
-        oauth_token: String,
-    }
-
     // UI state
     let loading = use_state(|| false);
     let logged_in = use_state(|| false);
@@ -63,7 +53,6 @@ pub fn app() -> Html {
         let instance = instance.clone();
         let email = email.clone();
         let password = password.clone();
-        let oauth = oauth.clone();
         let logged_in = logged_in.clone();
 
         use_effect_with((), move |_| {
@@ -95,13 +84,11 @@ pub fn app() -> Html {
 
                             match select(Box::pin(auth_future), Box::pin(timeout_future)).await {
                                 Either::Left((Ok(()), _)) => {
-                                    web_sys::console::log_1(&"Auto-login success".into());
+                                    info!("Auto-login success with token");
                                     logged_in.set(true);
                                 }
                                 Either::Left((Err(e), _)) => {
-                                    web_sys::console::log_1(
-                                        &format!("Auto-login failed: {}", e).into(),
-                                    );
+                                    error!("Auto-login failed: {}", e);
                                     // Silent failure - do not show error modal
                                 }
                                 Either::Right((_, _)) => {

@@ -80,6 +80,18 @@ impl UserPrefs {
     }
 
     pub fn load() -> Result<Option<Self>, Error> {
+        // Try to get credentials from environment variables first (for testing)
+        let instance = std::env::var("TEST_SPELEODB_INSTANCE").ok();
+        let oauth = std::env::var("TEST_SPELEODB_OAUTH").ok();
+        if instance.as_ref().is_some_and(|_| oauth.is_some()) {
+            info!("User preferences loaded from environment variables");
+            return Ok(Some(UserPrefs {
+                instance: instance.unwrap(),
+                email: None,
+                password: None,
+                oauth_token: oauth,
+            }));
+        }
         if user_prefs_file_path().exists() {
             let s = std::fs::read_to_string(user_prefs_file_path())
                 .map_err(|_| Error::UserPrefsRead)?;

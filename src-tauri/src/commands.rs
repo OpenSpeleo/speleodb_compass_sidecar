@@ -1,24 +1,34 @@
-use crate::{parse_token_from_json, release_project_mutex_internal, ACTIVE_PROJECT_ID};
+use crate::{
+    api, parse_token_from_json, release_project_mutex_internal, state::ApiInfo, ACTIVE_PROJECT_ID,
+};
 use log::info;
 use speleodb_compass_common::{CompassProject, Error, ProjectMetadata, UserPrefs};
+use tauri::State;
 use tauri_plugin_dialog::{DialogExt, FilePath};
 
 #[tauri::command]
-pub fn save_user_prefs(prefs: UserPrefs) -> Result<(), String> {
+pub fn save_user_prefs(api_info: State<'_, ApiInfo>, prefs: UserPrefs) -> Result<(), String> {
     info!("Saving user preferences: {prefs:?}");
     UserPrefs::save(&prefs).map_err(|e| e.to_string())?;
+    api_info.set(&prefs);
     Ok(())
 }
 
 #[tauri::command]
-pub fn load_user_prefs() -> Result<Option<UserPrefs>, String> {
+pub fn load_user_prefs(api_info: State<'_, ApiInfo>) -> Result<Option<UserPrefs>, String> {
     info!("Loading user preferences");
-    UserPrefs::load().map_err(|e| e.to_string())
+    let user_prefs = UserPrefs::load().map_err(|e| e.to_string())?;
+    if let Some(user_prefs) = &user_prefs {
+        api_info.set(user_prefs);
+    }
+    Ok(user_prefs)
 }
 
 #[tauri::command]
-pub fn forget_user_prefs() -> Result<(), String> {
-    UserPrefs::forget().map_err(|e| e.to_string())
+pub fn forget_user_prefs(api_info: State<'_, ApiInfo>) -> Result<(), String> {
+    let result = UserPrefs::forget().map_err(|e| e.to_string());
+    api_info.reset();
+    result
 }
 
 #[tauri::command]
@@ -88,84 +98,28 @@ pub async fn fetch_projects() -> serde_json::Value {
 
 #[tauri::command]
 pub async fn auth_request(
+    api_info: State<'_, ApiInfo>,
     email: Option<String>,
     password: Option<String>,
     oauth: Option<String>,
     instance: String,
-) -> Result<serde_json::Value, String> {
+) -> Result<String, String> {
     info!("Starting auth request");
-    use reqwest::Client;
-    use std::time::Duration;
-
-    if instance.trim().is_empty() {
-        return Ok(serde_json::json!({"ok": false, "error": "Instance URL is empty"}));
-    }
-    info!("Attempting to authorize with instance: {}", instance);
-    let base = instance.trim_end_matches('/');
-    let url = format!("{}{}", base, "/api/v1/user/auth-token/");
-
-    let client = match Client::builder().timeout(Duration::from_secs(10)).build() {
-        Ok(c) => c,
-        Err(e) => {
-            return Ok(
-                serde_json::json!({"ok": false, "error": format!("Failed to build HTTP client: {}", e)}),
-            )
-        }
-    };
-
-    let resp = if let Some(oauth) = oauth {
-        match client
-            .get(&url)
-            .header("Authorization", format!("Token {}", oauth))
-            .send()
-            .await
-        {
-            Ok(r) => r,
-            Err(e) => {
-                return Ok(
-                    serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)}),
-                )
-            }
-        }
+    let updated_token = if let Some(oauth_token) = oauth {
+        api::authorize_with_token(&instance, &oauth_token).await?
     } else {
-        let body = serde_json::json!({"email": email, "password": password});
-        match client.post(&url).json(&body).send().await {
-            Ok(r) => r,
-            Err(e) => {
-                return Ok(
-                    serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)}),
-                )
-            }
-        }
+        let email = email.ok_or("Email is required for email/password authentication")?;
+        let password = password.ok_or("Password is required for email/password authentication")?;
+        api::authorize_with_email(&instance, &email, &password).await?
     };
-
-    let status = resp.status();
-
-    if status.is_success() {
-        info!("Auth Request success");
-        // Prefer header named Auth-Token
-        if let Some(hv) = resp.headers().get("Auth-Token") {
-            if let Ok(s) = hv.to_str() {
-                if !s.is_empty() {
-                    return Ok(serde_json::json!({"ok": true, "token": s.to_string()}));
-                }
-            }
-        }
-
-        // Fall back to JSON body parsing
-        let json: serde_json::Value = resp.json().await.unwrap_or(serde_json::json!(null));
-        if let Some(token) = parse_token_from_json(&json) {
-            return Ok(serde_json::json!({"ok": true, "token": token}));
-        }
-
-        Ok(
-            serde_json::json!({"ok": false, "error": "Authentication succeeded but token not found in response"}),
-        )
-    } else {
-        Ok(
-            serde_json::json!({"ok": false, "error": format!("Authentication failed with status {}", status.as_u16()), "status": status.as_u16()}),
-        )
-    }
+    info!("Auth request successful, updating user preferences");
+    api_info.set(&UserPrefs {
+        instance,
+        email: None,
+        password: None,
+        oauth_token: Some(updated_token.clone()),
+    });
+    Ok(updated_token)
 }
 
 #[tauri::command]
