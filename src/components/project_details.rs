@@ -42,6 +42,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let show_readonly_modal = show_readonly_modal.clone();
         let show_empty_project_modal_effect = show_empty_project_modal.clone();
         let project_file_path = project_file_path.clone();
+        let is_dirty = is_dirty.clone();
         let is_readonly = is_readonly.clone();
         let download_complete = download_complete.clone();
 
@@ -62,7 +63,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                 }
 
                 // Step 2: Check if the project is dirty
-                match SPELEO_DB_CONTROLLER.is_project_dirty(project_id).await {
+                match SPELEO_DB_CONTROLLER.project_is_dirty(project_id).await {
                     Ok(dirty) => {
                         is_dirty.set(dirty);
                     }
@@ -71,7 +72,29 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                     }
                 }
 
-                // Step 2: Update project index
+                // Step 3: Check project revision
+                // If local revision != server revision, we need to update the index if the project isn't dirty
+                // If dirty, we skip update and warn user
+                match SPELEO_DB_CONTROLLER
+                    .project_index_revision_is_current(project_id)
+                    .await
+                {
+                    Ok(current) => {
+                        if !current && !*is_dirty {
+                            info!("Local project revision is outdated, updating index...");
+                        } else if !current && *is_dirty {
+                            info!(
+                                "Local project revision is outdated, but project is dirty; skipping update."
+                            );
+                        }
+                    }
+                    Err(error) => {
+                        error!("Error checking project revision: {error:?}!");
+                        return;
+                    }
+                }
+
+                // Step 4: Update project from SpeleoDB server
                 match SPELEO_DB_CONTROLLER.update_project(project_id).await {
                     Ok(updated_project) => {
                         info!("Successfully updated compass project data{updated_project:?}!");
@@ -459,7 +482,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                             <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
                                 <button
                                     onclick={on_save}
-                                    disabled={*uploading}
+                                    disabled={*uploading || !*is_dirty}
                                     style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: disabled ? 0.5 : 1;"
                                 >
                                     {if *uploading { "Saving..." } else { "Save Project" }}

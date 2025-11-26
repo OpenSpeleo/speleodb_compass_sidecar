@@ -19,6 +19,7 @@ impl UnitArgs {
 
 /// Struct for invocations that require only a project ID.
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ProjectIdArgs {
     project_id: Uuid,
 }
@@ -106,28 +107,31 @@ impl SpeleoDBController {
         Ok(())
     }
 
-    pub async fn is_project_dirty(&self, project_id: Uuid) -> Result<bool, String> {
+    pub async fn project_is_dirty(&self, project_id: Uuid) -> Result<bool, String> {
         let args = ProjectIdArgs::new(project_id);
-        let is_dirty: bool = invoke("is_project_dirty", &args)
+        let is_dirty: bool = invoke("project_working_copy_is_dirty", &args)
             .await
             .map_err(|e| e.to_string())?;
 
         Ok(is_dirty)
     }
 
-    pub async fn is_project_up_to_date(&self, project_id: Uuid) -> Result<bool, String> {
+    pub async fn project_index_revision_is_current(
+        &self,
+        project_id: Uuid,
+    ) -> Result<bool, String> {
         let args = ProjectIdArgs::new(project_id);
 
-        let is_up_to_date: bool = invoke("is_project_up_to_date", &args)
+        let is_current: bool = invoke("project_revision_is_current", &args)
             .await
             .map_err(|e| e.to_string())?;
 
-        Ok(is_up_to_date)
+        Ok(is_current)
     }
 
     pub async fn update_project(&self, project_id: Uuid) -> Result<CompassProject, String> {
         let args = ProjectIdArgs::new(project_id);
-        let project: CompassProject = invoke("update_project_index", &args)
+        let project: CompassProject = invoke("update_project", &args)
             .await
             .map_err(|e| e.to_string())?;
 

@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use log::{error, info};
 use semver::Version;
@@ -6,11 +6,44 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    Error, compass_project_index_path, compass_project_working_path,
-    ensure_compass_project_dirs_exist,
+    Error, api_types::CommitInfo, compass_project_index_path, compass_project_path,
+    compass_project_working_path, ensure_compass_project_dirs_exist,
 };
 const SPELEODB_COMPASS_PROJECT_FILE: &str = "compass.toml";
 const SPELEODB_COMPASS_VERSION: Version = Version::new(0, 0, 1);
+
+const SPELEODB_PROJECT_REVISION_FILE: &str = ".revision.txt";
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct SpeleoDbProjectRevision {
+    pub revision: String,
+}
+
+impl SpeleoDbProjectRevision {
+    pub fn revision_for_project(id: Uuid) -> Option<SpeleoDbProjectRevision> {
+        match std::fs::read_to_string(SpeleoDbProjectRevision::path_for_project(id)).ok() {
+            Some(rev) => Some(Self { revision: rev }),
+            None => None,
+        }
+    }
+    pub fn save_revision_for_project(&self, id: Uuid) -> Result<(), Error> {
+        let path = SpeleoDbProjectRevision::path_for_project(id);
+        std::fs::write(&path, &self.revision).map_err(|_| Error::ProjectWrite(path.clone()))
+    }
+    fn path_for_project(id: Uuid) -> PathBuf {
+        let mut revision_path = compass_project_path(id);
+        revision_path.push(SPELEODB_PROJECT_REVISION_FILE);
+        revision_path
+    }
+}
+
+impl From<&CommitInfo> for SpeleoDbProjectRevision {
+    fn from(commit_info: &CommitInfo) -> Self {
+        Self {
+            revision: commit_info.hexsha.clone(),
+        }
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct SpeleoDb {

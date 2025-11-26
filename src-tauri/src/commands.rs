@@ -1,8 +1,14 @@
-use crate::{api, state::ApiInfo, zip_management::unpack_project_zip, ACTIVE_PROJECT_ID};
+use crate::{
+    api,
+    state::{ApiInfo, ProjectInfoManager},
+    zip_management::unpack_project_zip,
+    ACTIVE_PROJECT_ID,
+};
 use log::{error, info};
 use speleodb_compass_common::{
-    api_types::ProjectInfo, compass_project_index_path, compass_project_working_path,
-    ensure_compass_project_dirs_exist, CompassProject, Error, UserPrefs,
+    api_types::{ProjectInfo, ProjectRevisionInfo},
+    compass_project_index_path, compass_project_working_path, ensure_compass_project_dirs_exist,
+    CompassProject, Error, SpeleoDbProjectRevision, UserPrefs,
 };
 use std::process::Command;
 use tauri::State;
@@ -77,7 +83,7 @@ pub async fn acquire_project_mutex(
 }
 
 #[tauri::command]
-pub async fn is_project_working_copy_dirty(project_id: Uuid) -> Result<bool, String> {
+pub async fn project_working_copy_is_dirty(project_id: Uuid) -> Result<bool, String> {
     info!("Checking if working copy is dirty");
     // If there is no working copy, it's not dirty
     if !compass_project_working_path(project_id).exists() {
@@ -87,12 +93,14 @@ pub async fn is_project_working_copy_dirty(project_id: Uuid) -> Result<bool, Str
     else if !compass_project_index_path(project_id).exists() {
         return Ok(false);
     }
-    let index_project = CompassProject::load_index_project(project_id)
-        .map_err(|e| e.to_string())?
-        .project;
-    let working_project = CompassProject::load_working_project(project_id)
-        .map_err(|e| e.to_string())?
-        .project;
+    let index_project = match CompassProject::load_index_project(project_id) {
+        Ok(p) => p.project,
+        Err(_) => return Ok(false),
+    };
+    let working_project = match CompassProject::load_working_project(project_id) {
+        Ok(p) => p.project,
+        Err(_) => return Ok(false),
+    };
     if index_project != working_project {
         info!("Working copy is dirty");
         Ok(true)
@@ -102,12 +110,89 @@ pub async fn is_project_working_copy_dirty(project_id: Uuid) -> Result<bool, Str
     }
 }
 
+pub async fn update_project_revision_info(
+    api_info: &ApiInfo,
+    project_info: &ProjectInfoManager,
+    project_id: Uuid,
+) -> Result<ProjectRevisionInfo, String> {
+    match api::get_project_revisions(&api_info, project_id).await {
+        Ok(revisions) => {
+            project_info.update_project(&revisions);
+            Ok(revisions)
+        }
+        Err(e) => {
+            error!("Failed to get revisions for project {}: {}", project_id, e);
+            return Err(format!(
+                "Failed to get revisions for project {}: {}",
+                project_id, e
+            ));
+        }
+    }
+}
+
 #[tauri::command]
-pub async fn update_project_index(
+pub async fn project_revision_is_current(
     api_info: State<'_, ApiInfo>,
+    project_info: State<'_, ProjectInfoManager>,
+    project_id: Uuid,
+) -> Result<bool, String> {
+    // Get the index revision for the project, if none, we're not up to date
+    let Some(index_revision) = SpeleoDbProjectRevision::revision_for_project(project_id) else {
+        info!("No index revision found for project {}", project_id);
+        return Ok(false);
+    };
+    match api::get_project_revisions(&api_info, project_id).await {
+        Ok(revisions) => {
+            project_info.update_project(&revisions);
+            let latest_revision = match revisions.latest_commit() {
+                Some(latest) => {
+                    info!(
+                        "Latest revision for project {} is {}",
+                        project_id, latest.hexsha
+                    );
+                    SpeleoDbProjectRevision::from(latest)
+                }
+                None => {
+                    info!("No revisions found for project {}", project_id);
+                    return Ok(true);
+                }
+            };
+            if latest_revision == index_revision {
+                info!(
+                    "Project {} index is up to date (revision {})",
+                    project_id, index_revision.revision
+                );
+                Ok(true)
+            } else {
+                info!(
+                    "Project {} index is out of date (index: {:?}, latest: {:?})",
+                    project_id, index_revision, latest_revision
+                );
+                Ok(false)
+            }
+        }
+        Err(e) => {
+            error!("Failed to get revisions for project {}: {}", project_id, e);
+            return Err(format!(
+                "Failed to get revisions for project {}: {}",
+                project_id, e
+            ));
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn update_project(
+    api_info: State<'_, ApiInfo>,
+    project_info: State<'_, ProjectInfoManager>,
     project_id: Uuid,
 ) -> Result<CompassProject, String> {
-    if is_project_working_copy_dirty(project_id).await? {
+    let version_info = match project_info.get_project(project_id) {
+        Some(info) => info,
+        None => update_project_revision_info(&api_info, &project_info, project_id).await?,
+    };
+
+    if project_working_copy_is_dirty(project_id).await? {
         error!("Working copy is dirty, refusing to update");
         return Err("Working copy is dirty, refusing to update".to_string());
     }
@@ -116,7 +201,15 @@ pub async fn update_project_index(
     match api::download_project_zip(&api_info, project_id).await {
         Ok(bytes) => {
             log::info!("Downloaded ZIP ({} bytes)", bytes.len());
-            unpack_project_zip(project_id, bytes)
+            let project = unpack_project_zip(project_id, bytes)?;
+
+            if let Some(latest_commit) = version_info.latest_commit() {
+                SpeleoDbProjectRevision::from(latest_commit)
+                    .save_revision_for_project(project_id)
+                    .map_err(|e| e.to_string())?;
+            };
+
+            Ok(project)
         }
         Err(Error::EmptyProjectDirectory(project_id)) => {
             info!("Empty project on SpeleoDB");
@@ -359,7 +452,7 @@ pub fn zip_project_folder(project_id: Uuid) -> serde_json::Value {
 #[tauri::command]
 pub async fn import_compass_project(
     app: tauri::AppHandle,
-    id: Uuid,
+    project_id: Uuid,
 ) -> Result<CompassProject, Error> {
     tauri::async_runtime::spawn(async move {
         let Some(FilePath::Path(file_path)) = app
@@ -371,8 +464,8 @@ pub async fn import_compass_project(
             return Err(Error::NoProjectSelected);
         };
         info!("Selected MAK file: {}", file_path.display());
-        info!("Importing into Compass project: {:?}", id);
-        let project = CompassProject::import_compass_project(&file_path, id)?;
+        info!("Importing into Compass project: {:?}", project_id);
+        let project = CompassProject::import_compass_project(&file_path, project_id)?;
         info!("Successfully imported Compass project: {project:?}");
         Ok(project)
     })

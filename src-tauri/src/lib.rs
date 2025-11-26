@@ -7,12 +7,13 @@ use crate::{
     commands::{
         acquire_project_mutex, auth_request, clear_active_project, create_project, fetch_projects,
         forget_user_prefs, import_compass_project, load_user_prefs, open_project,
-        release_project_mutex, save_user_prefs, set_active_project, unzip_project,
-        update_project_index, upload_project_zip, zip_project_folder,
+        project_revision_is_current, project_working_copy_is_dirty, release_project_mutex,
+        save_user_prefs, set_active_project, unzip_project, update_project, upload_project_zip,
+        zip_project_folder,
     },
-    state::ApiInfo,
+    state::{ApiInfo, ProjectInfoManager},
 };
-use speleodb_compass_common::compass_home;
+use speleodb_compass_common::{compass_home, Project};
 use tauri::Manager;
 use uuid::Uuid;
 
@@ -57,23 +58,26 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             acquire_project_mutex,
+            auth_request,
             clear_active_project,
-            update_project_index,
+            create_project,
             fetch_projects,
             forget_user_prefs,
+            import_compass_project,
             load_user_prefs,
-            auth_request,
             open_project,
+            project_revision_is_current,
+            project_working_copy_is_dirty,
             release_project_mutex,
             save_user_prefs,
-            import_compass_project,
             set_active_project,
             unzip_project,
+            update_project,
             upload_project_zip,
             zip_project_folder,
-            create_project,
         ])
-        .manage(ApiInfo::default());
+        .manage(ApiInfo::default())
+        .manage(ProjectInfoManager::new());
     #[cfg(debug_assertions)]
     {
         builder = builder.plugin(devtools);

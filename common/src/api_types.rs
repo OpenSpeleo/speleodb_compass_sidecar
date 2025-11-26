@@ -28,3 +28,23 @@ pub struct ProjectInfo {
     pub visibility: String,
     pub exclude_geojson: bool,
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct CommitInfo {
+    pub hexsha: String,
+    pub message: String,
+    pub author_name: String,
+    pub dt_since: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ProjectRevisionInfo {
+    pub commits: Vec<CommitInfo>,
+    pub project: ProjectInfo,
+}
+
+impl ProjectRevisionInfo {
+    pub fn latest_commit(&self) -> Option<&CommitInfo> {
+        self.commits.last()
+    }
+}

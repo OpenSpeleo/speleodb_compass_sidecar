@@ -1,7 +1,10 @@
 use crate::state::ApiInfo;
 use reqwest::Client;
 use serde::Deserialize;
-use speleodb_compass_common::{api_types::ProjectInfo, Error};
+use speleodb_compass_common::{
+    api_types::{ProjectInfo, ProjectRevisionInfo},
+    Error, SpeleoDbProjectRevision,
+};
 use std::{sync::LazyLock, time::Duration};
 use uuid::Uuid;
 
@@ -153,6 +156,39 @@ pub async fn acquire_project_mutex(api_info: &ApiInfo, project_id: Uuid) -> Resu
             "Mutex acquisition failed with status {}",
             status.as_u16()
         ))
+    }
+}
+
+pub async fn get_project_revisions(
+    api_info: &ApiInfo,
+    project_id: Uuid,
+) -> Result<ProjectRevisionInfo, String> {
+    let base = api_info.get_api_instance();
+    let oauth = api_info.get_api_token().map_err(|e| e.to_string())?;
+    let url = format!("{}/api/v1/projects/{}/revisions/", base, project_id);
+    let client = get_api_client();
+
+    let resp = client
+        .get(&url)
+        .header("Authorization", format!("Token {}", oauth))
+        .send()
+        .await
+        .map_err(|e| format!("Network request failed: {}", e))?;
+
+    let status = resp.status();
+
+    #[derive(Deserialize)]
+    struct RevisionsResponse {
+        pub data: ProjectRevisionInfo,
+    }
+
+    if status.is_success() {
+        match resp.json::<RevisionsResponse>().await {
+            Ok(revisions_response) => Ok(revisions_response.data),
+            Err(e) => Err(format!("Failed to parse response: {}", e)),
+        }
+    } else {
+        Err(format!("Request failed with status {}", status.as_u16()))
     }
 }
 
