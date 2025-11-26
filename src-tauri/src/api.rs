@@ -1,9 +1,8 @@
 use crate::state::ApiInfo;
 use reqwest::Client;
 use serde::Deserialize;
-use speleodb_compass_common::{api_types::ProjectInfo, compass_project_path, Error};
+use speleodb_compass_common::{api_types::ProjectInfo, Error};
 use std::{sync::LazyLock, time::Duration};
-use tauri::ipc::private::tracing::info_span;
 use uuid::Uuid;
 
 static API_CLIENT: LazyLock<Client> = LazyLock::new(|| {

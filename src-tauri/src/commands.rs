@@ -188,7 +188,7 @@ pub fn unzip_project(zip_path: String, project_id: Uuid) -> serde_json::Value {
 
 #[tauri::command]
 pub fn open_project(project_id: Uuid) -> Result<(), String> {
-    let project_dir = compass_project_working_path(project_id);
+    let mut project_dir = compass_project_working_path(project_id);
     if !project_dir.exists() {
         return Err("Project folder does not exist".to_string());
     }
@@ -212,13 +212,17 @@ pub fn open_project(project_id: Uuid) -> Result<(), String> {
             .map_err(|e| e.to_string())?
             .project
             .mak_file;
+        info!("{compass_project:?}");
         if let Some(project_path) = compass_project {
+            project_dir.push(project_path);
+            info!("Attempting to open project with Compass Software");
             Command::new("explorer")
-                .arg(project_path)
+                .arg(project_dir)
                 .spawn()
                 .map_err(|e| e.to_string())?
                 .wait()
                 .map_err(|e| e.to_string())?;
+            info!("Compass Closed Successfully");
         } else {
             std::process::Command::new("explorer")
                 .arg(&project_dir)
