@@ -12,7 +12,7 @@ use crate::{
 const SPELEODB_COMPASS_PROJECT_FILE: &str = "compass.toml";
 const SPELEODB_COMPASS_VERSION: Version = Version::new(0, 0, 1);
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct SpeleoDb {
     id: Uuid,
     pub version: semver::Version,
@@ -27,7 +27,7 @@ impl Default for SpeleoDb {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Project {
     pub mak_file: Option<String>,
     pub dat_files: Vec<String>,
@@ -56,7 +56,7 @@ impl Project {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct CompassProject {
     pub speleodb: SpeleoDb,
     pub project: Project,
@@ -102,7 +102,7 @@ impl CompassProject {
         }
 
         // Everything looks good, create the new CompassProject
-        let mut project_path = path_for_project(id);
+        let mut project_path = compass_project_working_path(id);
 
         std::fs::create_dir_all(&project_path)
             .map_err(|_| Error::CreateProjectDirectory(project_path.clone()))?;
@@ -122,18 +122,19 @@ impl CompassProject {
         std::fs::write(&project_path, &serialized_project)
             .map_err(|_| Error::ProjectWrite(project_path.clone()))?;
         // Copy the .mak file and all referenced survey files into the new project directory
-        let mut mak_target_path = path_for_project(id);
+        let mut mak_target_path = compass_project_working_path(id);
         mak_target_path.push(mak_path.file_name().unwrap());
         std::fs::copy(&mak_path, &mak_target_path)
             .map_err(|_| Error::ProjectImport(mak_path.clone(), mak_target_path.clone()))?;
         for (file_path, relative_path) in project_file_paths.iter().zip(project_files.iter()) {
-            let mut target_path = path_for_project(id);
+            let mut target_path = compass_project_working_path(id);
             target_path.push(relative_path);
             std::fs::copy(file_path, &target_path)
                 .map_err(|_| Error::ProjectImport(file_path.to_owned(), target_path.to_owned()))?;
         }
         Ok(new_project)
     }
+
     pub fn empty_project(id: Uuid) -> Result<Self, Error> {
         info!("Creating empty Compass project for id: {id}");
         ensure_compass_project_dirs_exist(id)?;
@@ -155,6 +156,26 @@ impl CompassProject {
         std::fs::write(&working_copy_path, &serialized_project)
             .map_err(|_| Error::ProjectWrite(working_copy_path.clone()))?;
         Ok(new_project)
+    }
+
+    pub fn load_working_project(id: Uuid) -> Result<Self, Error> {
+        let mut project_path = compass_project_working_path(id);
+        project_path.push(SPELEODB_COMPASS_PROJECT_FILE);
+        let project_data = std::fs::read_to_string(&project_path)
+            .map_err(|_| Error::ProjectNotFound(project_path.clone()))?;
+        let project: CompassProject =
+            toml::from_str(&project_data).map_err(|e| Error::Deserialization(e.to_string()))?;
+        Ok(project)
+    }
+
+    pub fn load_index_project(id: Uuid) -> Result<Self, Error> {
+        let mut project_path = compass_project_working_path(id);
+        project_path.push(SPELEODB_COMPASS_PROJECT_FILE);
+        let project_data = std::fs::read_to_string(&project_path)
+            .map_err(|_| Error::ProjectNotFound(project_path.clone()))?;
+        let project: CompassProject =
+            toml::from_str(&project_data).map_err(|e| Error::Deserialization(e.to_string()))?;
+        Ok(project)
     }
 
     pub fn is_empty(&self) -> bool {

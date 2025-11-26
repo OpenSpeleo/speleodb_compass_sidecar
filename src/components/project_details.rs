@@ -131,12 +131,11 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
     };
 
     // Open folder handler
-    let on_open_folder = {
-        let project_id = props.project.id.clone();
+    let on_open_project = {
+        let project_id = Uuid::parse_str(&props.project.id).unwrap();
         Callback::from(move |_: ()| {
-            let project_id = project_id.clone();
             spawn_local(async move {
-                let _ = SPELEO_DB_CONTROLLER.open_folder(&project_id).await;
+                let _ = SPELEO_DB_CONTROLLER.open_project(project_id).await;
             });
         })
     };
@@ -351,10 +350,10 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
             <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
                 <button onclick={on_back_click}>{"← Back to Projects"}</button>
                 <button
-                    onclick={on_open_folder.reform(|_| ())}
+                    onclick={on_open_project.reform(|_| ())}
                     style="background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
                 >
-                    {"🟢 Open Folder"}
+                    {"🟢 Open Project"}
                 </button>
             </div>
 
@@ -530,7 +529,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                             primary_button_text={Some("Open Folder".to_string())}
                             on_close={close_success_modal}
                             on_primary_action={
-                                let on_open_folder = on_open_folder.clone();
+                                let on_open_folder = on_open_project.clone();
                                 let show_success_modal = show_success_modal.clone();
                                 Callback::from(move |_| {
                                     on_open_folder.emit(());

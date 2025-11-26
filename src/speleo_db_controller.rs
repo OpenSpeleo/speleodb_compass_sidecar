@@ -139,16 +139,16 @@ impl SpeleoDBController {
         Ok(path.to_string())
     }
 
-    pub async fn open_folder(&self, project_id: &str) -> Result<(), String> {
+    pub async fn open_project(&self, project_id: Uuid) -> Result<(), String> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
-        struct Args<'a> {
-            project_id: &'a str,
+        struct Args {
+            project_id: Uuid,
         }
 
         let args = Args { project_id };
 
-        let json: serde_json::Value = invoke("open_project_folder", &args).await.unwrap();
+        let json: serde_json::Value = invoke("open_project", &args).await.unwrap();
 
         if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
             let err_msg = json

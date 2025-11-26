@@ -6,7 +6,7 @@ mod zip_management;
 use crate::{
     commands::{
         acquire_project_mutex, auth_request, clear_active_project, create_project, fetch_projects,
-        forget_user_prefs, import_compass_project, load_user_prefs, open_project_folder,
+        forget_user_prefs, import_compass_project, load_user_prefs, open_project,
         release_project_mutex, save_user_prefs, set_active_project, unzip_project,
         update_project_index, upload_project_zip, zip_project_folder,
     },
@@ -63,7 +63,7 @@ pub fn run() {
             forget_user_prefs,
             load_user_prefs,
             auth_request,
-            open_project_folder,
+            open_project,
             release_project_mutex,
             save_user_prefs,
             import_compass_project,

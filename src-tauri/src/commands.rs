@@ -1,8 +1,10 @@
 use crate::{api, state::ApiInfo, zip_management::unpack_project_zip, ACTIVE_PROJECT_ID};
 use log::info;
 use speleodb_compass_common::{
-    api_types::ProjectInfo, ensure_compass_project_dirs_exist, CompassProject, Error, UserPrefs,
+    api_types::ProjectInfo, compass_project_working_path, ensure_compass_project_dirs_exist,
+    CompassProject, Error, UserPrefs,
 };
+use std::process::Command;
 use tauri::State;
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
@@ -185,38 +187,42 @@ pub fn unzip_project(zip_path: String, project_id: Uuid) -> serde_json::Value {
 }
 
 #[tauri::command]
-pub fn open_project_folder(project_id: Uuid) -> serde_json::Value {
-    let project_path = speleodb_compass_common::compass_project_path(project_id);
-
-    if !project_path.exists() {
-        return serde_json::json!({"ok": false, "error": "Project folder does not exist"});
+pub fn open_project(project_id: Uuid) -> Result<(), String> {
+    let project_dir = compass_project_working_path(project_id);
+    if !project_dir.exists() {
+        return Err("Project folder does not exist".to_string());
     }
 
-    // Open folder in system file explorer
+    // Just open the folder in system file explorer
     #[cfg(target_os = "macos")]
-    let result = std::process::Command::new("open")
-        .arg(&project_path)
-        .spawn();
-
-    #[cfg(target_os = "windows")]
-    let result = std::process::Command::new("explorer")
-        .arg(&project_path)
-        .spawn();
-
+    let result = std::process::Command::new("open").arg(&project_dir).spawn();
     #[cfg(target_os = "linux")]
     let result = std::process::Command::new("xdg-open")
-        .arg(&project_path)
+        .arg(&project_dir)
         .spawn();
 
-    match result {
-        Ok(_) => {
-            log::info!("Opened project folder: {}", project_path.display());
-            serde_json::json!({"ok": true, "message": "Folder opened successfully"})
-        }
-        Err(e) => {
-            serde_json::json!({"ok": false, "error": format!("Failed to open folder: {}", e)})
+    // On Windows, actually try to open the project with Compass if possible
+    #[cfg(target_os = "windows")]
+    {
+        let compass_project = CompassProject::load_working_project(project_id)
+            .map_err(|e| e.to_string())?
+            .project
+            .mak_file;
+        if let Some(project_path) = compass_project {
+            Command::new("explorer")
+                .arg(project_path)
+                .spawn()
+                .expect("Expected to launch compass software")
+                .wait()
+                .expect("Compass exit successfully");
+        } else {
+            std::process::Command::new("explorer")
+                .arg(&project_dir)
+                .spawn()
+                .expect("Expected to launch file explorer");
         }
     }
+    Ok(())
 }
 
 #[tauri::command]
