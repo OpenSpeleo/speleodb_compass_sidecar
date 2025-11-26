@@ -7,15 +7,35 @@ use speleodb_compass_common::{CompassProject, api_types::ProjectInfo};
 use uuid::Uuid;
 use web_sys::Url;
 
+/// Empty struct for no-argument invocations.
+#[derive(Serialize)]
+struct UnitArgs {}
+
+impl UnitArgs {
+    fn new() -> Self {
+        Self {}
+    }
+}
+
+/// Struct for invocations that require only a project ID.
+#[derive(Serialize)]
+struct ProjectIdArgs {
+    project_id: Uuid,
+}
+
+impl ProjectIdArgs {
+    fn new(project_id: Uuid) -> Self {
+        Self { project_id }
+    }
+}
+
 pub struct SpeleoDBController {}
 
 impl SpeleoDBController {
     pub async fn fetch_projects(&self) -> Result<Vec<ProjectInfo>, String> {
         // Call the Tauri backend to fetch projects
-        #[derive(Serialize)]
-        struct FetchProjectsArgs {}
 
-        let args = FetchProjectsArgs {};
+        let args = UnitArgs::new();
 
         match invoke("fetch_projects", &args).await {
             Ok(projects) => Ok(projects),
@@ -77,14 +97,8 @@ impl SpeleoDBController {
     }
 
     pub async fn acquire_project_mutex(&self, project_id: Uuid) -> Result<(), String> {
-        #[derive(Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Args {
-            project_id: Uuid,
-        }
         info!("Acquiring mutex for project: {}", project_id);
-        let args = Args { project_id };
-
+        let args = ProjectIdArgs::new(project_id);
         let _: () = invoke("acquire_project_mutex", &args)
             .await
             .map_err(|e| e.to_string())?;
@@ -93,14 +107,7 @@ impl SpeleoDBController {
     }
 
     pub async fn is_project_dirty(&self, project_id: Uuid) -> Result<bool, String> {
-        #[derive(Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Args {
-            project_id: Uuid,
-        }
-
-        let args = Args { project_id };
-
+        let args = ProjectIdArgs::new(project_id);
         let is_dirty: bool = invoke("is_project_dirty", &args)
             .await
             .map_err(|e| e.to_string())?;
@@ -108,15 +115,18 @@ impl SpeleoDBController {
         Ok(is_dirty)
     }
 
+    pub async fn is_project_up_to_date(&self, project_id: Uuid) -> Result<bool, String> {
+        let args = ProjectIdArgs::new(project_id);
+
+        let is_up_to_date: bool = invoke("is_project_up_to_date", &args)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(is_up_to_date)
+    }
+
     pub async fn update_project(&self, project_id: Uuid) -> Result<CompassProject, String> {
-        #[derive(Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Args {
-            project_id: Uuid,
-        }
-
-        let args = Args { project_id };
-
+        let args = ProjectIdArgs::new(project_id);
         let project: CompassProject = invoke("update_project_index", &args)
             .await
             .map_err(|e| e.to_string())?;
@@ -156,14 +166,7 @@ impl SpeleoDBController {
     }
 
     pub async fn open_project(&self, project_id: Uuid) -> Result<(), String> {
-        #[derive(Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Args {
-            project_id: Uuid,
-        }
-
-        let args = Args { project_id };
-
+        let args = ProjectIdArgs::new(project_id);
         let _: () = invoke("open_project", &args)
             .await
             .map_err(|e| e.to_string())?;
@@ -172,14 +175,7 @@ impl SpeleoDBController {
     }
 
     pub async fn zip_project(&self, project_id: Uuid) -> Result<String, String> {
-        #[derive(Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Args {
-            project_id: Uuid,
-        }
-
-        let args = Args { project_id };
-
+        let args = ProjectIdArgs::new(project_id);
         let json: serde_json::Value = invoke("zip_project_folder", &args).await.unwrap();
 
         if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
@@ -233,35 +229,18 @@ impl SpeleoDBController {
     }
 
     pub async fn release_mutex(&self, project_id: Uuid) -> Result<(), String> {
-        #[derive(Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Args {
-            project_id: Uuid,
-        }
-
-        let args = Args { project_id };
-
+        let args = ProjectIdArgs::new(project_id);
         let _json: serde_json::Value = invoke("release_project_mutex", &args).await.unwrap();
         Ok(())
     }
 
     pub async fn import_compass_project(&self, id: Uuid) -> Result<CompassProject, Error> {
-        #[derive(Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Args {
-            id: Uuid,
-        }
-        let args = Args { id };
+        let args = ProjectIdArgs::new(id);
         invoke("import_compass_project", &args).await
     }
 
     pub async fn set_active_project(&self, project_id: Uuid) -> Result<(), String> {
-        #[derive(Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Args {
-            project_id: Uuid,
-        }
-        let args = Args { project_id };
+        let args = ProjectIdArgs::new(project_id);
         let _: () = invoke("set_active_project", &args).await.unwrap();
         Ok(())
     }
