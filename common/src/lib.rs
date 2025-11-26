@@ -3,7 +3,7 @@ mod compass_project;
 mod error;
 mod user_prefs;
 
-pub use compass_project::{CompassProject, Project, ProjectMetadata, SpeleoDb};
+pub use compass_project::{CompassProject, Project, SpeleoDb};
 pub use error::Error;
 pub use user_prefs::{OauthToken, UserPrefs};
 
@@ -48,9 +48,23 @@ pub fn compass_dir_path() -> &'static Path {
 }
 
 /// Get the path for a specific project in the compass folder.
-pub fn project_compass_path(project_id: &str) -> PathBuf {
+pub fn compass_project_path(project_id: Uuid) -> PathBuf {
     let mut path = compass_dir_path().to_path_buf();
-    path.push(project_id);
+    path.push(project_id.to_string());
+    path
+}
+
+/// Get the path for a specific project in the compass folder.
+pub fn compass_project_index_path(project_id: Uuid) -> PathBuf {
+    let mut path = compass_project_path(project_id);
+    path.push("index");
+    path
+}
+
+/// Get the path for a specific project in the compass folder.
+pub fn compass_project_working_path(project_id: Uuid) -> PathBuf {
+    let mut path = compass_project_path(project_id);
+    path.push("working_copy");
     path
 }
 
@@ -66,10 +80,12 @@ pub fn ensure_compass_dir_exists() -> std::io::Result<()> {
 }
 
 /// Ensure a specific project folder exists in the compass directory.
-pub fn ensure_project_compass_dir_exists(project_id: &str) -> std::io::Result<PathBuf> {
-    let path = project_compass_path(project_id);
-    std::fs::create_dir_all(&path)?;
-    Ok(path)
+pub fn ensure_compass_project_dirs_exist(project_id: Uuid) -> Result<PathBuf, Error> {
+    let path = compass_project_index_path(project_id);
+    std::fs::create_dir_all(&path).map_err(|_| Error::CreateProjectDirectory(path.clone()))?;
+    let path = compass_project_working_path(project_id);
+    std::fs::create_dir_all(&path).map_err(|_| Error::CreateProjectDirectory(path.clone()))?;
+    Ok(compass_project_path(project_id))
 }
 
 /// Initialize a file logger that writes logs into the SDB user directory.

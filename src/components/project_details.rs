@@ -1,7 +1,8 @@
 use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
-use speleodb_compass_common::ProjectMetadata;
+use log::{error, info};
 use speleodb_compass_common::api_types::ProjectInfo;
+use uuid::Uuid;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
@@ -25,7 +26,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
     let show_empty_project_modal = use_state(|| false);
     let error_message: UseStateHandle<Option<String>> = use_state(|| None);
     let upload_error: UseStateHandle<Option<String>> = use_state(|| None);
-    let project_folder_path: UseStateHandle<Option<String>> = use_state(|| None);
+    let project_file_path: UseStateHandle<Option<String>> = use_state(|| None);
     let is_readonly = use_state(|| false);
     let download_complete = use_state(|| false);
     let commit_message = use_state(String::new);
@@ -39,7 +40,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let show_readonly_modal = show_readonly_modal.clone();
         let show_empty_project_modal_effect = show_empty_project_modal.clone();
         let error_message = error_message.clone();
-        let project_folder_path = project_folder_path.clone();
+        let project_file_path = project_file_path.clone();
         let is_readonly = is_readonly.clone();
         let download_complete = download_complete.clone();
 
@@ -64,42 +65,23 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                     }
                 }
 
-                // Step 2: Download the project (regardless of mutex status)
-                let zip_result = SPELEO_DB_CONTROLLER.download_project(&project_id).await;
-
-                let zip_path = match zip_result {
-                    Ok(path) => path,
-                    Err(e) => {
-                        // Check if this is an empty project error (422)
-                        if e == "EMPTY_PROJECT_422" {
-                            // Empty project - show info modal instead of error
-                            downloading.set(false);
+                // Step 2: Update project index
+                match SPELEO_DB_CONTROLLER.update_project(&project_id).await {
+                    Ok(project) => {
+                        info!("Successfully updated compass project data{project:?}!");
+                        downloading.set(false);
+                        let mak_path = project.project.mak_file.clone();
+                        project_file_path.set(mak_path);
+                        if project.is_empty() {
                             show_empty_project_modal_effect.set(true);
-                            return;
+                        } else {
+                            download_complete.set(true);
                         }
-                        error_message.set(Some(format!("Download failed: {}", e)));
-                        downloading.set(false);
-                        return;
                     }
-                };
-
-                // Step 3: Unzip the project
-                let folder_path = match SPELEO_DB_CONTROLLER
-                    .unzip_project(&zip_path, &project_id)
-                    .await
-                {
-                    Ok(path) => path,
-                    Err(e) => {
-                        error_message.set(Some(format!("Failed to extract project: {}", e)));
-                        downloading.set(false);
-                        return;
+                    Err(error) => {
+                        error!("Error updating compass project data: {error:?}!");
                     }
-                };
-
-                // Step 4: Success!
-                project_folder_path.set(Some(folder_path));
-                downloading.set(false);
-                download_complete.set(true);
+                }
             });
 
             // Cleanup: Clear active project when component unmounts
@@ -232,46 +214,43 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
     // Reload Project Handler
     let on_confirm_reload = {
-        let project_id = props.project.id.clone();
         let downloading = downloading.clone();
-        let show_reload_confirm = show_reload_confirm.clone();
+        let download_complete = download_complete.clone();
         let error_message = error_message.clone();
-        let show_success_modal = show_success_modal.clone();
-
+        let project_file_path = project_file_path.clone();
+        let project_id = props.project.id.clone();
+        let show_empty_project_modal = show_empty_project_modal.clone();
+        let show_reload_confirm = show_reload_confirm.clone();
         Callback::from(move |_: ()| {
             let project_id = project_id.clone();
             let downloading = downloading.clone();
+            let download_complete = download_complete.clone();
             let show_reload_confirm = show_reload_confirm.clone();
             let error_message = error_message.clone();
-            let show_success_modal = show_success_modal.clone();
-
+            let show_empty_project_modal = show_empty_project_modal.clone();
+            let project_file_path = project_file_path.clone();
             show_reload_confirm.set(false);
             downloading.set(true);
             error_message.set(None);
 
             spawn_local(async move {
-                let zip_path = match SPELEO_DB_CONTROLLER.download_project(&project_id).await {
-                    Ok(path) => path,
-                    Err(e) => {
-                        error_message.set(Some(format!("Download failed: {}", e)));
+                // Step 2: Update project index
+                match SPELEO_DB_CONTROLLER.update_project(&project_id).await {
+                    Ok(project) => {
+                        info!("Successfully updated compass project data{project:?}!");
                         downloading.set(false);
-                        return;
+                        let mak_path = project.project.mak_file.clone();
+                        project_file_path.set(mak_path);
+                        if project.is_empty() {
+                            show_empty_project_modal.set(true);
+                        } else {
+                            download_complete.set(true);
+                        }
                     }
-                };
-
-                match SPELEO_DB_CONTROLLER
-                    .unzip_project(&zip_path, &project_id)
-                    .await
-                {
-                    Ok(_) => {
-                        downloading.set(false);
-                        show_success_modal.set(true);
+                    Err(error) => {
+                        error!("Error updating compass project data: {error:?}!");
                     }
-                    Err(e) => {
-                        error_message.set(Some(format!("Failed to extract project: {}", e)));
-                        downloading.set(false);
-                    }
-                };
+                }
             });
         })
     };
@@ -281,22 +260,16 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let selected_zip = selected_zip.clone();
         let show_load_confirm = show_load_confirm.clone();
         let error_message = error_message.clone();
-        let name = props.project.name.clone();
-        let description = props.project.description.clone();
-        let project_id = props.project.id.clone();
+        let project_id = Uuid::parse_str(&props.project.id.clone()).unwrap();
 
         Callback::from(move |_| {
             let selected_zip = selected_zip.clone();
             let show_load_confirm = show_load_confirm.clone();
             let error_message = error_message.clone();
-            let compass_project = ProjectMetadata {
-                id: project_id.parse().unwrap(),
-                name: name.clone(),
-                description: description.clone(),
-            };
+
             spawn_local(async move {
                 match SPELEO_DB_CONTROLLER
-                    .import_compass_project(compass_project)
+                    .import_compass_project(project_id)
                     .await
                 {
                     Ok(project) => {

@@ -1,8 +1,9 @@
 use crate::state::ApiInfo;
 use reqwest::Client;
 use serde::Deserialize;
-use speleodb_compass_common::api_types::ProjectInfo;
+use speleodb_compass_common::{api_types::ProjectInfo, compass_project_path, Error};
 use std::{sync::LazyLock, time::Duration};
+use tauri::ipc::private::tracing::info_span;
 use uuid::Uuid;
 
 static API_CLIENT: LazyLock<Client> = LazyLock::new(|| {
@@ -67,7 +68,7 @@ pub async fn authorize_with_email(
 pub async fn release_project_mutex(api_info: &ApiInfo, project_id: &Uuid) -> Result<(), String> {
     log::info!("Releasing project mutex for project: {}", project_id);
     let base = api_info.get_api_instance();
-    let oauth = api_info.get_api_token()?;
+    let oauth = api_info.get_api_token().map_err(|e| e.to_string())?;
     let url = format!("{}/api/v1/projects/{}/release/", base, project_id);
     let client = get_api_client();
 
@@ -97,7 +98,7 @@ pub async fn release_project_mutex(api_info: &ApiInfo, project_id: &Uuid) -> Res
 
 pub async fn fetch_projects(api_info: &ApiInfo) -> Result<Vec<ProjectInfo>, String> {
     let base = api_info.get_api_instance();
-    let oauth = api_info.get_api_token()?;
+    let oauth = api_info.get_api_token().map_err(|e| e.to_string())?;
     let url = format!("{}{}", base, "/api/v1/projects/");
     let client = get_api_client();
 
@@ -129,7 +130,7 @@ pub async fn fetch_projects(api_info: &ApiInfo) -> Result<Vec<ProjectInfo>, Stri
 pub async fn acquire_project_mutex(api_info: &ApiInfo, project_id: Uuid) -> Result<(), String> {
     log::info!("Acquiring project mutex for project: {}", project_id);
     let base = api_info.get_api_instance();
-    let oauth = api_info.get_api_token()?;
+    let oauth = api_info.get_api_token().map_err(|e| e.to_string())?;
     let url = format!("{}/api/v1/projects/{}/acquire/", base, project_id);
     let client = get_api_client();
 
@@ -154,6 +155,44 @@ pub async fn acquire_project_mutex(api_info: &ApiInfo, project_id: Uuid) -> Resu
             status.as_u16()
         ))
     }
+}
+
+pub async fn download_project_zip(
+    api_info: &ApiInfo,
+    project_id: Uuid,
+) -> Result<bytes::Bytes, Error> {
+    let base = api_info.get_api_instance();
+    let oauth = api_info.get_api_token()?;
+    let url = format!(
+        "{}/api/v1/projects/{}/download/compass_zip/",
+        base, project_id
+    );
+    let client = get_api_client();
+
+    let resp = client
+        .get(&url)
+        .header("Authorization", format!("Token {}", oauth))
+        .send()
+        .await
+        .map_err(|e| Error::NetworkRequest(e.to_string()))?;
+
+    let status = resp.status();
+
+    // Handle 422 - Project has no compass data yet (new/empty project)
+    if status.as_u16() == 422 {
+        return Err(Error::EmptyProjectDirectory(project_id));
+    }
+
+    if !status.is_success() {
+        return Err(Error::ApiRequest(status.as_u16()));
+    }
+
+    // Get the bytes
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| Error::Deserialization(e.to_string()))?;
+    Ok(bytes)
 }
 
 #[cfg(test)]

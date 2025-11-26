@@ -55,7 +55,8 @@ impl UserPrefs {
             panic!("We should never try to persist a user's password to disk!");
         }
         let s = toml::to_string_pretty(&prefs).map_err(|_| Error::Serialization)?;
-        std::fs::write(user_prefs_file_path(), s).map_err(|_| Error::UserPrefsWrite)?;
+        std::fs::write(user_prefs_file_path(), s)
+            .map_err(|_| Error::UserPrefsWrite(user_prefs_file_path().to_path_buf()))?;
 
         // On Unix, tighten permissions so only the owner can read/write the prefs file.
         #[cfg(unix)]
@@ -94,8 +95,9 @@ impl UserPrefs {
         }
         if user_prefs_file_path().exists() {
             let s = std::fs::read_to_string(user_prefs_file_path())
-                .map_err(|_| Error::UserPrefsRead)?;
-            let s: UserPrefs = toml::from_str(&s).map_err(|_| Error::Deserialization)?;
+                .map_err(|_| Error::UserPrefsRead(user_prefs_file_path().to_path_buf()))?;
+            let s: UserPrefs =
+                toml::from_str(&s).map_err(|e| Error::Deserialization(e.to_string()))?;
             info!("User preferences loaded successfully");
             Ok(Some(s))
         } else {
@@ -106,7 +108,8 @@ impl UserPrefs {
 
     pub fn forget() -> Result<(), Error> {
         if user_prefs_file_path().exists() {
-            std::fs::remove_file(user_prefs_file_path()).map_err(|_| Error::UserPrefsWrite)?;
+            std::fs::remove_file(user_prefs_file_path())
+                .map_err(|_| Error::UserPrefsWrite(user_prefs_file_path().to_path_buf()))?;
         }
         Ok(())
     }

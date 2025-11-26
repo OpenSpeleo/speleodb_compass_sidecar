@@ -5,7 +5,10 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{Error, path_for_project};
+use crate::{
+    Error, compass_project_index_path, compass_project_working_path,
+    ensure_compass_project_dirs_exist, path_for_project,
+};
 const SPELEODB_COMPASS_PROJECT_FILE: &str = "compass.toml";
 const SPELEODB_COMPASS_VERSION: Version = Version::new(0, 0, 1);
 
@@ -26,49 +29,31 @@ impl Default for SpeleoDb {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Project {
-    pub name: String,
-    pub description: String,
     pub mak_file: Option<String>,
     pub dat_files: Vec<String>,
     pub plt_files: Vec<String>,
 }
 
 impl Project {
-    pub fn import(
-        name: String,
-        description: String,
-        mak_file: String,
-        dat_files: Vec<String>,
-    ) -> Self {
+    pub fn import(mak_file: String, dat_files: Vec<String>) -> Self {
         let plt_files = vec![];
         Self {
-            name,
-            description,
             mak_file: Some(mak_file),
             dat_files,
             plt_files,
         }
     }
 
-    pub fn new(name: String, description: String) -> Self {
+    pub fn new() -> Self {
         let mak_file = None;
         let dat_files = vec![];
         let plt_files = vec![];
         Self {
-            name,
-            description,
             mak_file,
             dat_files,
             plt_files,
         }
     }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct ProjectMetadata {
-    pub id: Uuid,
-    pub name: String,
-    pub description: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -78,11 +63,8 @@ pub struct CompassProject {
 }
 
 impl CompassProject {
-    pub fn import_compass_project(
-        mak_path: &Path,
-        metadata: ProjectMetadata,
-    ) -> Result<Self, Error> {
-        info!("Attempting to import {mak_path:?} to {metadata:?}");
+    pub fn import_compass_project(mak_path: &Path, id: Uuid) -> Result<Self, Error> {
+        info!("Attempting to import {mak_path:?} to project {id}");
         // Verify that the .mak file exists
         let mak_path = std::path::PathBuf::from(mak_path);
         if !mak_path.exists() {
@@ -95,7 +77,7 @@ impl CompassProject {
         // Load and parse the compass project file
         let compass_project = compass_data::Project::read(&mak_path).map_err(|e| {
             error!("Error loading compass .mak file: {e}");
-            Error::Deserialization
+            Error::Deserialization(e.to_string())
         })?;
         info!("Project parsed successfully");
         // Verify that all referenced survey files exist
@@ -120,17 +102,16 @@ impl CompassProject {
         }
 
         // Everything looks good, create the new CompassProject
-        let mut project_path = path_for_project(metadata.id);
+        let mut project_path = path_for_project(id);
 
-        std::fs::create_dir_all(&project_path).map_err(|_| Error::CreateProjectDirectory)?;
+        std::fs::create_dir_all(&project_path)
+            .map_err(|_| Error::CreateProjectDirectory(project_path.clone()))?;
         let new_project = Self {
             speleodb: SpeleoDb {
-                id: metadata.id,
+                id,
                 version: SPELEODB_COMPASS_VERSION,
             },
             project: Project::import(
-                metadata.name,
-                metadata.description,
                 mak_path.file_name().unwrap().to_string_lossy().to_string(),
                 project_files.clone(),
             ),
@@ -138,17 +119,46 @@ impl CompassProject {
         project_path.push(SPELEODB_COMPASS_PROJECT_FILE);
         let serialized_project =
             toml::to_string_pretty(&new_project).map_err(|_| Error::Serialization)?;
-        std::fs::write(project_path, &serialized_project).map_err(|_| Error::ProjectWrite)?;
+        std::fs::write(&project_path, &serialized_project)
+            .map_err(|_| Error::ProjectWrite(project_path.clone()))?;
         // Copy the .mak file and all referenced survey files into the new project directory
-        let mut mak_target_path = path_for_project(metadata.id);
+        let mut mak_target_path = path_for_project(id);
         mak_target_path.push(mak_path.file_name().unwrap());
-        std::fs::copy(mak_path, mak_target_path).map_err(|_| Error::ProjectWrite)?;
+        std::fs::copy(&mak_path, &mak_target_path)
+            .map_err(|_| Error::ProjectImport(mak_path.clone(), mak_target_path.clone()))?;
         for (file_path, relative_path) in project_file_paths.iter().zip(project_files.iter()) {
-            let mut target_path = path_for_project(metadata.id);
+            let mut target_path = path_for_project(id);
             target_path.push(relative_path);
-            std::fs::copy(file_path, target_path).map_err(|_| Error::ProjectWrite)?;
+            std::fs::copy(file_path, &target_path)
+                .map_err(|_| Error::ProjectImport(file_path.to_owned(), target_path.to_owned()))?;
         }
         Ok(new_project)
+    }
+    pub fn empty_project(id: Uuid) -> Result<Self, Error> {
+        info!("Creating empty Compass project for id: {id}");
+        ensure_compass_project_dirs_exist(id)?;
+        let new_project = Self {
+            speleodb: SpeleoDb {
+                id,
+                version: SPELEODB_COMPASS_VERSION,
+            },
+            project: Project::new(),
+        };
+        let mut index_path = compass_project_index_path(id);
+        index_path.push(SPELEODB_COMPASS_PROJECT_FILE);
+        let serialized_project =
+            toml::to_string_pretty(&new_project).map_err(|_| Error::Serialization)?;
+        std::fs::write(&index_path, &serialized_project)
+            .map_err(|_| Error::ProjectWrite(index_path.clone()))?;
+        let mut working_copy_path = compass_project_working_path(id);
+        working_copy_path.push(SPELEODB_COMPASS_PROJECT_FILE);
+        std::fs::write(&working_copy_path, &serialized_project)
+            .map_err(|_| Error::ProjectWrite(working_copy_path.clone()))?;
+        Ok(new_project)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.project.mak_file.is_none()
     }
 }
 
@@ -160,18 +170,15 @@ mod test {
 
     #[test]
     fn test_project_import() {
-        let name = "Test Project".to_string();
-        let description = "Super awesome cave".to_string();
         let id = Uuid::new_v4();
-        let metadata = ProjectMetadata {
-            id,
-            name: name.clone(),
-            description: description.clone(),
-        };
-        let _project = CompassProject::import_compass_project(
+        let project = CompassProject::import_compass_project(
             &PathBuf::from_str("assets/test_data/Fulfords.mak").unwrap(),
-            metadata,
+            id,
         )
         .unwrap();
+        let serialized_project =
+            toml::to_string_pretty(&project).expect("Failed to serialize imported project");
+        println!("Imported project: {:?}", serialized_project);
+        panic!();
     }
 }

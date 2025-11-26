@@ -1,5 +1,5 @@
 use crate::API_BASE_URL;
-use speleodb_compass_common::UserPrefs;
+use speleodb_compass_common::{Error, UserPrefs};
 #[cfg(test)]
 use std::env::VarError;
 use std::sync::Mutex;
@@ -31,11 +31,11 @@ impl ApiInfo {
         instance_lock.clone()
     }
 
-    pub fn get_api_token(&self) -> Result<String, String> {
+    pub fn get_api_token(&self) -> Result<String, Error> {
         let token_lock = self.token.lock().unwrap();
         match &*token_lock {
             Some(token) => Ok(token.clone()),
-            None => Err("No API token set".to_string()),
+            None => Err(Error::NoAuthToken),
         }
     }
 

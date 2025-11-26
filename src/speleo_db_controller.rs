@@ -3,8 +3,9 @@ use crate::{Error, invoke};
 use log::{error, info};
 use once_cell::sync::Lazy;
 use serde::Serialize;
-use speleodb_compass_common::{CompassProject, ProjectMetadata, api_types::ProjectInfo};
-use web_sys::{Url, console::info};
+use speleodb_compass_common::{CompassProject, api_types::ProjectInfo};
+use uuid::Uuid;
+use web_sys::Url;
 
 pub struct SpeleoDBController {}
 
@@ -91,7 +92,7 @@ impl SpeleoDBController {
         Ok(())
     }
 
-    pub async fn download_project(&self, project_id: &str) -> Result<String, String> {
+    pub async fn update_project(&self, project_id: &str) -> Result<CompassProject, String> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
         struct Args<'a> {
@@ -100,36 +101,11 @@ impl SpeleoDBController {
 
         let args = Args { project_id };
 
-        let json: serde_json::Value = invoke("download_project_zip", &args).await.unwrap();
+        let project: CompassProject = invoke("update_project_index", &args)
+            .await
+            .map_err(|e| e.to_string())?;
 
-        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
-            let err_msg = json
-                .get("error")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Failed to download project");
-
-            // Include URL if available for debugging
-            let debug_info = if let Some(url) = json.get("url").and_then(|v| v.as_str()) {
-                format!("{} (URL: {})", err_msg, url)
-            } else {
-                err_msg.to_string()
-            };
-
-            return Err(debug_info);
-        }
-
-        // Check if this is an empty project (422 response)
-        if json.get("empty_project").and_then(|v| v.as_bool()) == Some(true) {
-            // Return a special error that the frontend can detect
-            return Err("EMPTY_PROJECT_422".to_string());
-        }
-
-        let path = json
-            .get("path")
-            .and_then(|v| v.as_str())
-            .ok_or("No path in response")?;
-
-        Ok(path.to_string())
+        Ok(project)
     }
 
     pub async fn unzip_project(&self, zip_path: &str, project_id: &str) -> Result<String, String> {
@@ -259,16 +235,13 @@ impl SpeleoDBController {
         Ok(())
     }
 
-    pub async fn import_compass_project(
-        &self,
-        project_metadata: ProjectMetadata,
-    ) -> Result<CompassProject, Error> {
+    pub async fn import_compass_project(&self, id: Uuid) -> Result<CompassProject, Error> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
         struct Args {
-            project_metadata: ProjectMetadata,
+            id: Uuid,
         }
-        let args = Args { project_metadata };
+        let args = Args { id };
         invoke("import_compass_project", &args).await
     }
 

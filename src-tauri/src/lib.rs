@@ -1,13 +1,14 @@
 mod api;
 mod commands;
 mod state;
+mod zip_management;
 
 use crate::{
     commands::{
-        acquire_project_mutex, auth_request, clear_active_project, create_project,
-        download_project_zip, fetch_projects, forget_user_prefs, import_compass_project,
-        load_user_prefs, open_project_folder, release_project_mutex, save_user_prefs,
-        set_active_project, unzip_project, upload_project_zip, zip_project_folder,
+        acquire_project_mutex, auth_request, clear_active_project, create_project, fetch_projects,
+        forget_user_prefs, import_compass_project, load_user_prefs, open_project_folder,
+        release_project_mutex, save_user_prefs, set_active_project, unzip_project,
+        update_project_index, upload_project_zip, zip_project_folder,
     },
     state::ApiInfo,
 };
@@ -57,7 +58,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             acquire_project_mutex,
             clear_active_project,
-            download_project_zip,
+            update_project_index,
             fetch_projects,
             forget_user_prefs,
             load_user_prefs,

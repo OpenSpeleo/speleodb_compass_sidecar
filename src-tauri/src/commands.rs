@@ -1,7 +1,7 @@
-use crate::{api, state::ApiInfo, ACTIVE_PROJECT_ID};
+use crate::{api, state::ApiInfo, zip_management::unpack_project_zip, ACTIVE_PROJECT_ID};
 use log::info;
 use speleodb_compass_common::{
-    api_types::ProjectInfo, CompassProject, Error, ProjectMetadata, UserPrefs,
+    api_types::ProjectInfo, ensure_compass_project_dirs_exist, CompassProject, Error, UserPrefs,
 };
 use tauri::State;
 use tauri_plugin_dialog::{DialogExt, FilePath};
@@ -75,119 +75,27 @@ pub async fn acquire_project_mutex(
 }
 
 #[tauri::command]
-pub async fn download_project_zip(project_id: String) -> serde_json::Value {
-    use reqwest::Client;
-    use std::time::Duration;
-
-    // Load user prefs
-    let prefs = match UserPrefs::load() {
-        Ok(p) => p,
-        Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to load user preferences: {}", e)})
+pub async fn update_project_index(
+    api_info: State<'_, ApiInfo>,
+    project_id: Uuid,
+) -> Result<CompassProject, String> {
+    ensure_compass_project_dirs_exist(project_id).map_err(|e| e.to_string())?;
+    log::info!("Downloading project ZIP from");
+    match api::download_project_zip(&api_info, project_id).await {
+        Ok(bytes) => {
+            log::info!("Downloaded ZIP ({} bytes)", bytes.len());
+            unpack_project_zip(project_id, bytes)
         }
-    };
-
-    let prefs = match prefs {
-        Some(p) => p,
-        _ => {
-            return serde_json::json!({"ok": false, "error": "No instance URL in user preferences"});
+        Err(Error::EmptyProjectDirectory(project_id)) => {
+            info!("Empty project on SpeleoDB");
+            CompassProject::empty_project(project_id).map_err(|e| e.to_string())
         }
-    };
-
-    let oauth = match prefs.oauth_token {
-        Some(t) => t,
-        _ => {
-            return serde_json::json!({"ok": false, "error": "No OAuth token in user preferences"});
-        }
-    };
-
-    let base = prefs.instance.trim_end_matches('/');
-    let url = format!(
-        "{}/api/v1/projects/{}/download/compass_zip/",
-        base, project_id
-    );
-
-    let client = match Client::builder().timeout(Duration::from_secs(60)).build() {
-        Ok(c) => c,
-        Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to build HTTP client: {}", e)})
-        }
-    };
-
-    log::info!("Downloading project ZIP from: {}", url);
-
-    let resp = match client
-        .get(&url)
-        .header("Authorization", format!("Token {}", oauth))
-        .send()
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)})
-        }
-    };
-
-    let status = resp.status();
-
-    // Handle 422 - Project has no compass data yet (new/empty project)
-    if status.as_u16() == 422 {
-        // Create the project directory even though there's no data to download
-        if let Err(e) = speleodb_compass_common::ensure_project_compass_dir_exists(&project_id) {
-            return serde_json::json!({
-                "ok": false,
-                "error": format!("Failed to create project directory: {}", e)
-            });
-        }
-
-        log::info!("Created directory for empty project: {}", project_id);
-
-        return serde_json::json!({
-            "ok": true,
-            "empty_project": true,
-            "message": "Project contains no Compass data. Use 'Import from Disk' to initialize the project."
-        });
-    }
-
-    if !status.is_success() {
-        return serde_json::json!({
-            "ok": false,
-            "error": format!("Download failed with status {}", status.as_u16()),
-            "status": status.as_u16(),
-            "url": url  // Include URL for debugging
-        });
-    }
-
-    // Get the bytes
-    let bytes = match resp.bytes().await {
-        Ok(b) => b,
-        Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to read response body: {}", e)})
-        }
-    };
-
-    // Save to temp directory
-    let temp_dir = std::env::temp_dir();
-    let zip_filename = format!("project_{}.zip", project_id);
-    let zip_path = temp_dir.join(&zip_filename);
-
-    match std::fs::write(&zip_path, &bytes) {
-        Ok(_) => {
-            log::info!("Downloaded ZIP to: {}", zip_path.display());
-            serde_json::json!({
-                "ok": true,
-                "path": zip_path.to_string_lossy().to_string(),
-                "size": bytes.len()
-            })
-        }
-        Err(e) => {
-            serde_json::json!({"ok": false, "error": format!("Failed to write ZIP file: {}", e)})
-        }
+        Err(e) => Err(format!("Failed to download project ZIP: {}", e)),
     }
 }
 
 #[tauri::command]
-pub fn unzip_project(zip_path: String, project_id: String) -> serde_json::Value {
+pub fn unzip_project(zip_path: String, project_id: Uuid) -> serde_json::Value {
     use std::fs::File;
     use zip::ZipArchive;
 
@@ -199,8 +107,7 @@ pub fn unzip_project(zip_path: String, project_id: String) -> serde_json::Value 
     }
 
     // Create project-specific directory
-    let project_path = match speleodb_compass_common::ensure_project_compass_dir_exists(&project_id)
-    {
+    let project_path = match ensure_compass_project_dirs_exist(project_id) {
         Ok(p) => p,
         Err(e) => {
             return serde_json::json!({"ok": false, "error": format!("Failed to create project directory: {}", e)})
@@ -278,8 +185,8 @@ pub fn unzip_project(zip_path: String, project_id: String) -> serde_json::Value 
 }
 
 #[tauri::command]
-pub fn open_project_folder(project_id: String) -> serde_json::Value {
-    let project_path = speleodb_compass_common::project_compass_path(&project_id);
+pub fn open_project_folder(project_id: Uuid) -> serde_json::Value {
+    let project_path = speleodb_compass_common::compass_project_path(project_id);
 
     if !project_path.exists() {
         return serde_json::json!({"ok": false, "error": "Project folder does not exist"});
@@ -313,7 +220,7 @@ pub fn open_project_folder(project_id: String) -> serde_json::Value {
 }
 
 #[tauri::command]
-pub fn zip_project_folder(project_id: String) -> serde_json::Value {
+pub fn zip_project_folder(project_id: Uuid) -> serde_json::Value {
     use std::fs::{self, File};
     use std::io::Write;
     use zip::ZipWriter;
@@ -321,7 +228,7 @@ pub fn zip_project_folder(project_id: String) -> serde_json::Value {
     log::info!("Zipping project folder for project: {}", project_id);
 
     // Get project folder path
-    let project_path = speleodb_compass_common::project_compass_path(&project_id);
+    let project_path = speleodb_compass_common::compass_project_path(project_id);
 
     if !project_path.exists() {
         return serde_json::json!({
@@ -408,7 +315,7 @@ pub fn zip_project_folder(project_id: String) -> serde_json::Value {
 #[tauri::command]
 pub async fn import_compass_project(
     app: tauri::AppHandle,
-    project_metadata: ProjectMetadata,
+    id: Uuid,
 ) -> Result<CompassProject, Error> {
     tauri::async_runtime::spawn(async move {
         let Some(FilePath::Path(file_path)) = app
@@ -420,8 +327,8 @@ pub async fn import_compass_project(
             return Err(Error::NoProjectSelected);
         };
         info!("Selected MAK file: {}", file_path.display());
-        info!("Importing into Compass project: {:?}", project_metadata);
-        let project = CompassProject::import_compass_project(&file_path, project_metadata)?;
+        info!("Importing into Compass project: {:?}", id);
+        let project = CompassProject::import_compass_project(&file_path, id)?;
         info!("Successfully imported Compass project: {project:?}");
         Ok(project)
     })
@@ -648,24 +555,6 @@ pub async fn create_project(
                 return serde_json::json!({"ok": false, "error": "No data field in API response"});
             }
         };
-
-        // Extract project ID to create local folder
-        if let Some(project_id) = project_data.get("id").and_then(|v| v.as_str()) {
-            // Ensure compass directory exists
-            if let Err(e) = speleodb_compass_common::ensure_compass_dir_exists() {
-                return serde_json::json!({"ok": false, "error": format!("Failed to create compass directory: {}", e)});
-            }
-
-            // Create project-specific directory
-            if let Err(e) = speleodb_compass_common::ensure_project_compass_dir_exists(project_id) {
-                return serde_json::json!({"ok": false, "error": format!("Failed to create project directory: {}", e)});
-            }
-
-            log::info!(
-                "Created local project directory for project: {}",
-                project_id
-            );
-        }
 
         // Return the project data wrapped in our standard format
         serde_json::json!({
