@@ -39,7 +39,6 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let downloading = downloading.clone();
         let show_readonly_modal = show_readonly_modal.clone();
         let show_empty_project_modal_effect = show_empty_project_modal.clone();
-        let error_message = error_message.clone();
         let project_file_path = project_file_path.clone();
         let is_readonly = is_readonly.clone();
         let download_complete = download_complete.clone();

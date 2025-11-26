@@ -148,15 +148,9 @@ impl SpeleoDBController {
 
         let args = Args { project_id };
 
-        let json: serde_json::Value = invoke("open_project", &args).await.unwrap();
-
-        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
-            let err_msg = json
-                .get("error")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Failed to open folder");
-            return Err(err_msg.to_string());
-        }
+        let _: () = invoke("open_project", &args)
+            .await
+            .map_err(|e| e.to_string())?;
 
         Ok(())
     }

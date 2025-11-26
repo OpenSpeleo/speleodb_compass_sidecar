@@ -195,11 +195,15 @@ pub fn open_project(project_id: Uuid) -> Result<(), String> {
 
     // Just open the folder in system file explorer
     #[cfg(target_os = "macos")]
-    let result = std::process::Command::new("open").arg(&project_dir).spawn();
-    #[cfg(target_os = "linux")]
-    let result = std::process::Command::new("xdg-open")
+    Command::new("open")
         .arg(&project_dir)
-        .spawn();
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    #[cfg(target_os = "linux")]
+    Command::new("xdg-open")
+        .arg(&project_dir)
+        .spawn()
+        .map_err(|e| e.to_string())?;
 
     // On Windows, actually try to open the project with Compass if possible
     #[cfg(target_os = "windows")]
@@ -212,14 +216,14 @@ pub fn open_project(project_id: Uuid) -> Result<(), String> {
             Command::new("explorer")
                 .arg(project_path)
                 .spawn()
-                .expect("Expected to launch compass software")
+                .map_err(|e| e.to_string())?
                 .wait()
-                .expect("Compass exit successfully");
+                .map_err(|e| e.to_string())?;
         } else {
             std::process::Command::new("explorer")
                 .arg(&project_dir)
                 .spawn()
-                .expect("Expected to launch file explorer");
+                .map_err(|e| e.to_string())?;
         }
     }
     Ok(())

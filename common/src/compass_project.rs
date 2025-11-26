@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     Error, compass_project_index_path, compass_project_working_path,
-    ensure_compass_project_dirs_exist, path_for_project,
+    ensure_compass_project_dirs_exist,
 };
 const SPELEODB_COMPASS_PROJECT_FILE: &str = "compass.toml";
 const SPELEODB_COMPASS_VERSION: Version = Version::new(0, 0, 1);
