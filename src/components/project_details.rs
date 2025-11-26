@@ -53,15 +53,9 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                     .acquire_project_mutex(&project_id)
                     .await
                 {
-                    Ok(locked) => {
-                        if !locked {
-                            // Mutex acquisition failed - read-only mode
-                            is_readonly.set(true);
-                            show_readonly_modal.set(true);
-                        } else {
-                            // Mutex acquired! Set active project for shutdown hook
-                            let _ = SPELEO_DB_CONTROLLER.set_active_project(&project_id).await;
-                        }
+                    Ok(()) => {
+                        // Mutex acquired! Set active project for shutdown hook
+                        let _ = SPELEO_DB_CONTROLLER.set_active_project(&project_id).await;
                     }
                     Err(_e) => {
                         // Mutex acquisition had an error, but we continue anyway

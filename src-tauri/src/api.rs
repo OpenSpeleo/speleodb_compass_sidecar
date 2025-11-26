@@ -126,6 +126,36 @@ pub async fn fetch_projects(api_info: &ApiInfo) -> Result<Vec<ProjectInfo>, Stri
     }
 }
 
+pub async fn acquire_project_mutex(api_info: &ApiInfo, project_id: Uuid) -> Result<(), String> {
+    log::info!("Acquiring project mutex for project: {}", project_id);
+    let base = api_info.get_api_instance();
+    let oauth = api_info.get_api_token()?;
+    let url = format!("{}/api/v1/projects/{}/acquire/", base, project_id);
+    let client = get_api_client();
+
+    let resp = client
+        .post(&url)
+        .header("Authorization", format!("Token {}", oauth))
+        .send()
+        .await
+        .map_err(|e| format!("Network error attempting to lock project: {e}"))?;
+
+    let status = resp.status();
+
+    if status.is_success() {
+        // Successfully acquired the mutex
+        Ok(())
+    } else if status.as_u16() == 409 || status.as_u16() == 423 {
+        // 409 Conflict or 423 Locked - mutex is already held by another user
+        Err("Project is already locked by another user".to_string())
+    } else {
+        Err(format!(
+            "Mutex acquisition failed with status {}",
+            status.as_u16()
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

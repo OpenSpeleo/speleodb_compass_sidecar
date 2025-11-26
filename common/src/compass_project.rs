@@ -55,7 +55,7 @@ impl Project {
         let dat_files = vec![];
         let plt_files = vec![];
         Self {
-            name: name,
+            name,
             description,
             mak_file,
             dat_files,
@@ -114,9 +114,9 @@ impl CompassProject {
                 project_files.push(f.file_path.to_string_lossy().to_string());
             }
         });
-        if not_found.is_some() {
-            error!("Failed to find referenced project file: {not_found:?}");
-            return Err(Error::ProjectFileNotFound(not_found.unwrap()));
+        if let Some(path) = not_found {
+            error!("Failed to find referenced project file: {path:?}");
+            return Err(Error::ProjectFileNotFound(path));
         }
 
         // Everything looks good, create the new CompassProject

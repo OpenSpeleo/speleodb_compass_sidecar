@@ -87,10 +87,9 @@ pub fn run() {
                         "App exit requested, releasing mutex for project: {}",
                         project_id
                     );
-                    let runtime = tokio::runtime::Runtime::new().unwrap();
-                    runtime.block_on(async {
+                    tauri::async_runtime::block_on(async {
                         let api = app_handle.state::<ApiInfo>();
-                        api::release_project_mutex(&api, project_id).await;
+                        api::release_project_mutex(&api, project_id).await.ok();
                     });
                 }
             }

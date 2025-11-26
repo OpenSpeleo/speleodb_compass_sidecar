@@ -3,8 +3,8 @@ use crate::{Error, invoke};
 use log::{error, info};
 use once_cell::sync::Lazy;
 use serde::Serialize;
-use speleodb_compass_common::{CompassProject, Project, ProjectMetadata, api_types::ProjectInfo};
-use web_sys::Url;
+use speleodb_compass_common::{CompassProject, ProjectMetadata, api_types::ProjectInfo};
+use web_sys::{Url, console::info};
 
 pub struct SpeleoDBController {}
 
@@ -75,33 +75,20 @@ impl SpeleoDBController {
         Ok(())
     }
 
-    pub async fn acquire_project_mutex(&self, project_id: &str) -> Result<bool, String> {
+    pub async fn acquire_project_mutex(&self, project_id: &str) -> Result<(), String> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
         struct Args<'a> {
             project_id: &'a str,
         }
-
+        info!("Acquiring mutex for project: {}", project_id);
         let args = Args { project_id };
 
-        let json: serde_json::Value = invoke("acquire_project_mutex", &args).await.unwrap();
-
-        // Check if operation was successful
-        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
-            let msg = json
-                .get("message")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Failed to acquire mutex");
-            return Err(msg.to_string());
-        }
-
-        // Return whether the mutex was locked
-        let locked = json
-            .get("locked")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-
-        Ok(locked)
+        let _: () = invoke("acquire_project_mutex", &args)
+            .await
+            .map_err(|e| e.to_string())?;
+        info!("Mutex acquired for project: {}", project_id);
+        Ok(())
     }
 
     pub async fn download_project(&self, project_id: &str) -> Result<String, String> {
@@ -363,9 +350,6 @@ impl SpeleoDBController {
         Ok(project)
     }
 }
-
-/// Try to parse an auth token from a JSON response body. Checks several common field names.
-// parse_auth_token removed; token parsing handled in native backend
 
 pub static SPELEO_DB_CONTROLLER: Lazy<SpeleoDBController> = Lazy::new(|| SpeleoDBController {});
 

@@ -1,8 +1,8 @@
-use std::{env::VarError, sync::Mutex};
-
-use speleodb_compass_common::UserPrefs;
-
 use crate::API_BASE_URL;
+use speleodb_compass_common::UserPrefs;
+#[cfg(test)]
+use std::env::VarError;
+use std::sync::Mutex;
 
 pub struct ApiInfo {
     instance: Mutex<String>,
@@ -19,15 +19,6 @@ impl Default for ApiInfo {
 }
 
 impl ApiInfo {
-    pub fn from_env() -> Result<Self, VarError> {
-        let instance = std::env::var("TEST_SPELEODB_INSTANCE")?;
-        let oauth = std::env::var("TEST_SPELEODB_OAUTH")?;
-        Ok(Self {
-            instance: Mutex::new(instance),
-            token: Mutex::new(Some(oauth)),
-        })
-    }
-
     pub fn set(&self, user_prefs: &UserPrefs) {
         let mut instance_lock = self.instance.lock().unwrap();
         let mut token_lock = self.token.lock().unwrap();
@@ -53,5 +44,15 @@ impl ApiInfo {
         let mut token_lock = self.token.lock().unwrap();
         *instance_lock = API_BASE_URL.to_string();
         *token_lock = None;
+    }
+
+    #[cfg(test)]
+    pub fn from_env() -> Result<Self, VarError> {
+        let instance = std::env::var("TEST_SPELEODB_INSTANCE")?;
+        let oauth = std::env::var("TEST_SPELEODB_OAUTH")?;
+        Ok(Self {
+            instance: Mutex::new(instance),
+            token: Mutex::new(Some(oauth)),
+        })
     }
 }

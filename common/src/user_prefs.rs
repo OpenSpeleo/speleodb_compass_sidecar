@@ -65,7 +65,7 @@ impl UserPrefs {
                 let mut perms = meta.permissions();
                 // rw------- (owner read/write)
                 perms.set_mode(0o600);
-                let _ = std::fs::set_permissions(user_prefs_file_path(), perms)
+                std::fs::set_permissions(user_prefs_file_path(), perms)
                     .map_err(|_| Error::FilePermissionSet)?;
             }
         }
@@ -106,7 +106,7 @@ impl UserPrefs {
 
     pub fn forget() -> Result<(), Error> {
         if user_prefs_file_path().exists() {
-            std::fs::remove_file(&user_prefs_file_path()).map_err(|_| Error::UserPrefsWrite)?;
+            std::fs::remove_file(user_prefs_file_path()).map_err(|_| Error::UserPrefsWrite)?;
         }
         Ok(())
     }

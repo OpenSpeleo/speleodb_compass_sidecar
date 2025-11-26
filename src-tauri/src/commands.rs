@@ -67,83 +67,11 @@ pub async fn auth_request(
 }
 
 #[tauri::command]
-pub async fn acquire_project_mutex(project_id: String) -> Result<serde_json::Value, String> {
-    use reqwest::Client;
-    use std::time::Duration;
-
-    // Load user prefs to get instance URL and OAuth token
-    let prefs = match UserPrefs::load() {
-        Ok(p) => p,
-        Err(e) => {
-            return Ok(
-                serde_json::json!({"ok": false, "error": format!("Failed to load user preferences: {}", e)}),
-            )
-        }
-    };
-
-    let prefs = match prefs {
-        Some(p) => p,
-        _ => {
-            return Ok(
-                serde_json::json!({"ok": false, "error": "No instance URL in user preferences"}),
-            );
-        }
-    };
-
-    let oauth = match prefs.oauth_token {
-        Some(t) => t.to_string(),
-        _ => {
-            return Ok(
-                serde_json::json!({"ok": false, "error": "No OAuth token in user preferences"}),
-            );
-        }
-    };
-
-    let base = prefs.instance.trim_end_matches('/');
-    // NOTE: Using /acquire/ endpoint - adjust if actual API endpoint differs
-    let url = format!("{}/api/v1/projects/{}/acquire/", base, project_id);
-
-    let client = match Client::builder().timeout(Duration::from_secs(10)).build() {
-        Ok(c) => c,
-        Err(e) => {
-            return Ok(
-                serde_json::json!({"ok": false, "locked": false, "message": format!("Failed to build HTTP client: {}", e)}),
-            )
-        }
-    };
-
-    let resp = match client
-        .post(&url)
-        .header("Authorization", format!("Token {}", oauth))
-        .send()
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            return Ok(
-                serde_json::json!({"ok": false, "locked": false, "message": format!("Network request failed: {}", e)}),
-            )
-        }
-    };
-
-    let status = resp.status();
-
-    if status.is_success() {
-        // Successfully acquired the mutex
-        Ok(
-            serde_json::json!({"ok": true, "locked": true, "message": "Project mutex acquired successfully"}),
-        )
-    } else if status.as_u16() == 409 || status.as_u16() == 423 {
-        // 409 Conflict or 423 Locked - mutex is already held by another user
-        Ok(
-            serde_json::json!({"ok": true, "locked": false, "message": "Project is already locked by another user"}),
-        )
-    } else {
-        // Other error
-        Ok(
-            serde_json::json!({"ok": false, "locked": false, "message": format!("Mutex acquisition failed with status {}", status.as_u16()), "status": status.as_u16()}),
-        )
-    }
+pub async fn acquire_project_mutex(
+    api_info: State<'_, ApiInfo>,
+    project_id: Uuid,
+) -> Result<(), String> {
+    api::acquire_project_mutex(&api_info, project_id).await
 }
 
 #[tauri::command]
@@ -518,10 +446,10 @@ pub fn clear_active_project() -> Result<(), String> {
 pub async fn release_project_mutex(
     api_info: State<'_, ApiInfo>,
     project_id: Uuid,
-) -> Result<serde_json::Value, String> {
-    api::release_project_mutex(&api_info, &project_id).await;
+) -> Result<(), String> {
+    api::release_project_mutex(&api_info, &project_id).await?;
     // Always return success (fire and forget)
-    Ok(serde_json::json!({"ok": true, "message": "Mutex release attempted"}))
+    Ok(())
 }
 
 #[tauri::command]

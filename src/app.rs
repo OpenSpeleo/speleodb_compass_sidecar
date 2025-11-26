@@ -57,48 +57,45 @@ pub fn app() -> Html {
 
         use_effect_with((), move |_| {
             spawn_local(async move {
-                match invoke::<(), UserPrefs>("load_user_prefs", &()).await {
-                    Ok(prefs) => {
-                        info!("User prefs loaded successfully: {prefs:?}");
-                        if !prefs.instance.is_empty() {
-                            instance.set(prefs.instance.clone());
-                        }
+                if let Ok(prefs) = invoke::<(), UserPrefs>("load_user_prefs", &()).await {
+                    info!("User prefs loaded successfully: {prefs:?}");
+                    if !prefs.instance.is_empty() {
+                        instance.set(prefs.instance.clone());
+                    }
 
-                        // Auto-login logic
-                        if SPELEO_DB_CONTROLLER.should_auto_login(
-                            None,
-                            None,
-                            prefs.oauth_token.as_deref(),
-                        ) {
-                            info!("Attempting silent auto-login...");
-                            let email = (*email).clone();
-                            let password = (*password).clone();
-                            let oauth_token = prefs.oauth_token.clone();
-                            let auth_future = SPELEO_DB_CONTROLLER.authenticate(
-                                email.as_deref(),
-                                password.as_deref(),
-                                oauth_token.as_deref(),
-                                &prefs.instance,
-                            );
-                            let timeout_future = TimeoutFuture::new(3_000);
+                    // Auto-login logic
+                    if SPELEO_DB_CONTROLLER.should_auto_login(
+                        None,
+                        None,
+                        prefs.oauth_token.as_deref(),
+                    ) {
+                        info!("Attempting silent auto-login...");
+                        let email = (*email).clone();
+                        let password = (*password).clone();
+                        let oauth_token = prefs.oauth_token.clone();
+                        let auth_future = SPELEO_DB_CONTROLLER.authenticate(
+                            email.as_deref(),
+                            password.as_deref(),
+                            oauth_token.as_deref(),
+                            &prefs.instance,
+                        );
+                        let timeout_future = TimeoutFuture::new(3_000);
 
-                            match select(Box::pin(auth_future), Box::pin(timeout_future)).await {
-                                Either::Left((Ok(()), _)) => {
-                                    info!("Auto-login success with token");
-                                    logged_in.set(true);
-                                }
-                                Either::Left((Err(e), _)) => {
-                                    error!("Auto-login failed: {}", e);
-                                    // Silent failure - do not show error modal
-                                }
-                                Either::Right((_, _)) => {
-                                    web_sys::console::log_1(&"Auto-login timed out".into());
-                                    // Silent failure on timeout
-                                }
+                        match select(Box::pin(auth_future), Box::pin(timeout_future)).await {
+                            Either::Left((Ok(()), _)) => {
+                                info!("Auto-login success with token");
+                                logged_in.set(true);
+                            }
+                            Either::Left((Err(e), _)) => {
+                                error!("Auto-login failed: {}", e);
+                                // Silent failure - do not show error modal
+                            }
+                            Either::Right((_, _)) => {
+                                web_sys::console::log_1(&"Auto-login timed out".into());
+                                // Silent failure on timeout
                             }
                         }
                     }
-                    Err(_) => {}
                 }
             });
         });
