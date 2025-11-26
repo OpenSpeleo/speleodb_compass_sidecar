@@ -1,3 +1,4 @@
+pub mod api_types;
 mod compass_project;
 mod error;
 mod user_prefs;
@@ -15,7 +16,6 @@ use uuid::Uuid;
 
 /// Name of the hidden application directory inside the user's home directory.
 const COMPASS_HOME_DIR_NAME: &str = ".compass";
-
 /// Name of the compass projects folder inside the user's home directory.
 const COMPASS_PROJECT_DIR_NAME: &str = "projects";
 

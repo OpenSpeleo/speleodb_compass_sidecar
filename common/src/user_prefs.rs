@@ -61,7 +61,7 @@ impl UserPrefs {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            if let Ok(meta) = std::fs::metadata(&user_prefs_file_path()) {
+            if let Ok(meta) = std::fs::metadata(user_prefs_file_path()) {
                 let mut perms = meta.permissions();
                 // rw------- (owner read/write)
                 perms.set_mode(0o600);

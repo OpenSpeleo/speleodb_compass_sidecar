@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::{env::VarError, sync::Mutex};
 
 use speleodb_compass_common::UserPrefs;
 
@@ -19,6 +19,15 @@ impl Default for ApiInfo {
 }
 
 impl ApiInfo {
+    pub fn from_env() -> Result<Self, VarError> {
+        let instance = std::env::var("TEST_SPELEODB_INSTANCE")?;
+        let oauth = std::env::var("TEST_SPELEODB_OAUTH")?;
+        Ok(Self {
+            instance: Mutex::new(instance),
+            token: Mutex::new(Some(oauth)),
+        })
+    }
+
     pub fn set(&self, user_prefs: &UserPrefs) {
         let mut instance_lock = self.instance.lock().unwrap();
         let mut token_lock = self.token.lock().unwrap();

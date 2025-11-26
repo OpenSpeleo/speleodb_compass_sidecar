@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{Error, path_for_project};
-const SPELEODB_COMPASS_PROJECT_FILE: &'static str = "compass.toml";
+const SPELEODB_COMPASS_PROJECT_FILE: &str = "compass.toml";
 const SPELEODB_COMPASS_VERSION: Version = Version::new(0, 0, 1);
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -42,7 +42,7 @@ impl Project {
     ) -> Self {
         let plt_files = vec![];
         Self {
-            name: name,
+            name,
             description,
             mak_file: Some(mak_file),
             dat_files,

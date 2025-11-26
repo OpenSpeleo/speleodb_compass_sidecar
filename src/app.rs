@@ -2,14 +2,14 @@ use futures::future::{Either, select};
 use gloo_timers::future::TimeoutFuture;
 use log::{error, info};
 use serde::Serialize;
-use speleodb_compass_common::UserPrefs;
+use speleodb_compass_common::{UserPrefs, api_types::ProjectInfo};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
 use crate::{
     components::{project_details::ProjectDetails, project_listing::ProjectListing},
     invoke,
-    speleo_db_controller::{Project, SPELEO_DB_CONTROLLER},
+    speleo_db_controller::SPELEO_DB_CONTROLLER,
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -40,10 +40,10 @@ pub fn app() -> Html {
     let loading = use_state(|| false);
     let logged_in = use_state(|| false);
     let show_error = use_state(|| false);
-    let error_msg = use_state(|| String::new());
+    let error_msg = use_state(String::new);
     let error_is_403 = use_state(|| false);
     let active_tab = use_state(|| ActiveTab::Listing);
-    let selected_project: UseStateHandle<Option<Project>> = use_state(|| None);
+    let selected_project: UseStateHandle<Option<ProjectInfo>> = use_state(|| None);
     let refresh_trigger = use_state(|| 0u32);
     // Silent mode for validation errors (true on startup/auto-login, false on interaction)
     let validation_silent = use_state(|| true);
@@ -178,7 +178,7 @@ pub fn app() -> Html {
             e.prevent_default();
             validation_silent.set(false);
             // quick validation
-            if !validate_instance(&*instance) {
+            if !validate_instance(&instance) {
                 error_msg.set("SpeleoDB instance must start with http:// or https://".to_string());
                 error_is_403.set(false);
                 show_error.set(true);
@@ -353,7 +353,7 @@ pub fn app() -> Html {
     let on_project_selected = {
         let selected_project = selected_project.clone();
         let active_tab = active_tab.clone();
-        Callback::from(move |project: Project| {
+        Callback::from(move |project: ProjectInfo| {
             selected_project.set(Some(project));
             active_tab.set(ActiveTab::Details);
         })
@@ -384,14 +384,8 @@ pub fn app() -> Html {
     // Only show errors if not in silent mode
     let show_errors = !*validation_silent;
     let instance_invalid = show_errors && !instance.is_empty() && !validate_instance(&instance);
-    let email_invalid = show_errors
-        && email
-            .as_deref()
-            .is_some_and(|email| !validate_email(&email));
-    let oauth_invalid = show_errors
-        && oauth
-            .as_deref()
-            .is_some_and(|oauth| !validate_oauth(&oauth));
+    let email_invalid = show_errors && email.as_deref().is_some_and(|email| !validate_email(email));
+    let oauth_invalid = show_errors && oauth.as_deref().is_some_and(|oauth| !validate_oauth(oauth));
 
     // Show error on auth fields if both methods are used
     let email_conflict = both_auth_methods_used && has_email;
@@ -415,12 +409,10 @@ pub fn app() -> Html {
                     {
                         if *active_tab == ActiveTab::Listing {
                             html!{ <ProjectListing on_select={on_project_selected.clone()} refresh_trigger={*refresh_trigger} /> }
+                        } else if let Some(project) = &*selected_project {
+                            html!{ <ProjectDetails project={project.clone()} on_back={on_back_to_listing.clone()} /> }
                         } else {
-                            if let Some(project) = &*selected_project {
-                                html!{ <ProjectDetails project={project.clone()} on_back={on_back_to_listing.clone()} /> }
-                            } else {
-                                html!{ <p>{"Select a project from the listing first."}</p> }
-                            }
+                            html!{ <p>{"Select a project from the listing first."}</p> }
                         }
                     }
                 </section>

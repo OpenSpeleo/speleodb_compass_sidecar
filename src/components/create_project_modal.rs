@@ -1,4 +1,5 @@
-use crate::speleo_db_controller::{Project, SPELEO_DB_CONTROLLER};
+use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
+use speleodb_compass_common::api_types::ProjectInfo;
 use std::collections::BTreeMap;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
@@ -9,16 +10,16 @@ use yew::prelude::*;
 #[derive(Properties, PartialEq, Clone)]
 pub struct CreateProjectModalProps {
     pub on_close: Callback<()>,
-    pub on_success: Callback<Project>,
+    pub on_success: Callback<ProjectInfo>,
 }
 
 #[function_component(CreateProjectModal)]
 pub fn create_project_modal(props: &CreateProjectModalProps) -> Html {
-    let name = use_state(|| String::new());
-    let description = use_state(|| String::new());
-    let country = use_state(|| String::new());
-    let latitude = use_state(|| String::new());
-    let longitude = use_state(|| String::new());
+    let name = use_state(String::new);
+    let description = use_state(String::new);
+    let country = use_state(String::new);
+    let latitude = use_state(String::new);
+    let longitude = use_state(String::new);
 
     let error_message = use_state(|| None::<String>);
     let is_submitting = use_state(|| false);
@@ -73,17 +74,13 @@ pub fn create_project_modal(props: &CreateProjectModalProps) -> Html {
                 return;
             }
             // Validate Lat/Lon if provided
-            if !lat_val.is_empty() {
-                if let Err(_) = lat_val.parse::<f64>() {
-                    error_message.set(Some("Latitude must be a valid number".to_string()));
-                    return;
-                }
+            if !lat_val.is_empty() && lat_val.parse::<f64>().is_err() {
+                error_message.set(Some("Latitude must be a valid number".to_string()));
+                return;
             }
-            if !lon_val.is_empty() {
-                if let Err(_) = lon_val.parse::<f64>() {
-                    error_message.set(Some("Longitude must be a valid number".to_string()));
-                    return;
-                }
+            if !lon_val.is_empty() && lon_val.parse::<f64>().is_err() {
+                error_message.set(Some("Longitude must be a valid number".to_string()));
+                return;
             }
 
             let error_message = error_message.clone();

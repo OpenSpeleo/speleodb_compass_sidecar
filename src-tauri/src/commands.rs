@@ -1,10 +1,11 @@
-use crate::{
-    api, parse_token_from_json, release_project_mutex_internal, state::ApiInfo, ACTIVE_PROJECT_ID,
-};
+use crate::{api, state::ApiInfo, ACTIVE_PROJECT_ID};
 use log::info;
-use speleodb_compass_common::{CompassProject, Error, ProjectMetadata, UserPrefs};
+use speleodb_compass_common::{
+    api_types::ProjectInfo, CompassProject, Error, ProjectMetadata, UserPrefs,
+};
 use tauri::State;
 use tauri_plugin_dialog::{DialogExt, FilePath};
+use uuid::Uuid;
 
 #[tauri::command]
 pub fn save_user_prefs(api_info: State<'_, ApiInfo>, prefs: UserPrefs) -> Result<(), String> {
@@ -19,6 +20,7 @@ pub fn load_user_prefs(api_info: State<'_, ApiInfo>) -> Result<Option<UserPrefs>
     info!("Loading user preferences");
     let user_prefs = UserPrefs::load().map_err(|e| e.to_string())?;
     if let Some(user_prefs) = &user_prefs {
+        info!("Loaded user prefs:{user_prefs:?}");
         api_info.set(user_prefs);
     }
     Ok(user_prefs)
@@ -32,68 +34,8 @@ pub fn forget_user_prefs(api_info: State<'_, ApiInfo>) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn fetch_projects() -> serde_json::Value {
-    use reqwest::Client;
-    use std::time::Duration;
-
-    // Try to get credentials from environment variables first (for testing)
-    let instance = std::env::var("TEST_SPELEODB_INSTANCE").ok();
-    let oauth = std::env::var("TEST_SPELEODB_OAUTH").ok();
-
-    let (instance, oauth) = if instance.is_some() && oauth.is_some() {
-        // Use test environment variables
-        (instance.unwrap(), oauth.unwrap())
-    } else {
-        let prefs = match UserPrefs::load() {
-            Ok(p) => p,
-            Err(e) => {
-                return serde_json::json!({"ok": false, "error": format!("Failed to load user preferences: {}", e)})
-            }
-        };
-
-        let prefs = match prefs {
-            Some(p) => p,
-            _ => {
-                return serde_json::json!({"ok": false, "error": "No instance URL in user preferences"});
-            }
-        };
-        (prefs.instance, prefs.oauth_token.unwrap().to_string())
-    };
-
-    let base = instance.trim_end_matches('/');
-    let url = format!("{}{}", base, "/api/v1/projects/");
-
-    let client = match Client::builder().timeout(Duration::from_secs(10)).build() {
-        Ok(c) => c,
-        Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to build HTTP client: {}", e)})
-        }
-    };
-
-    let resp = match client
-        .get(&url)
-        .header("Authorization", format!("Token {}", oauth))
-        .send()
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)})
-        }
-    };
-
-    let status = resp.status();
-
-    if status.is_success() {
-        match resp.json::<serde_json::Value>().await {
-            Ok(json) => json,
-            Err(e) => {
-                serde_json::json!({"ok": false, "error": format!("Failed to parse response: {}", e)})
-            }
-        }
-    } else {
-        serde_json::json!({"ok": false, "error": format!("Request failed with status {}", status.as_u16()), "status": status.as_u16()})
-    }
+pub async fn fetch_projects(api_info: State<'_, ApiInfo>) -> Result<Vec<ProjectInfo>, String> {
+    api::fetch_projects(&api_info).await
 }
 
 #[tauri::command]
@@ -113,12 +55,14 @@ pub async fn auth_request(
         api::authorize_with_email(&instance, &email, &password).await?
     };
     info!("Auth request successful, updating user preferences");
-    api_info.set(&UserPrefs {
+    let new_prefs = UserPrefs {
         instance,
         email: None,
         password: None,
         oauth_token: Some(updated_token.clone()),
-    });
+    };
+    api_info.set(&new_prefs);
+    UserPrefs::save(&new_prefs).map_err(|e| e.to_string())?;
     Ok(updated_token)
 }
 
@@ -558,7 +502,8 @@ pub async fn import_compass_project(
 }
 
 #[tauri::command]
-pub fn set_active_project(project_id: String) -> Result<(), String> {
+pub fn set_active_project(project_id: Uuid) -> Result<(), String> {
+    info!("Setting active project: {project_id}");
     *ACTIVE_PROJECT_ID.lock().unwrap() = Some(project_id);
     Ok(())
 }
@@ -570,8 +515,11 @@ pub fn clear_active_project() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn release_project_mutex(project_id: String) -> Result<serde_json::Value, String> {
-    release_project_mutex_internal(&project_id).await;
+pub async fn release_project_mutex(
+    api_info: State<'_, ApiInfo>,
+    project_id: Uuid,
+) -> Result<serde_json::Value, String> {
+    api::release_project_mutex(&api_info, &project_id).await;
     // Always return success (fire and forget)
     Ok(serde_json::json!({"ok": true, "message": "Mutex release attempted"}))
 }

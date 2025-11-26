@@ -2,74 +2,26 @@
 use crate::{Error, invoke};
 use log::{error, info};
 use once_cell::sync::Lazy;
-use serde::{Deserialize, Serialize};
-use speleodb_compass_common::{CompassProject, ProjectMetadata, UserPrefs};
+use serde::Serialize;
+use speleodb_compass_common::{CompassProject, Project, ProjectMetadata, api_types::ProjectInfo};
 use web_sys::Url;
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct ActiveMutex {
-    pub user: String,
-    pub creation_date: String,
-    pub modified_date: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct Project {
-    pub id: String,
-    pub name: String,
-    pub description: String,
-    pub is_active: bool,
-    pub permission: String,
-    pub active_mutex: Option<ActiveMutex>,
-    pub country: String,
-    pub created_by: String,
-    pub creation_date: String,
-    pub modified_date: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub latitude: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub longitude: Option<f64>,
-    pub fork_from: Option<String>,
-    pub visibility: String,
-    pub exclude_geojson: bool,
-}
-
-#[derive(Deserialize, Debug)]
-struct ProjectsResponse {
-    pub data: Vec<Project>,
-    pub success: bool,
-    // Ignore extra fields like timestamp and url
-}
 
 pub struct SpeleoDBController {}
 
 impl SpeleoDBController {
-    pub async fn fetch_projects(&self) -> Result<Vec<Project>, String> {
+    pub async fn fetch_projects(&self) -> Result<Vec<ProjectInfo>, String> {
         // Call the Tauri backend to fetch projects
         #[derive(Serialize)]
         struct FetchProjectsArgs {}
 
         let args = FetchProjectsArgs {};
 
-        let json: serde_json::Value = invoke("fetch_projects", &args).await.unwrap();
-
-        // Check if it's an error response from our backend
-        if json.get("ok").and_then(|v| v.as_bool()) == Some(false) {
-            let err_msg = json
-                .get("error")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Failed to fetch projects");
-            return Err(err_msg.to_string());
-        }
-
-        // Now try to deserialize to ProjectsResponse using serde_json
-        let response: ProjectsResponse = serde_json::from_value(json)
-            .map_err(|e| format!("Failed to parse API response: {}", e))?;
-
-        if response.success {
-            Ok(response.data)
-        } else {
-            Err("API returned success: false".to_string())
+        match invoke("fetch_projects", &args).await {
+            Ok(projects) => Ok(projects),
+            Err(e) => {
+                error!("Failed to fetch projects: {}", e);
+                Err(e.to_string())
+            }
         }
     }
 
@@ -86,9 +38,9 @@ impl SpeleoDBController {
         }
         info!("token: {oauth:?}");
         // Validation: either oauth token (40 hex) OR email+password
-        let oauth_ok = oauth.is_some_and(|oauth| validate_oauth(&oauth));
+        let oauth_ok = oauth.is_some_and(validate_oauth);
         let pass_ok = email.is_some_and(|email| {
-            password.is_some_and(|password| validate_email_password(&email, &password))
+            password.is_some_and(|password| validate_email_password(email, password))
         });
         info!("Auth Ok: {oauth_ok}, Pass Ok: {pass_ok}");
 
@@ -357,9 +309,9 @@ impl SpeleoDBController {
         oauth: Option<&str>,
     ) -> bool {
         info!("email: {email:?}, password: {password:?}, oauth: {oauth:?}");
-        let oauth_ok = oauth.is_some_and(|token| validate_oauth(&token));
+        let oauth_ok = oauth.is_some_and(validate_oauth);
         let pass_ok = email.is_some_and(|email| {
-            password.is_some_and(|password| validate_email_password(&email, &password))
+            password.is_some_and(|password| validate_email_password(email, password))
         });
         oauth_ok || pass_ok
     }
@@ -371,7 +323,7 @@ impl SpeleoDBController {
         country: &str,
         latitude: Option<&str>,
         longitude: Option<&str>,
-    ) -> Result<Project, String> {
+    ) -> Result<ProjectInfo, String> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
         struct Args<'a> {
@@ -405,7 +357,7 @@ impl SpeleoDBController {
         let project_data = json.get("data").ok_or("No project data in response")?;
 
         // Deserialize to Project
-        let project: Project = serde_json::from_value(project_data.clone())
+        let project: ProjectInfo = serde_json::from_value(project_data.clone())
             .map_err(|e| format!("Failed to parse project data: {}", e))?;
 
         Ok(project)
@@ -561,113 +513,6 @@ mod tests {
         assert!(validate_email_password("user@example.com", "🔒secure"));
     }
 
-    // Prefs struct tests
-    #[test]
-    fn prefs_serialization() {
-        let prefs = UserPrefs {
-            instance: "https://test.com".to_string(),
-            email: None,
-            password: None,
-            oauth_token: Some("0123456789abcdef0123456789abcdef01234567".to_string()),
-        };
-
-        let json = serde_json::to_string(&prefs).unwrap();
-        assert!(json.contains("https://test.com"));
-        assert!(json.contains("0123456789abcdef0123456789abcdef01234567"));
-    }
-
-    #[test]
-    fn prefs_deserialization() {
-        let json = r#"{"instance":"https://test.com","oauth_token":"token123"}"#;
-        let prefs: UserPrefs = serde_json::from_str(json).unwrap();
-
-        assert_eq!(prefs.instance, "https://test.com");
-        assert_eq!(prefs.oauth_token, Some("token123".to_string()));
-    }
-
-    // Project struct tests
-    #[test]
-    fn project_deserialization_with_null_mutex() {
-        let json = r#"{
-            "id": "123",
-            "name": "Test",
-            "description": "Desc",
-            "permission": "ADMIN",
-            "active_mutex": null,
-            "country": "US",
-            "created_by": "user",
-            "creation_date": "2025-01-01",
-            "modified_date": "2025-01-02",
-            "fork_from": null,
-            "visibility": "PUBLIC",
-            "exclude_geojson": false,
-            "is_active": true,
-            "latitude": null,
-            "longitude": null
-        }"#;
-
-        let project: Project = serde_json::from_str(json).unwrap();
-        assert_eq!(project.name, "Test");
-        assert!(project.active_mutex.is_none());
-    }
-
-    #[test]
-    fn project_deserialization_with_string_mutex() {
-        let json = r#"{
-            "id": "123",
-            "name": "Test",
-            "description": "Desc",
-            "permission": "READ_AND_WRITE",
-            "active_mutex": {
-                "user": "user@example.com",
-                "creation_date": "2025-01-01",
-                "modified_date": "2025-01-01"
-            },
-            "country": "US",
-            "created_by": "user",
-            "creation_date": "2025-01-01",
-            "modified_date": "2025-01-02",
-            "fork_from": null,
-            "visibility": "PRIVATE",
-            "exclude_geojson": true,
-            "is_active": true,
-            "latitude": null,
-            "longitude": null
-        }"#;
-
-        let project: Project = serde_json::from_str(json).unwrap();
-        assert_eq!(project.name, "Test");
-        assert!(project.active_mutex.is_some());
-        assert_eq!(
-            project.active_mutex.as_ref().unwrap().user,
-            "user@example.com"
-        );
-    }
-
-    #[test]
-    fn project_clone_works() {
-        let project = Project {
-            id: "1".to_string(),
-            name: "Test".to_string(),
-            description: "Desc".to_string(),
-            permission: "ADMIN".to_string(),
-            active_mutex: None,
-            country: "US".to_string(),
-            created_by: "user".to_string(),
-            creation_date: "2025-01-01".to_string(),
-            modified_date: "2025-01-02".to_string(),
-            fork_from: None,
-            visibility: "PUBLIC".to_string(),
-            exclude_geojson: false,
-            is_active: true,
-            latitude: None,
-            longitude: None,
-        };
-
-        let cloned = project.clone();
-        assert_eq!(project.id, cloned.id);
-        assert_eq!(project.name, cloned.name);
-    }
     #[test]
     fn should_auto_login_oauth() {
         let controller = SpeleoDBController {};

@@ -1,12 +1,13 @@
 use crate::components::modal::{Modal, ModalType};
-use crate::speleo_db_controller::{Project, SPELEO_DB_CONTROLLER};
+use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use speleodb_compass_common::ProjectMetadata;
+use speleodb_compass_common::api_types::ProjectInfo;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct ProjectDetailsProps {
-    pub project: Project,
+    pub project: ProjectInfo,
     #[prop_or_default]
     pub on_back: Callback<()>,
 }
@@ -27,7 +28,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
     let project_folder_path: UseStateHandle<Option<String>> = use_state(|| None);
     let is_readonly = use_state(|| false);
     let download_complete = use_state(|| false);
-    let commit_message = use_state(|| String::new());
+    let commit_message = use_state(String::new);
     let commit_message_error = use_state(|| false);
     let selected_zip: UseStateHandle<Option<String>> = use_state(|| None);
 

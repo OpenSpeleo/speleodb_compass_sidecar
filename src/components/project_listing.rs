@@ -1,19 +1,20 @@
 use crate::components::create_project_modal::CreateProjectModal;
-use crate::speleo_db_controller::{Project, SPELEO_DB_CONTROLLER};
+use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
+use speleodb_compass_common::api_types::ProjectInfo;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct ProjectListingProps {
     #[prop_or_default]
-    pub on_select: Callback<Project>,
+    pub on_select: Callback<ProjectInfo>,
     #[prop_or(0)]
     pub refresh_trigger: u32,
 }
 
 #[function_component(ProjectListing)]
 pub fn project_listing(props: &ProjectListingProps) -> Html {
-    let projects: UseStateHandle<Vec<Project>> = use_state(|| vec![]);
+    let projects: UseStateHandle<Vec<ProjectInfo>> = use_state(Vec::new);
     let loading = use_state(|| true);
     let error = use_state(|| None::<String>);
     let show_create_modal = use_state(|| false);
@@ -93,7 +94,7 @@ pub fn project_listing(props: &ProjectListingProps) -> Html {
         let error = error.clone();
         let on_select = props.on_select.clone();
 
-        Callback::from(move |new_project: Project| {
+        Callback::from(move |new_project: ProjectInfo| {
             show_create_modal.set(false);
 
             // Refresh the project list
@@ -193,7 +194,7 @@ pub fn project_listing(props: &ProjectListingProps) -> Html {
                                 <div
                                     class="project-card"
                                     onclick={on_card_click}
-                                    style={format!(
+                                    style={
                                         "border: 1px solid #ddd; \
                                          border-radius: 8px; \
                                          padding: 16px; \
@@ -204,7 +205,7 @@ pub fn project_listing(props: &ProjectListingProps) -> Html {
                                          display: flex; \
                                          justify-content: space-between; \
                                          align-items: center;"
-                                    )}
+                                    }
                                 >
                                     <h3 style="margin: 0; font-size: 18px; color: #2c3e50;">
                                         { &project.name }
