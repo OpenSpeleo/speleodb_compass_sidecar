@@ -169,7 +169,7 @@ impl CompassProject {
     }
 
     pub fn load_index_project(id: Uuid) -> Result<Self, Error> {
-        let mut project_path = compass_project_working_path(id);
+        let mut project_path = compass_project_index_path(id);
         project_path.push(SPELEODB_COMPASS_PROJECT_FILE);
         let project_data = std::fs::read_to_string(&project_path)
             .map_err(|_| Error::ProjectNotFound(project_path.clone()))?;

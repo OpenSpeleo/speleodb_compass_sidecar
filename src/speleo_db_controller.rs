@@ -76,11 +76,11 @@ impl SpeleoDBController {
         Ok(())
     }
 
-    pub async fn acquire_project_mutex(&self, project_id: &str) -> Result<(), String> {
+    pub async fn acquire_project_mutex(&self, project_id: Uuid) -> Result<(), String> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
-        struct Args<'a> {
-            project_id: &'a str,
+        struct Args {
+            project_id: Uuid,
         }
         info!("Acquiring mutex for project: {}", project_id);
         let args = Args { project_id };
@@ -92,11 +92,27 @@ impl SpeleoDBController {
         Ok(())
     }
 
-    pub async fn update_project(&self, project_id: &str) -> Result<CompassProject, String> {
+    pub async fn is_project_dirty(&self, project_id: Uuid) -> Result<bool, String> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
-        struct Args<'a> {
-            project_id: &'a str,
+        struct Args {
+            project_id: Uuid,
+        }
+
+        let args = Args { project_id };
+
+        let is_dirty: bool = invoke("is_project_dirty", &args)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(is_dirty)
+    }
+
+    pub async fn update_project(&self, project_id: Uuid) -> Result<CompassProject, String> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args {
+            project_id: Uuid,
         }
 
         let args = Args { project_id };
@@ -155,11 +171,11 @@ impl SpeleoDBController {
         Ok(())
     }
 
-    pub async fn zip_project(&self, project_id: &str) -> Result<String, String> {
+    pub async fn zip_project(&self, project_id: Uuid) -> Result<String, String> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
-        struct Args<'a> {
-            project_id: &'a str,
+        struct Args {
+            project_id: Uuid,
         }
 
         let args = Args { project_id };
@@ -184,14 +200,14 @@ impl SpeleoDBController {
 
     pub async fn upload_project(
         &self,
-        project_id: &str,
+        project_id: Uuid,
         message: &str,
         zip_path: &str,
     ) -> Result<u16, String> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
         struct Args<'a> {
-            project_id: &'a str,
+            project_id: Uuid,
             commit_message: &'a str,
             zip_path: &'a str,
         }
@@ -216,11 +232,11 @@ impl SpeleoDBController {
         Ok(status)
     }
 
-    pub async fn release_mutex(&self, project_id: &str) -> Result<(), String> {
+    pub async fn release_mutex(&self, project_id: Uuid) -> Result<(), String> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
-        struct Args<'a> {
-            project_id: &'a str,
+        struct Args {
+            project_id: Uuid,
         }
 
         let args = Args { project_id };
@@ -239,11 +255,11 @@ impl SpeleoDBController {
         invoke("import_compass_project", &args).await
     }
 
-    pub async fn set_active_project(&self, project_id: &str) -> Result<(), String> {
+    pub async fn set_active_project(&self, project_id: Uuid) -> Result<(), String> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
-        struct Args<'a> {
-            project_id: &'a str,
+        struct Args {
+            project_id: Uuid,
         }
         let args = Args { project_id };
         let _: () = invoke("set_active_project", &args).await.unwrap();

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ActiveMutex {
@@ -9,7 +10,7 @@ pub struct ActiveMutex {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ProjectInfo {
-    pub id: String,
+    pub id: Uuid,
     pub name: String,
     pub description: String,
     pub is_active: bool,

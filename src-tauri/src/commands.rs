@@ -1,8 +1,8 @@
 use crate::{api, state::ApiInfo, zip_management::unpack_project_zip, ACTIVE_PROJECT_ID};
-use log::info;
+use log::{error, info};
 use speleodb_compass_common::{
-    api_types::ProjectInfo, compass_project_working_path, ensure_compass_project_dirs_exist,
-    CompassProject, Error, UserPrefs,
+    api_types::ProjectInfo, compass_project_index_path, compass_project_working_path,
+    ensure_compass_project_dirs_exist, CompassProject, Error, UserPrefs,
 };
 use std::process::Command;
 use tauri::State;
@@ -77,10 +77,40 @@ pub async fn acquire_project_mutex(
 }
 
 #[tauri::command]
+pub async fn is_project_working_copy_dirty(project_id: Uuid) -> Result<bool, String> {
+    info!("Checking if working copy is dirty");
+    // If there is no working copy, it's not dirty
+    if !compass_project_working_path(project_id).exists() {
+        return Ok(false);
+    }
+    // If there is no index, it's not dirty
+    else if !compass_project_index_path(project_id).exists() {
+        return Ok(false);
+    }
+    let index_project = CompassProject::load_index_project(project_id)
+        .map_err(|e| e.to_string())?
+        .project;
+    let working_project = CompassProject::load_working_project(project_id)
+        .map_err(|e| e.to_string())?
+        .project;
+    if index_project != working_project {
+        info!("Working copy is dirty");
+        Ok(true)
+    } else {
+        info!("Working copy is clean");
+        Ok(false)
+    }
+}
+
+#[tauri::command]
 pub async fn update_project_index(
     api_info: State<'_, ApiInfo>,
     project_id: Uuid,
 ) -> Result<CompassProject, String> {
+    if is_project_working_copy_dirty(project_id).await? {
+        error!("Working copy is dirty, refusing to update");
+        return Err("Working copy is dirty, refusing to update".to_string());
+    }
     ensure_compass_project_dirs_exist(project_id).map_err(|e| e.to_string())?;
     log::info!("Downloading project ZIP from");
     match api::download_project_zip(&api_info, project_id).await {

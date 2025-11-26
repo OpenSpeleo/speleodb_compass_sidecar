@@ -1,4 +1,5 @@
 use crate::components::modal::{Modal, ModalType};
+use crate::components::project_details::_ProjectDetailsProps::project;
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use log::{error, info};
 use speleodb_compass_common::api_types::ProjectInfo;
@@ -28,6 +29,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
     let upload_error: UseStateHandle<Option<String>> = use_state(|| None);
     let project_file_path: UseStateHandle<Option<String>> = use_state(|| None);
     let is_readonly = use_state(|| false);
+    let is_dirty = use_state(|| false);
     let download_complete = use_state(|| false);
     let commit_message = use_state(String::new);
     let commit_message_error = use_state(|| false);
@@ -35,7 +37,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
     // Run the download workflow automatically on mount
     {
-        let project_id = props.project.id.clone();
+        let project_id = props.project.id;
         let downloading = downloading.clone();
         let show_readonly_modal = show_readonly_modal.clone();
         let show_empty_project_modal_effect = show_empty_project_modal.clone();
@@ -44,18 +46,13 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let download_complete = download_complete.clone();
 
         use_effect_with((), move |_| {
-            let project_id = project_id.clone();
             spawn_local(async move {
                 downloading.set(true);
-
                 // Step 1: Try to acquire project mutex
-                match SPELEO_DB_CONTROLLER
-                    .acquire_project_mutex(&project_id)
-                    .await
-                {
+                match SPELEO_DB_CONTROLLER.acquire_project_mutex(project_id).await {
                     Ok(()) => {
                         // Mutex acquired! Set active project for shutdown hook
-                        let _ = SPELEO_DB_CONTROLLER.set_active_project(&project_id).await;
+                        let _ = SPELEO_DB_CONTROLLER.set_active_project(project_id).await;
                     }
                     Err(_e) => {
                         // Mutex acquisition had an error, but we continue anyway
@@ -64,20 +61,31 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                     }
                 }
 
+                // Step 2: Check if the project is dirty
+                match SPELEO_DB_CONTROLLER.is_project_dirty(project_id).await {
+                    Ok(dirty) => {
+                        is_dirty.set(dirty);
+                    }
+                    Err(error) => {
+                        error!("Error checking if project is dirty: {error:?}!");
+                    }
+                }
+
                 // Step 2: Update project index
-                match SPELEO_DB_CONTROLLER.update_project(&project_id).await {
-                    Ok(project) => {
-                        info!("Successfully updated compass project data{project:?}!");
+                match SPELEO_DB_CONTROLLER.update_project(project_id).await {
+                    Ok(updated_project) => {
+                        info!("Successfully updated compass project data{updated_project:?}!");
                         downloading.set(false);
-                        let mak_path = project.project.mak_file.clone();
+                        let mak_path = updated_project.project.mak_file.clone();
                         project_file_path.set(mak_path);
-                        if project.is_empty() {
+                        if updated_project.is_empty() {
                             show_empty_project_modal_effect.set(true);
                         } else {
                             download_complete.set(true);
                         }
                     }
                     Err(error) => {
+                        downloading.set(false);
                         error!("Error updating compass project data: {error:?}!");
                     }
                 }
@@ -131,7 +139,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
     // Open folder handler
     let on_open_project = {
-        let project_id = Uuid::parse_str(&props.project.id).unwrap();
+        let project_id = props.project.id;
         Callback::from(move |_: ()| {
             spawn_local(async move {
                 let _ = SPELEO_DB_CONTROLLER.open_project(project_id).await;
@@ -154,7 +162,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
     // Save Project Handler
     let on_save = {
-        let project_id = props.project.id.clone();
+        let project_id = props.project.id;
         let commit_message = commit_message.clone();
         let commit_message_error = commit_message_error.clone();
         let uploading = uploading.clone();
@@ -181,7 +189,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
             spawn_local(async move {
                 // 1. ZIP project
-                let zip_path = match SPELEO_DB_CONTROLLER.zip_project(&project_id).await {
+                let zip_path = match SPELEO_DB_CONTROLLER.zip_project(project_id).await {
                     Ok(p) => p,
                     Err(e) => {
                         upload_error.set(Some(format!("Failed to zip project: {}", e)));
@@ -192,7 +200,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
                 // 2. Upload
                 match SPELEO_DB_CONTROLLER
-                    .upload_project(&project_id, &msg, &zip_path)
+                    .upload_project(project_id, &msg, &zip_path)
                     .await
                 {
                     Ok(status) => {
@@ -216,7 +224,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let download_complete = download_complete.clone();
         let error_message = error_message.clone();
         let project_file_path = project_file_path.clone();
-        let project_id = props.project.id.clone();
+        let project_id = props.project.id;
         let show_empty_project_modal = show_empty_project_modal.clone();
         let show_reload_confirm = show_reload_confirm.clone();
         Callback::from(move |_: ()| {
@@ -233,13 +241,13 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
             spawn_local(async move {
                 // Step 2: Update project index
-                match SPELEO_DB_CONTROLLER.update_project(&project_id).await {
-                    Ok(project) => {
-                        info!("Successfully updated compass project data{project:?}!");
+                match SPELEO_DB_CONTROLLER.update_project(project_id).await {
+                    Ok(updated_project) => {
+                        info!("Successfully updated compass project data{updated_project:?}!");
                         downloading.set(false);
-                        let mak_path = project.project.mak_file.clone();
+                        let mak_path = updated_project.project.mak_file.clone();
                         project_file_path.set(mak_path);
-                        if project.is_empty() {
+                        if updated_project.is_empty() {
                             show_empty_project_modal.set(true);
                         } else {
                             download_complete.set(true);
@@ -258,7 +266,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let selected_zip = selected_zip.clone();
         let show_load_confirm = show_load_confirm.clone();
         let error_message = error_message.clone();
-        let project_id = Uuid::parse_str(&props.project.id.clone()).unwrap();
+        let project_id = props.project.id;
 
         Callback::from(move |_| {
             let selected_zip = selected_zip.clone();
@@ -270,8 +278,8 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                     .import_compass_project(project_id)
                     .await
                 {
-                    Ok(project) => {
-                        selected_zip.set(project.project.mak_file);
+                    Ok(imported_project) => {
+                        selected_zip.set(imported_project.project.mak_file);
                         show_load_confirm.set(true);
                     }
                     Err(e) => {
@@ -307,7 +315,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
             spawn_local(async move {
                 match SPELEO_DB_CONTROLLER
-                    .upload_project(&project_id, "Imported from disk", &zip_path)
+                    .upload_project(project_id, "Imported from disk", &zip_path)
                     .await
                 {
                     Ok(status) => {
@@ -326,7 +334,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
     // Back button handler - release mutex before navigating back
     let on_back_click = {
-        let project_id = props.project.id.clone();
+        let project_id = props.project.id;
         let on_back = props.on_back.clone();
 
         Callback::from(move |_| {
@@ -335,7 +343,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
             spawn_local(async move {
                 // Release mutex and clear active project first
-                let _ = SPELEO_DB_CONTROLLER.release_mutex(&project_id).await;
+                let _ = SPELEO_DB_CONTROLLER.release_mutex(project_id).await;
                 let _ = SPELEO_DB_CONTROLLER.clear_active_project().await;
 
                 // Then navigate back (which will trigger refresh)
