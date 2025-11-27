@@ -29,12 +29,12 @@ test-tauri:
 
 # Run only common crate tests
 test-common:
-	cargo test -p speleodb_compass_common
+	cargo test -p common
 
 # Run WASM UI tests (requires wasm-pack)
 test-ui:
 	@if command -v wasm-pack >/dev/null 2>&1; then \
-		cd src && wasm-pack test --headless --firefox; \
+		cd app/src && wasm-pack test --headless --firefox; \
 	else \
 		echo "wasm-pack not found, skipping UI tests"; \
 	fi
@@ -45,10 +45,12 @@ test-ui:
 
 # Build Tauri app
 build-tauri:
+	cd app && \
 	cargo tauri build
 
 # Build UI for distribution
 build-ui:
+	cd app && \
 	trunk build --release
 
 # ============================================================================ #
@@ -56,4 +58,5 @@ build-ui:
 # ============================================================================ #
 
 dev:
+	cd app && \
 	cargo tauri dev
