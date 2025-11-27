@@ -125,7 +125,7 @@ mod tests {
     #[serial]
     fn test_save_and_load_user_prefs() {
         // Ensure directory exists and clear any existing preferences
-        let _ = ensure_app_dir_exists();
+        ensure_app_dir_exists().expect("App dir created successfully");
         let _ = UserPrefs::forget();
         const INSTANCE_URL: &str = "https://test.example.com";
         const OAUTH_TOKEN: &str = "0123456789abcdef0123456789abcdef01234567";

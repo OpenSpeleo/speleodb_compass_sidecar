@@ -192,7 +192,6 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let upload_error = upload_error.clone();
 
         Callback::from(move |_| {
-            let project_id = project_id.clone();
             let msg = (*commit_message).clone();
 
             if msg.trim().is_empty() {
@@ -210,7 +209,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
             spawn_local(async move {
                 // 1. ZIP project
-                let zip_path = match SPELEO_DB_CONTROLLER.save_project(project_id, &msg).await {
+                match SPELEO_DB_CONTROLLER.save_project(project_id, &msg).await {
                     Ok(upload_result) => match upload_result {
                         ProjectSaveResult::NoChanges => {
                             show_no_changes_modal.set(true);
@@ -240,7 +239,6 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let show_empty_project_modal = show_empty_project_modal.clone();
         let show_reload_confirm = show_reload_confirm.clone();
         Callback::from(move |_: ()| {
-            let project_id = project_id.clone();
             let downloading = downloading.clone();
             let download_complete = download_complete.clone();
             let show_reload_confirm = show_reload_confirm.clone();
@@ -304,8 +302,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
     // Confirm Load from Disk (Upload)
     let on_confirm_load = {
-        let project_id = props.project.id.clone();
-        let selected_zip = selected_zip.clone();
+        let project_id = props.project.id;
         let uploading = uploading.clone();
         let show_load_confirm = show_load_confirm.clone();
         let show_upload_success = show_upload_success.clone();
@@ -313,8 +310,6 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let upload_error = upload_error.clone();
 
         Callback::from(move |_: ()| {
-            let project_id = project_id.clone();
-            let zip_path = (*selected_zip).clone().unwrap_or_default();
             let uploading = uploading.clone();
             let show_load_confirm = show_load_confirm.clone();
             let show_upload_success = show_upload_success.clone();
@@ -347,7 +342,6 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let on_back = props.on_back.clone();
 
         Callback::from(move |_| {
-            let project_id = project_id.clone();
             let on_back = on_back.clone();
 
             spawn_local(async move {

@@ -21,10 +21,9 @@ pub struct SpeleoDbProjectRevision {
 
 impl SpeleoDbProjectRevision {
     pub fn revision_for_project(id: Uuid) -> Option<SpeleoDbProjectRevision> {
-        match std::fs::read_to_string(SpeleoDbProjectRevision::path_for_project(id)).ok() {
-            Some(rev) => Some(Self { revision: rev }),
-            None => None,
-        }
+        std::fs::read_to_string(SpeleoDbProjectRevision::path_for_project(id))
+            .ok()
+            .map(|revision| Self { revision })
     }
     pub fn save_revision_for_project(&self, id: Uuid) -> Result<(), Error> {
         let path = SpeleoDbProjectRevision::path_for_project(id);
@@ -78,6 +77,12 @@ impl Project {
     }
 
     pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for Project {
+    fn default() -> Self {
         let mak_file = None;
         let dat_files = vec![];
         let plt_files = vec![];
@@ -215,11 +220,12 @@ impl CompassProject {
 
 #[cfg(test)]
 mod test {
+    use super::*;
+    use serial_test::serial;
     use std::{path::PathBuf, str::FromStr};
 
-    use super::*;
-
     #[test]
+    #[serial]
     fn test_project_import() {
         let id = Uuid::new_v4();
         let project = CompassProject::import_compass_project(

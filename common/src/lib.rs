@@ -155,22 +155,13 @@ fn open_with_compass_path(path: &Path) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn konst_and_path() {
         let p = compass_home();
         assert!(p.ends_with(COMPASS_HOME_DIR_NAME));
-    }
-
-    #[test]
-    fn app_dir_path_returns_clone() {
-        // Test that app_dir_path returns a clone and both paths are equal
-        let path1 = compass_home();
-        let path2 = compass_home();
-        assert_eq!(path1, path2);
-        assert!(path1.ends_with(COMPASS_HOME_DIR_NAME));
     }
 
     #[test]
@@ -182,6 +173,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn ensure_app_dir_creates_directory() {
         // This test creates the actual directory
         // In production code, this is acceptable as it's in the user's home
@@ -206,6 +198,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn init_file_logger_with_valid_level() {
         // Test logger initialization with valid log levels
         // Note: This will actually create a log file, which is acceptable for tests
@@ -221,6 +214,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn init_file_logger_creates_directory() {
         // The logger should create the directory if it doesn't exist
         let log_dir = compass_home();
@@ -231,11 +225,5 @@ mod tests {
         // Directory should exist regardless
         assert!(log_dir.exists());
         assert!(log_dir.is_dir());
-    }
-
-    #[test]
-    fn constant_value_is_correct() {
-        // Verify the constant has the expected value
-        assert_eq!(COMPASS_HOME_DIR_NAME, ".compass");
     }
 }

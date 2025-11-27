@@ -141,37 +141,6 @@ impl SpeleoDBController {
         Ok(project)
     }
 
-    pub async fn unzip_project(&self, zip_path: &str, project_id: &str) -> Result<String, String> {
-        #[derive(Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Args<'a> {
-            zip_path: &'a str,
-            project_id: &'a str,
-        }
-
-        let args = Args {
-            zip_path,
-            project_id,
-        };
-
-        let json: serde_json::Value = invoke("unzip_project", &args).await.unwrap();
-
-        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
-            let err_msg = json
-                .get("error")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Failed to unzip project");
-            return Err(err_msg.to_string());
-        }
-
-        let path = json
-            .get("path")
-            .and_then(|v| v.as_str())
-            .ok_or("No path in response")?;
-
-        Ok(path.to_string())
-    }
-
     pub async fn open_project(&self, project_id: Uuid) -> Result<(), String> {
         let args = ProjectIdArgs::new(project_id);
         let _: () = invoke("open_project", &args)
