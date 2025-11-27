@@ -1,11 +1,12 @@
 use crate::state::ApiInfo;
+use log::info;
 use reqwest::Client;
 use serde::Deserialize;
 use speleodb_compass_common::{
-    api_types::{ProjectInfo, ProjectRevisionInfo},
-    Error, SpeleoDbProjectRevision,
+    api_types::{ProjectInfo, ProjectRevisionInfo, ProjectSaveResult},
+    Error,
 };
-use std::{sync::LazyLock, time::Duration};
+use std::{path::Path, sync::LazyLock, time::Duration};
 use uuid::Uuid;
 
 static API_CLIENT: LazyLock<Client> = LazyLock::new(|| {
@@ -228,6 +229,56 @@ pub async fn download_project_zip(
         .await
         .map_err(|e| Error::Deserialization(e.to_string()))?;
     Ok(bytes)
+}
+
+pub async fn upload_project_zip(
+    api_info: &ApiInfo,
+    project_id: Uuid,
+    commit_message: String,
+    zip_path: &Path,
+) -> Result<ProjectSaveResult, Error> {
+    log::info!("Uploading project ZIP for project: {}", project_id);
+    let base = api_info.get_api_instance();
+    let oauth = api_info.get_api_token()?;
+    let url = format!(
+        "{}/api/v1/projects/{}/upload/compass_zip/",
+        base, project_id
+    );
+    let client = get_api_client();
+    // Read ZIP file
+    let zip_bytes = std::fs::read(&zip_path).map_err(|e| Error::FileRead(e.to_string()))?;
+
+    // Create multipart form
+    let part = reqwest::multipart::Part::bytes(zip_bytes)
+        .file_name("project.zip")
+        .mime_str("application/zip")
+        .unwrap();
+
+    let form = reqwest::multipart::Form::new()
+        .text("message", commit_message)
+        .part("artifact", part);
+
+    info!("Uploading project to: {}", url);
+
+    let resp = client
+        .put(&url)
+        .header("Authorization", format!("Token {}", oauth))
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| Error::NetworkRequest(e.to_string()))?;
+
+    let status = resp.status();
+
+    if status.is_success() {
+        info!("Successfully uploaded project: {}", project_id);
+        Ok(ProjectSaveResult::Saved)
+    } else if status == reqwest::StatusCode::NOT_MODIFIED {
+        info!("No changes to upload for project: {}", project_id);
+        Ok(ProjectSaveResult::NoChanges)
+    } else {
+        Err(Error::ApiRequest(status.as_u16()))
+    }
 }
 
 #[cfg(test)]

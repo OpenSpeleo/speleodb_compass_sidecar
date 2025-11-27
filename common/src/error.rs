@@ -37,4 +37,6 @@ pub enum Error {
     NetworkRequest(String),
     #[error("Api request failed with status code: {0}")]
     ApiRequest(u16),
+    #[error("File read failed: {0}")]
+    FileRead(String),
 }

@@ -48,3 +48,9 @@ impl ProjectRevisionInfo {
         self.commits.last()
     }
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum ProjectSaveResult {
+    Saved,
+    NoChanges,
+}

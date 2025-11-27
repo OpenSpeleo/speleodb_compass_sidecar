@@ -3,7 +3,10 @@ use crate::{Error, invoke};
 use log::{error, info};
 use once_cell::sync::Lazy;
 use serde::Serialize;
-use speleodb_compass_common::{CompassProject, api_types::ProjectInfo};
+use speleodb_compass_common::{
+    CompassProject,
+    api_types::{ProjectInfo, ProjectSaveResult},
+};
 use uuid::Uuid;
 use web_sys::Url;
 
@@ -131,7 +134,7 @@ impl SpeleoDBController {
 
     pub async fn update_project(&self, project_id: Uuid) -> Result<CompassProject, String> {
         let args = ProjectIdArgs::new(project_id);
-        let project: CompassProject = invoke("update_project", &args)
+        let project: CompassProject = invoke("update_index", &args)
             .await
             .map_err(|e| e.to_string())?;
 
@@ -178,58 +181,26 @@ impl SpeleoDBController {
         Ok(())
     }
 
-    pub async fn zip_project(&self, project_id: Uuid) -> Result<String, String> {
-        let args = ProjectIdArgs::new(project_id);
-        let json: serde_json::Value = invoke("zip_project_folder", &args).await.unwrap();
-
-        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
-            let err_msg = json
-                .get("error")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Failed to ZIP project");
-            return Err(err_msg.to_string());
-        }
-
-        let path = json
-            .get("path")
-            .and_then(|v| v.as_str())
-            .ok_or("No path in response")?;
-
-        Ok(path.to_string())
-    }
-
-    pub async fn upload_project(
+    pub async fn save_project(
         &self,
         project_id: Uuid,
-        message: &str,
-        zip_path: &str,
-    ) -> Result<u16, String> {
+        commit_message: &str,
+    ) -> Result<ProjectSaveResult, String> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
         struct Args<'a> {
             project_id: Uuid,
             commit_message: &'a str,
-            zip_path: &'a str,
         }
-
         let args = Args {
             project_id,
-            commit_message: message,
-            zip_path,
+            commit_message,
         };
 
-        let json: serde_json::Value = invoke("upload_project_zip", &args).await.unwrap();
-
-        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
-            let err_msg = json
-                .get("error")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Failed to upload project");
-            return Err(err_msg.to_string());
-        }
-
-        let status = json.get("status").and_then(|v| v.as_u64()).unwrap_or(200) as u16;
-        Ok(status)
+        let result: ProjectSaveResult = invoke("save_project", &args)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(result)
     }
 
     pub async fn release_mutex(&self, project_id: Uuid) -> Result<(), String> {

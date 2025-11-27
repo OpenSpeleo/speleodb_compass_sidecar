@@ -9,7 +9,7 @@ use crate::{
     Error, api_types::CommitInfo, compass_project_index_path, compass_project_path,
     compass_project_working_path, ensure_compass_project_dirs_exist,
 };
-const SPELEODB_COMPASS_PROJECT_FILE: &str = "compass.toml";
+pub const SPELEODB_COMPASS_PROJECT_FILE: &str = "compass.toml";
 const SPELEODB_COMPASS_VERSION: Version = Version::new(0, 0, 1);
 
 const SPELEODB_PROJECT_REVISION_FILE: &str = ".revision.txt";
@@ -47,7 +47,7 @@ impl From<&CommitInfo> for SpeleoDbProjectRevision {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct SpeleoDb {
-    id: Uuid,
+    pub id: Uuid,
     pub version: semver::Version,
 }
 
@@ -168,6 +168,7 @@ impl CompassProject {
         Ok(new_project)
     }
 
+    /// Create an empty Compass project with no files, and populate the working copy.
     pub fn empty_project(id: Uuid) -> Result<Self, Error> {
         info!("Creating empty Compass project for id: {id}");
         ensure_compass_project_dirs_exist(id)?;
@@ -178,12 +179,8 @@ impl CompassProject {
             },
             project: Project::new(),
         };
-        let mut index_path = compass_project_index_path(id);
-        index_path.push(SPELEODB_COMPASS_PROJECT_FILE);
         let serialized_project =
             toml::to_string_pretty(&new_project).map_err(|_| Error::Serialization)?;
-        std::fs::write(&index_path, &serialized_project)
-            .map_err(|_| Error::ProjectWrite(index_path.clone()))?;
         let mut working_copy_path = compass_project_working_path(id);
         working_copy_path.push(SPELEODB_COMPASS_PROJECT_FILE);
         std::fs::write(&working_copy_path, &serialized_project)

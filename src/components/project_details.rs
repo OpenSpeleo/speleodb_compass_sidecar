@@ -1,9 +1,7 @@
 use crate::components::modal::{Modal, ModalType};
-use crate::components::project_details::_ProjectDetailsProps::project;
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use log::{error, info};
-use speleodb_compass_common::api_types::ProjectInfo;
-use uuid::Uuid;
+use speleodb_compass_common::api_types::{ProjectInfo, ProjectSaveResult};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
@@ -212,30 +210,21 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
             spawn_local(async move {
                 // 1. ZIP project
-                let zip_path = match SPELEO_DB_CONTROLLER.zip_project(project_id).await {
-                    Ok(p) => p,
+                let zip_path = match SPELEO_DB_CONTROLLER.save_project(project_id, &msg).await {
+                    Ok(upload_result) => match upload_result {
+                        ProjectSaveResult::NoChanges => {
+                            show_no_changes_modal.set(true);
+                        }
+                        ProjectSaveResult::Saved => {
+                            show_upload_success.set(true);
+                        }
+                    },
                     Err(e) => {
                         upload_error.set(Some(format!("Failed to zip project: {}", e)));
                         uploading.set(false);
                         return;
                     }
                 };
-
-                // 2. Upload
-                match SPELEO_DB_CONTROLLER
-                    .upload_project(project_id, &msg, &zip_path)
-                    .await
-                {
-                    Ok(status) => {
-                        if status == 304 {
-                            show_no_changes_modal.set(true);
-                        } else {
-                            show_upload_success.set(true);
-                        }
-                    }
-                    Err(e) => upload_error.set(Some(format!("Upload failed: {}", e))),
-                }
-
                 uploading.set(false);
             });
         })
@@ -338,16 +327,13 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
             spawn_local(async move {
                 match SPELEO_DB_CONTROLLER
-                    .upload_project(project_id, "Imported from disk", &zip_path)
+                    .save_project(project_id, "Imported from disk")
                     .await
                 {
-                    Ok(status) => {
-                        if status == 304 {
-                            show_no_changes_modal.set(true);
-                        } else {
-                            show_upload_success.set(true);
-                        }
-                    }
+                    Ok(save_result) => match save_result {
+                        ProjectSaveResult::NoChanges => show_no_changes_modal.set(true),
+                        ProjectSaveResult::Saved => show_upload_success.set(true),
+                    },
                     Err(e) => upload_error.set(Some(format!("Upload failed: {}", e))),
                 }
                 uploading.set(false);

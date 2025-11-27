@@ -1,17 +1,17 @@
 use crate::{
     api,
     state::{ApiInfo, ProjectInfoManager},
-    zip_management::unpack_project_zip,
+    zip_management::{cleanup_temp_zip, pack_project_working_copy, unpack_project_zip},
     ACTIVE_PROJECT_ID,
 };
 use log::{error, info};
 use speleodb_compass_common::{
-    api_types::{ProjectInfo, ProjectRevisionInfo},
+    api_types::{ProjectInfo, ProjectRevisionInfo, ProjectSaveResult},
     compass_project_index_path, compass_project_working_path, ensure_compass_project_dirs_exist,
     CompassProject, Error, SpeleoDbProjectRevision, UserPrefs,
 };
 use std::process::Command;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
 
@@ -182,7 +182,7 @@ pub async fn project_revision_is_current(
 }
 
 #[tauri::command]
-pub async fn update_project(
+pub async fn update_index(
     api_info: State<'_, ApiInfo>,
     project_info: State<'_, ProjectInfoManager>,
     project_id: Uuid,
@@ -191,11 +191,6 @@ pub async fn update_project(
         Some(info) => info,
         None => update_project_revision_info(&api_info, &project_info, project_id).await?,
     };
-
-    if project_working_copy_is_dirty(project_id).await? {
-        error!("Working copy is dirty, refusing to update");
-        return Err("Working copy is dirty, refusing to update".to_string());
-    }
     ensure_compass_project_dirs_exist(project_id).map_err(|e| e.to_string())?;
     log::info!("Downloading project ZIP from");
     match api::download_project_zip(&api_info, project_id).await {
@@ -311,7 +306,7 @@ pub fn unzip_project(zip_path: String, project_id: Uuid) -> serde_json::Value {
 
 #[tauri::command]
 pub fn open_project(project_id: Uuid) -> Result<(), String> {
-    let mut project_dir = compass_project_working_path(project_id);
+    let project_dir = compass_project_working_path(project_id);
     if !project_dir.exists() {
         return Err("Project folder does not exist".to_string());
     }
@@ -357,96 +352,44 @@ pub fn open_project(project_id: Uuid) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn zip_project_folder(project_id: Uuid) -> serde_json::Value {
-    use std::fs::{self, File};
-    use std::io::Write;
-    use zip::ZipWriter;
-
+pub async fn save_project(
+    app_handle: AppHandle,
+    project_id: Uuid,
+    commit_message: String,
+) -> Result<ProjectSaveResult, String> {
     log::info!("Zipping project folder for project: {}", project_id);
+    let zipped_project_path = pack_project_working_copy(project_id)?;
+    info!("Project zipped successfully, uploading project ZIP to SpeleoDB");
+    let api_info = app_handle.state::<ApiInfo>();
+    let result =
+        api::upload_project_zip(&api_info, project_id, commit_message, &zipped_project_path).await;
+    // Clean up temp zip file regardless of success or failure
+    cleanup_temp_zip(&zipped_project_path);
 
-    // Get project folder path
-    let project_path = speleodb_compass_common::compass_project_path(project_id);
-
-    if !project_path.exists() {
-        return serde_json::json!({
-            "ok": false,
-            "error": format!("Project folder does not exist: {}", project_path.display())
-        });
-    }
-
-    // Create temp zip file
-    let temp_dir = std::env::temp_dir();
-    let zip_filename = format!("project_{}.zip", project_id);
-    let zip_path = temp_dir.join(&zip_filename);
-
-    let zip_file = match File::create(&zip_path) {
-        Ok(f) => f,
-        Err(e) => {
-            return serde_json::json!({
-                "ok": false,
-                "error": format!("Failed to create ZIP file: {}", e)
-            });
-        }
-    };
-
-    let mut zip = ZipWriter::new(zip_file);
-
-    // Helper function to recursively add directory to ZIP
-    fn add_dir_to_zip(
-        zip: &mut ZipWriter<File>,
-        path: &std::path::Path,
-        prefix: &str,
-    ) -> std::io::Result<()> {
-        let entries = fs::read_dir(path)?;
-
-        for entry in entries {
-            let entry = entry?;
-            let entry_path = entry.path();
-            let name = entry.file_name();
-            let name_str = name.to_string_lossy();
-            let zip_path = if prefix.is_empty() {
-                name_str.to_string()
-            } else {
-                format!("{}/{}", prefix, name_str)
-            };
-
-            if entry_path.is_dir() {
-                // Add directory - use () for default options
-                zip.add_directory::<_, ()>(&zip_path, Default::default())?;
-                // Recurse into subdirectory
-                add_dir_to_zip(zip, &entry_path, &zip_path)?;
-            } else {
-                // Add file - use () for default options
-                zip.start_file::<_, ()>(&zip_path, Default::default())?;
-                let contents = fs::read(&entry_path)?;
-                zip.write_all(&contents)?;
+    let cloned_handle = app_handle.clone();
+    tauri::async_runtime::spawn(async move {
+        let api_info = cloned_handle.state::<ApiInfo>();
+        let project_info = cloned_handle.state::<ProjectInfoManager>();
+        match update_project_revision_info(&api_info, &project_info, project_id).await {
+            Ok(project_info) => {
+                info!(
+                    "Updated project revision info after save: {:?}",
+                    project_info
+                );
+                if let Some(latest_commit) = project_info.latest_commit() {
+                    let latest_rev = SpeleoDbProjectRevision::from(latest_commit);
+                    if let Err(e) = latest_rev.save_revision_for_project(project_id) {
+                        error!(
+                            "Failed to save latest revision for project {}: {}",
+                            project_id, e
+                        );
+                    }
+                }
             }
+            Err(e) => error!("Failed to update project revision info after save: {}", e),
         }
-        Ok(())
-    }
-
-    // Add all files to ZIP
-    if let Err(e) = add_dir_to_zip(&mut zip, &project_path, "") {
-        return serde_json::json!({
-            "ok": false,
-            "error": format!("Failed to add files to ZIP: {}", e)
-        });
-    }
-
-    // Finalize ZIP
-    if let Err(e) = zip.finish() {
-        return serde_json::json!({
-            "ok": false,
-            "error": format!("Failed to finalize ZIP: {}", e)
-        });
-    }
-
-    log::info!("Created ZIP file: {}", zip_path.display());
-
-    serde_json::json!({
-        "ok": true,
-        "path": zip_path.to_string_lossy().to_string()
-    })
+    });
+    Ok(result.map_err(|e| format!("Failed to upload project ZIP: {}", e))?)
 }
 
 #[tauri::command]
@@ -494,112 +437,6 @@ pub async fn release_project_mutex(
     api::release_project_mutex(&api_info, &project_id).await?;
     // Always return success (fire and forget)
     Ok(())
-}
-
-#[tauri::command]
-pub async fn upload_project_zip(
-    project_id: String,
-    commit_message: String,
-    zip_path: String,
-) -> serde_json::Value {
-    use reqwest::Client;
-    use std::time::Duration;
-
-    log::info!("Uploading project ZIP for project: {}", project_id);
-
-    let prefs = match UserPrefs::load() {
-        Ok(p) => p,
-        Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to load user preferences: {}", e)})
-        }
-    };
-
-    let prefs = match prefs {
-        Some(p) => p,
-        _ => {
-            return serde_json::json!({"ok": false, "error": "No instance URL in user preferences"});
-        }
-    };
-
-    let oauth = match prefs.oauth_token {
-        Some(t) => t,
-        _ => {
-            return serde_json::json!({"ok": false, "error": "No OAuth token in user preferences"});
-        }
-    };
-
-    let base = prefs.instance.trim_end_matches('/');
-    let url = format!(
-        "{}/api/v1/projects/{}/upload/compass_zip/",
-        base, project_id
-    );
-
-    // Read ZIP file
-    let zip_bytes = match std::fs::read(&zip_path) {
-        Ok(b) => b,
-        Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to read ZIP file: {}", e)});
-        }
-    };
-
-    let client = match Client::builder().timeout(Duration::from_secs(120)).build() {
-        Ok(c) => c,
-        Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to build HTTP client: {}", e)});
-        }
-    };
-
-    // Create multipart form
-    let part = reqwest::multipart::Part::bytes(zip_bytes)
-        .file_name("project.zip")
-        .mime_str("application/zip")
-        .unwrap();
-
-    let form = reqwest::multipart::Form::new()
-        .text("message", commit_message)
-        .part("artifact", part);
-
-    log::info!("Uploading to: {}", url);
-
-    let resp = match client
-        .put(&url)
-        .header("Authorization", format!("Token {}", oauth))
-        .multipart(form)
-        .send()
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)});
-        }
-    };
-
-    let status = resp.status();
-
-    // Clean up temp ZIP file
-    let _ = std::fs::remove_file(&zip_path);
-
-    if status.is_success() {
-        log::info!("Successfully uploaded project: {}", project_id);
-        serde_json::json!({
-            "ok": true,
-            "message": "Project uploaded successfully",
-            "status": status.as_u16()
-        })
-    } else if status == reqwest::StatusCode::NOT_MODIFIED {
-        log::info!("Project upload returned 304 Not Modified: {}", project_id);
-        serde_json::json!({
-            "ok": true,
-            "message": "No changes detected",
-            "status": 304
-        })
-    } else {
-        serde_json::json!({
-            "ok": false,
-            "error": format!("Upload failed with status {}", status.as_u16()),
-            "status": status.as_u16()
-        })
-    }
 }
 
 #[tauri::command]

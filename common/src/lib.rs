@@ -3,7 +3,9 @@ mod compass_project;
 mod error;
 mod user_prefs;
 
-pub use compass_project::{CompassProject, Project, SpeleoDb, SpeleoDbProjectRevision};
+pub use compass_project::{
+    CompassProject, Project, SPELEODB_COMPASS_PROJECT_FILE, SpeleoDb, SpeleoDbProjectRevision,
+};
 pub use error::Error;
 pub use user_prefs::{OauthToken, UserPrefs};
 
