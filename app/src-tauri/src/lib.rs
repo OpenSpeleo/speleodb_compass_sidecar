@@ -12,7 +12,7 @@ use crate::{
     },
     state::{ApiInfo, ProjectInfoManager},
 };
-use speleodb_compass_common::compass_home;
+use common::compass_home;
 use tauri::Manager;
 use uuid::Uuid;
 
@@ -29,7 +29,7 @@ lazy_static::lazy_static! {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Ensure the hidden application directory exists in the user's home directory.
-    if let Err(e) = speleodb_compass_common::ensure_app_dir_exists() {
+    if let Err(e) = common::ensure_app_dir_exists() {
         eprintln!(
             "Failed to create application directory '{:?}': {:#}",
             compass_home(),
@@ -41,7 +41,7 @@ pub fn run() {
     let devtools = tauri_plugin_devtools::init();
 
     // Initialize logging
-    let _ = speleodb_compass_common::init_file_logger("info");
+    let _ = common::init_file_logger("info");
 
     if let Ok(path) = std::env::current_dir() {
         log::info!("Current working directory: {}", path.display());

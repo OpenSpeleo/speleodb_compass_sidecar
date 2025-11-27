@@ -3,12 +3,12 @@ use crate::{
     state::{ApiInfo, ProjectInfoManager},
     zip_management::{cleanup_temp_zip, pack_project_working_copy, unpack_project_zip},
 };
-use log::{error, info};
-use speleodb_compass_common::{
+use common::{
     CompassProject, Error, SpeleoDbProjectRevision, UserPrefs,
     api_types::{ProjectInfo, ProjectRevisionInfo, ProjectSaveResult},
     compass_project_index_path, compass_project_working_path, ensure_compass_project_dirs_exist,
 };
+use log::{error, info};
 use std::{
     fs::{copy, create_dir_all, read_dir},
     path::Path,

@@ -3,7 +3,7 @@ use crate::{Error, invoke};
 use log::{error, info};
 use once_cell::sync::Lazy;
 use serde::Serialize;
-use speleodb_compass_common::{
+use common::{
     CompassProject,
     api_types::{ProjectInfo, ProjectSaveResult},
 };

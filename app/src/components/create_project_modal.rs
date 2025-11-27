@@ -1,5 +1,5 @@
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
-use speleodb_compass_common::api_types::ProjectInfo;
+use common::api_types::ProjectInfo;
 use std::collections::BTreeMap;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;

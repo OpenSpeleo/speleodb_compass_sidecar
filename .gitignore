@@ -1,6 +1,7 @@
-/dist/
-/target/
-/Cargo.lock
+dist/
+target/
+Cargo.lock
+gen/
 
 .DS_Store
 

@@ -5,7 +5,9 @@ use std::{
     path::{Path, PathBuf},
     sync::LazyLock,
 };
-
+#[cfg(test)]
+const USER_PREFS_FILE_NAME: &str = "user_prefs_test.json";
+#[cfg(not(test))]
 const USER_PREFS_FILE_NAME: &str = "user_prefs.json";
 
 /// Lazily-initialized full path to the user preferences file (COMPASS_HOME_DIR + USER_PREFS_FILE_NAME).
@@ -195,7 +197,6 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial]
     fn test_save_user_prefs_sets_permissions() {
         use std::os::unix::fs::PermissionsExt;
 

@@ -2,7 +2,7 @@ use futures::future::{Either, select};
 use gloo_timers::future::TimeoutFuture;
 use log::{error, info};
 use serde::Serialize;
-use speleodb_compass_common::{UserPrefs, api_types::ProjectInfo};
+use common::{UserPrefs, api_types::ProjectInfo};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 

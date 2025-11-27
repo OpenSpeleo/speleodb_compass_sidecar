@@ -1,7 +1,7 @@
 use bytes::Bytes;
-use speleodb_compass_common::{
-    compass_project_index_path, compass_project_working_path, CompassProject,
-    SPELEODB_COMPASS_PROJECT_FILE,
+use common::{
+    CompassProject, SPELEODB_COMPASS_PROJECT_FILE, compass_project_index_path,
+    compass_project_working_path,
 };
 use std::{
     fs::File,

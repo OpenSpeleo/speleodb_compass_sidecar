@@ -1,6 +1,6 @@
 use crate::components::create_project_modal::CreateProjectModal;
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
-use speleodb_compass_common::api_types::ProjectInfo;
+use common::api_types::ProjectInfo;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 

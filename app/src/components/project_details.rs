@@ -1,7 +1,7 @@
 use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use log::{error, info};
-use speleodb_compass_common::api_types::{ProjectInfo, ProjectSaveResult};
+use common::api_types::{ProjectInfo, ProjectSaveResult};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
