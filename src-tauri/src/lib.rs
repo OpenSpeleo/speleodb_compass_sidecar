@@ -8,7 +8,7 @@ use crate::{
         acquire_project_mutex, auth_request, clear_active_project, create_project, fetch_projects,
         forget_user_prefs, import_compass_project, load_user_prefs, open_project,
         project_revision_is_current, project_working_copy_is_dirty, release_project_mutex,
-        save_project, save_user_prefs, set_active_project, unzip_project, update_index,
+        save_project, save_user_prefs, set_active_project, update_index,
     },
     state::{ApiInfo, ProjectInfoManager},
 };
@@ -69,7 +69,6 @@ pub fn run() {
             release_project_mutex,
             save_user_prefs,
             set_active_project,
-            unzip_project,
             update_index,
             save_project,
         ])
