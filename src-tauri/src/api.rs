@@ -3,8 +3,8 @@ use log::info;
 use reqwest::Client;
 use serde::Deserialize;
 use speleodb_compass_common::{
-    api_types::{ProjectInfo, ProjectRevisionInfo, ProjectSaveResult},
     Error,
+    api_types::{ProjectInfo, ProjectRevisionInfo, ProjectSaveResult},
 };
 use std::{path::Path, sync::LazyLock, time::Duration};
 use uuid::Uuid;
@@ -362,17 +362,20 @@ mod tests {
         let instance = std::env::var("TEST_SPELEODB_INSTANCE").unwrap();
 
         // Temporarily set environment variables with invalid token
-        std::env::set_var("TEST_SPELEODB_INSTANCE", &instance);
-        std::env::set_var(
-            "TEST_SPELEODB_OAUTH",
-            "0000000000000000000000000000000000000000",
-        ); // Fetch projects from real API (uses env vars directly)
+        unsafe {
+            std::env::set_var("TEST_SPELEODB_INSTANCE", &instance);
+            std::env::set_var(
+                "TEST_SPELEODB_OAUTH",
+                "0000000000000000000000000000000000000000",
+            ); // Fetch projects from real API (uses env vars directly)
+        }
         let api_info = ApiInfo::from_env().unwrap();
         let _result = fetch_projects(&api_info)
             .await
             .expect_err("This shouldn't work");
-
-        // Restore the valid token immediately
-        std::env::set_var("TEST_SPELEODB_OAUTH", valid_oauth);
+        unsafe {
+            // Restore the valid token immediately
+            std::env::set_var("TEST_SPELEODB_OAUTH", valid_oauth);
+        }
     }
 }

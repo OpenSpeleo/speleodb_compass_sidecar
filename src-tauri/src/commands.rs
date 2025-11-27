@@ -1,14 +1,13 @@
 use crate::{
-    api,
+    ACTIVE_PROJECT_ID, api,
     state::{ApiInfo, ProjectInfoManager},
     zip_management::{cleanup_temp_zip, pack_project_working_copy, unpack_project_zip},
-    ACTIVE_PROJECT_ID,
 };
 use log::{error, info};
 use speleodb_compass_common::{
+    CompassProject, Error, SpeleoDbProjectRevision, UserPrefs,
     api_types::{ProjectInfo, ProjectRevisionInfo, ProjectSaveResult},
     compass_project_index_path, compass_project_working_path, ensure_compass_project_dirs_exist,
-    CompassProject, Error, SpeleoDbProjectRevision, UserPrefs,
 };
 use std::{
     fs::{copy, create_dir_all, read_dir},
@@ -258,7 +257,7 @@ pub fn unzip_project(zip_path: String, project_id: Uuid) -> serde_json::Value {
     let project_path = match ensure_compass_project_dirs_exist(project_id) {
         Ok(p) => p,
         Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to create project directory: {}", e)})
+            return serde_json::json!({"ok": false, "error": format!("Failed to create project directory: {}", e)});
         }
     };
 
@@ -266,14 +265,14 @@ pub fn unzip_project(zip_path: String, project_id: Uuid) -> serde_json::Value {
     let file = match File::open(&zip_path) {
         Ok(f) => f,
         Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to open ZIP file: {}", e)})
+            return serde_json::json!({"ok": false, "error": format!("Failed to open ZIP file: {}", e)});
         }
     };
 
     let mut archive = match ZipArchive::new(file) {
         Ok(a) => a,
         Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to read ZIP archive: {}", e)})
+            return serde_json::json!({"ok": false, "error": format!("Failed to read ZIP archive: {}", e)});
         }
     };
 
@@ -282,7 +281,7 @@ pub fn unzip_project(zip_path: String, project_id: Uuid) -> serde_json::Value {
         let mut file = match archive.by_index(i) {
             Ok(f) => f,
             Err(e) => {
-                return serde_json::json!({"ok": false, "error": format!("Failed to read ZIP entry {}: {}", i, e)})
+                return serde_json::json!({"ok": false, "error": format!("Failed to read ZIP entry {}: {}", i, e)});
             }
         };
 
@@ -307,7 +306,7 @@ pub fn unzip_project(zip_path: String, project_id: Uuid) -> serde_json::Value {
             let mut outfile = match File::create(&outpath) {
                 Ok(f) => f,
                 Err(e) => {
-                    return serde_json::json!({"ok": false, "error": format!("Failed to create file {}: {}", outpath.display(), e)})
+                    return serde_json::json!({"ok": false, "error": format!("Failed to create file {}: {}", outpath.display(), e)});
                 }
             };
 
@@ -354,6 +353,7 @@ pub fn open_project(project_id: Uuid) -> Result<(), String> {
     // On Windows, actually try to open the project with Compass if possible
     #[cfg(target_os = "windows")]
     {
+        let mut project_dir = compass_project_working_path(project_id);
         let compass_project = CompassProject::load_working_project(project_id)
             .map_err(|e| e.to_string())?
             .project
@@ -482,7 +482,7 @@ pub async fn create_project(
     let prefs = match UserPrefs::load() {
         Ok(p) => p,
         Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to load user preferences: {}", e)})
+            return serde_json::json!({"ok": false, "error": format!("Failed to load user preferences: {}", e)});
         }
     };
 
@@ -506,7 +506,7 @@ pub async fn create_project(
     let client = match Client::builder().timeout(Duration::from_secs(30)).build() {
         Ok(c) => c,
         Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to build HTTP client: {}", e)})
+            return serde_json::json!({"ok": false, "error": format!("Failed to build HTTP client: {}", e)});
         }
     };
 
@@ -536,7 +536,7 @@ pub async fn create_project(
     {
         Ok(r) => r,
         Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)})
+            return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)});
         }
     };
 
@@ -546,7 +546,7 @@ pub async fn create_project(
         let json: serde_json::Value = match resp.json().await {
             Ok(j) => j,
             Err(e) => {
-                return serde_json::json!({"ok": false, "error": format!("Failed to parse response: {}", e)})
+                return serde_json::json!({"ok": false, "error": format!("Failed to parse response: {}", e)});
             }
         };
 
