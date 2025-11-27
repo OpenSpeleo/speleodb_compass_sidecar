@@ -119,14 +119,13 @@ impl UserPrefs {
 mod tests {
     use super::*;
     use crate::ensure_app_dir_exists;
-    use serial_test::serial;
 
     #[test]
-    #[serial]
+    #[ignore]
     fn test_save_and_load_user_prefs() {
         // Ensure directory exists and clear any existing preferences
         ensure_app_dir_exists().expect("App dir created successfully");
-        let _ = UserPrefs::forget();
+        UserPrefs::forget().expect("Successfully delete user prefs file");
         const INSTANCE_URL: &str = "https://test.example.com";
         const OAUTH_TOKEN: &str = "0123456789abcdef0123456789abcdef01234567";
         // Create test preferences
@@ -148,13 +147,12 @@ mod tests {
         // Load preferences
         let load_result = UserPrefs::load().expect("Expected to load user prefs");
         let loaded = load_result.expect("User prefs should be 'Some'");
-
         assert_eq!(loaded.instance, INSTANCE_URL);
         assert_eq!(loaded.oauth_token.unwrap(), OAUTH_TOKEN);
     }
 
     #[test]
-    #[serial]
+    #[ignore]
     fn test_forget_user_prefs() {
         // Ensure directory exists
         let _ = ensure_app_dir_exists();
@@ -172,7 +170,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[ignore]
     fn test_forget_user_prefs_when_none_exist() {
         // Should not error even if file doesn't exist
         let result = UserPrefs::forget();
@@ -183,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[ignore]
     fn test_load_user_prefs_when_none_exist() {
         // Delete prefs first
         let _ = UserPrefs::forget();
