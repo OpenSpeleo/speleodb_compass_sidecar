@@ -230,6 +230,5 @@ mod test {
         let serialized_project =
             toml::to_string_pretty(&project).expect("Failed to serialize imported project");
         println!("Imported project: {:?}", serialized_project);
-        panic!();
     }
 }
