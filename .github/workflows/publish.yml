@@ -45,8 +45,7 @@ jobs:
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: wasm32-unknown-unknown
 
       # Cache Rust dependencies and build artifacts
       - name: Rust cache
@@ -54,31 +53,8 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
           cache-on-failure: true
-          # Cache all Rust build artifacts, including intermediate compilation
-          save-if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
-          shared-key: ${{ matrix.platform }}
-
-      # Setup sccache for faster Rust compilation
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
-        
-      - name: Configure sccache
-        run: |
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
 
       # Cache cargo binaries (tauri-cli and trunk) - this saves ~25 minutes
-      - name: Cache cargo binaries
-        uses: actions/cache@v4
-        id: cargo-bins-cache
-        with:
-          path: |
-            ~/.cargo/bin/cargo-tauri*
-            ~/.cargo/bin/trunk*
-            ~/.cargo/.crates.toml
-            ~/.cargo/.crates2.json
-          key: ${{ runner.os }}-cargo-bins-${{ hashFiles('**/Cargo.lock') }}-tauri-cli-2-trunk
-
       # Cache Trunk frontend build artifacts
       - name: Cache Trunk build
         uses: actions/cache@v4
@@ -86,21 +62,16 @@ jobs:
           path: |
             dist
             target/wasm32-unknown-unknown
-          key: ${{ runner.os }}-trunk-${{ hashFiles('src/**', 'Cargo.lock', 'index.html', 'styles.css') }}
+          key: ${{ runner.os }}-trunk-test-${{ hashFiles('src/**', 'Cargo.lock', 'index.html', 'styles.css') }}
           restore-keys: |
-            ${{ runner.os }}-trunk-
+            ${{ runner.os }}-trunk-test-
 
-      - name: install dependencies
-        if: steps.cargo-bins-cache.outputs.cache-hit != 'true'
-        run: |
-          cargo install tauri-cli --version '^2.0.0' --locked
-          cargo install trunk --locked
+      - uses: cargo-bins/cargo-binstall@main
 
-      - name: install wasm target
-        run: |
-          rustup target add wasm32-unknown-unknown
+      - name: Install trunk and wasm-pack
+        run: cargo binstall trunk wasm-pack
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@action-v0.6.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUSTC_WRAPPER: sccache
