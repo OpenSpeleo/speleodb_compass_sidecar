@@ -1,8 +1,9 @@
 use crate::{
-    ACTIVE_PROJECT_ID, api,
-    state::{ApiInfo, ProjectInfoManager},
+    ACTIVE_PROJECT_ID,
+    state::ProjectInfoManager,
     zip_management::{cleanup_temp_zip, pack_project_working_copy, unpack_project_zip},
 };
+use api::api_info::ApiInfo;
 use common::{
     CompassProject, Error, SpeleoDbProjectRevision, UserPrefs,
     api_types::{ProjectInfo, ProjectRevisionInfo, ProjectSaveResult},
@@ -46,7 +47,7 @@ pub fn forget_user_prefs(api_info: State<'_, ApiInfo>) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn fetch_projects(api_info: State<'_, ApiInfo>) -> Result<Vec<ProjectInfo>, String> {
-    api::fetch_projects(&api_info).await
+    api::project::fetch_projects(&api_info).await
 }
 
 #[tauri::command]
@@ -59,11 +60,11 @@ pub async fn auth_request(
 ) -> Result<String, String> {
     info!("Starting auth request");
     let updated_token = if let Some(oauth_token) = oauth {
-        api::authorize_with_token(&instance, &oauth_token).await?
+        api::auth::authorize_with_token(&instance, &oauth_token).await?
     } else {
         let email = email.ok_or("Email is required for email/password authentication")?;
         let password = password.ok_or("Password is required for email/password authentication")?;
-        api::authorize_with_email(&instance, &email, &password).await?
+        api::auth::authorize_with_email(&instance, &email, &password).await?
     };
     info!("Auth request successful, updating user preferences");
     let new_prefs = UserPrefs {
@@ -82,7 +83,7 @@ pub async fn acquire_project_mutex(
     api_info: State<'_, ApiInfo>,
     project_id: Uuid,
 ) -> Result<(), String> {
-    api::acquire_project_mutex(&api_info, project_id).await
+    api::project::acquire_project_mutex(&api_info, project_id).await
 }
 
 #[tauri::command]
@@ -118,7 +119,7 @@ pub async fn update_project_revision_info(
     project_info: &ProjectInfoManager,
     project_id: Uuid,
 ) -> Result<ProjectRevisionInfo, String> {
-    match api::get_project_revisions(&api_info, project_id).await {
+    match api::project::get_project_revisions(&api_info, project_id).await {
         Ok(revisions) => {
             project_info.update_project(&revisions);
             Ok(revisions)
@@ -144,7 +145,7 @@ pub async fn project_revision_is_current(
         info!("No index revision found for project {}", project_id);
         return Ok(false);
     };
-    match api::get_project_revisions(&api_info, project_id).await {
+    match api::project::get_project_revisions(&api_info, project_id).await {
         Ok(revisions) => {
             project_info.update_project(&revisions);
             let latest_revision = match revisions.latest_commit() {
@@ -210,7 +211,7 @@ pub async fn update_index(
     };
     ensure_compass_project_dirs_exist(project_id).map_err(|e| e.to_string())?;
     log::info!("Downloading project ZIP from");
-    match api::download_project_zip(&api_info, project_id).await {
+    match api::project::download_project_zip(&api_info, project_id).await {
         Ok(bytes) => {
             log::info!("Downloaded ZIP ({} bytes)", bytes.len());
             let project = unpack_project_zip(project_id, bytes)?;
@@ -233,7 +234,7 @@ pub async fn update_index(
 
             Ok(project)
         }
-        Err(Error::EmptyProjectDirectory(project_id)) => {
+        Err(api::Error::NoProjectData(project_id)) => {
             info!("Empty project on SpeleoDB");
             CompassProject::empty_project(project_id).map_err(|e| e.to_string())
         }
@@ -301,8 +302,13 @@ pub async fn save_project(
     let zipped_project_path = pack_project_working_copy(project_id)?;
     info!("Project zipped successfully, uploading project ZIP to SpeleoDB");
     let api_info = app_handle.state::<ApiInfo>();
-    let result =
-        api::upload_project_zip(&api_info, project_id, commit_message, &zipped_project_path).await;
+    let result = api::project::upload_project_zip(
+        &api_info,
+        project_id,
+        commit_message,
+        &zipped_project_path,
+    )
+    .await;
     // Clean up temp zip file regardless of success or failure
     cleanup_temp_zip(&zipped_project_path);
 
@@ -374,119 +380,21 @@ pub async fn release_project_mutex(
     api_info: State<'_, ApiInfo>,
     project_id: Uuid,
 ) -> Result<(), String> {
-    api::release_project_mutex(&api_info, &project_id).await?;
+    api::project::release_project_mutex(&api_info, &project_id).await?;
     // Always return success (fire and forget)
     Ok(())
 }
 
 #[tauri::command]
 pub async fn create_project(
+    api_info: State<'_, ApiInfo>,
     name: String,
     description: String,
     country: String,
     latitude: Option<String>,
     longitude: Option<String>,
-) -> serde_json::Value {
-    use reqwest::Client;
-    use std::time::Duration;
-
-    // Load user prefs
-    let prefs = match UserPrefs::load() {
-        Ok(p) => p,
-        Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to load user preferences: {}", e)});
-        }
-    };
-
-    let prefs = match prefs {
-        Some(p) => p,
-        _ => {
-            return serde_json::json!({"ok": false, "error": "No instance URL in user preferences"});
-        }
-    };
-
-    let oauth = match prefs.oauth_token {
-        Some(t) => t,
-        _ => {
-            return serde_json::json!({"ok": false, "error": "No OAuth token in user preferences"});
-        }
-    };
-
-    let base = prefs.instance.trim_end_matches('/');
-    let url = format!("{}{}", base, "/api/v1/projects/");
-
-    let client = match Client::builder().timeout(Duration::from_secs(30)).build() {
-        Ok(c) => c,
-        Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to build HTTP client: {}", e)});
-        }
-    };
-
-    let mut body = serde_json::Map::new();
-    body.insert("name".to_string(), serde_json::json!(name));
-    body.insert("description".to_string(), serde_json::json!(description));
-    body.insert("country".to_string(), serde_json::json!(country));
-    if let Some(lat) = latitude {
-        if !lat.is_empty() {
-            body.insert("latitude".to_string(), serde_json::json!(lat));
-        }
-    }
-    if let Some(lon) = longitude {
-        if !lon.is_empty() {
-            body.insert("longitude".to_string(), serde_json::json!(lon));
-        }
-    }
-
-    log::info!("Creating project: {}", name);
-
-    let resp = match client
-        .post(&url)
-        .header("Authorization", format!("Token {}", oauth))
-        .json(&body)
-        .send()
+) -> Result<ProjectInfo, String> {
+    api::project::create_project(&api_info, name, description, country, latitude, longitude)
         .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Network request failed: {}", e)});
-        }
-    };
-
-    let status = resp.status();
-
-    if status.is_success() {
-        let json: serde_json::Value = match resp.json().await {
-            Ok(j) => j,
-            Err(e) => {
-                return serde_json::json!({"ok": false, "error": format!("Failed to parse response: {}", e)});
-            }
-        };
-
-        // Extract the project data from the API response
-        let project_data = match json.get("data") {
-            Some(data) => data.clone(),
-            None => {
-                return serde_json::json!({"ok": false, "error": "No data field in API response"});
-            }
-        };
-
-        // Return the project data wrapped in our standard format
-        serde_json::json!({
-            "ok": true,
-            "data": project_data
-        })
-    } else {
-        // Try to get error message from body
-        let error_msg = if let Ok(err_json) = resp.json::<serde_json::Value>().await {
-            err_json.to_string()
-        } else {
-            format!("Status {}", status.as_u16())
-        };
-
-        serde_json::json!({
-            "ok": false,
-            "error": format!("Create failed: {}", error_msg),
-            "status": status.as_u16()
-        })
-    }
+        .map_err(|e| e.to_string())
 }

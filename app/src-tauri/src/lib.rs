@@ -1,4 +1,3 @@
-mod api;
 mod commands;
 mod state;
 mod zip_management;
@@ -10,16 +9,12 @@ use crate::{
         project_revision_is_current, project_working_copy_is_dirty, release_project_mutex,
         save_project, save_user_prefs, set_active_project, update_index,
     },
-    state::{ApiInfo, ProjectInfoManager},
+    state::ProjectInfoManager,
 };
+use api::api_info::ApiInfo;
 use common::compass_home;
 use tauri::Manager;
 use uuid::Uuid;
-
-#[cfg(debug_assertions)]
-const API_BASE_URL: &str = "https://stage.speleodb.org";
-#[cfg(not(debug_assertions))]
-const API_BASE_URL: &str = "https://www.speleodb.com";
 
 // Global state for active project
 lazy_static::lazy_static! {
@@ -90,7 +85,9 @@ pub fn run() {
                     );
                     tauri::async_runtime::block_on(async {
                         let api = app_handle.state::<ApiInfo>();
-                        api::release_project_mutex(&api, project_id).await.ok();
+                        api::project::release_project_mutex(&api, project_id)
+                            .await
+                            .ok();
                     });
                 }
             }
