@@ -10,7 +10,11 @@ use speleodb_compass_common::{
     compass_project_index_path, compass_project_working_path, ensure_compass_project_dirs_exist,
     CompassProject, Error, SpeleoDbProjectRevision, UserPrefs,
 };
-use std::process::Command;
+use std::{
+    fs::{copy, create_dir_all, read_dir},
+    path::Path,
+    process::Command,
+};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
@@ -181,6 +185,20 @@ pub async fn project_revision_is_current(
     }
 }
 
+fn copy_dir_all<A: AsRef<Path>>(src: impl AsRef<Path>, dst: A) -> std::io::Result<()> {
+    create_dir_all(&dst)?;
+    for entry in read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        } else {
+            copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn update_index(
     api_info: State<'_, ApiInfo>,
@@ -197,12 +215,22 @@ pub async fn update_index(
         Ok(bytes) => {
             log::info!("Downloaded ZIP ({} bytes)", bytes.len());
             let project = unpack_project_zip(project_id, bytes)?;
-
             if let Some(latest_commit) = version_info.latest_commit() {
                 SpeleoDbProjectRevision::from(latest_commit)
                     .save_revision_for_project(project_id)
                     .map_err(|e| e.to_string())?;
             };
+            // Copy index to working copy
+            let src = compass_project_index_path(project_id);
+            let dst = compass_project_working_path(project_id);
+            copy_dir_all(&src, &dst).map_err(|e| {
+                format!(
+                    "Failed to copy index to working copy ({} -> {}): {}",
+                    src.display(),
+                    dst.display(),
+                    e
+                )
+            })?;
 
             Ok(project)
         }

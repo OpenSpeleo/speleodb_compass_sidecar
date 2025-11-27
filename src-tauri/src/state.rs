@@ -1,8 +1,5 @@
 use crate::API_BASE_URL;
-use speleodb_compass_common::{
-    api_types::{ProjectInfo, ProjectRevisionInfo},
-    Error, UserPrefs,
-};
+use speleodb_compass_common::{api_types::ProjectRevisionInfo, Error, UserPrefs};
 #[cfg(test)]
 use std::env::VarError;
 use std::{collections::HashMap, sync::Mutex};

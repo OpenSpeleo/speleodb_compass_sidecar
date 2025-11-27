@@ -1,8 +1,10 @@
 use bytes::Bytes;
 use speleodb_compass_common::{
-    compass_project_working_path, CompassProject, SPELEODB_COMPASS_PROJECT_FILE,
+    compass_project_index_path, compass_project_working_path, CompassProject,
+    SPELEODB_COMPASS_PROJECT_FILE,
 };
 use std::{
+    fs::File,
     io::prelude::*,
     path::{Path, PathBuf},
 };
@@ -10,7 +12,7 @@ use tauri::ipc::private::tracing::info;
 use uuid::Uuid;
 use zip::write::SimpleFileOptions;
 
-// Unpack a project zip directly into the compass project index
+// Unpack a project zip directly into the index and return the resulting `CompassProject`.
 pub fn unpack_project_zip(project_id: Uuid, zip_bytes: Bytes) -> Result<CompassProject, String> {
     // Create temp zip file
     let temp_dir = std::env::temp_dir();
@@ -19,11 +21,47 @@ pub fn unpack_project_zip(project_id: Uuid, zip_bytes: Bytes) -> Result<CompassP
     info!("Creating zip file in temp folder: {zip_path:?}");
     std::fs::write(&zip_path, &zip_bytes)
         .map_err(|e| format!("Failed to write temp zip file: {}", e))?;
-    // Ensure compass project directory exists
-    speleodb_compass_common::ensure_compass_project_dirs_exist(project_id)
-        .map_err(|e| format!("Failed to create compass directory: {}", e))?;
-    CompassProject::empty_project(project_id)
-        .map_err(|e| format!("Failed to create empty project: {}", e))
+    // Unzip the project
+    let file = std::fs::File::open(&zip_path)
+        .map_err(|e| format!("Failed to open temp zip file: {}", e))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("Failed to read zip archive: {}", e))?;
+
+    let index_path = compass_project_index_path(project_id);
+
+    // Extract all files
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to read zip entry {}: {}", i, e))?;
+
+        let file_path = match file.enclosed_name() {
+            Some(path) => index_path.join(path),
+            None => continue,
+        };
+        if file.is_dir() {
+            // Ignore, we automatically create directories for files as needed below
+        } else {
+            // Create parent directories if they don't exist
+            if let Some(p) = file_path.parent() {
+                std::fs::create_dir_all(p).map_err(|e| {
+                    format!("Failed to create parent directory {}: {}", p.display(), e)
+                })?;
+            }
+            let mut out_file = File::create(&file_path)
+                .map_err(|e| format!("Failed to create file {}: {}", file_path.display(), e))?;
+
+            std::io::copy(&mut file, &mut out_file)
+                .map_err(|e| format!("Failed to write file {}: {}", file_path.display(), e))?;
+        }
+    }
+    // Clean up temp ZIP file
+    cleanup_temp_zip(&zip_path);
+
+    log::info!("Successfully unzipped project to: {}", index_path.display());
+    let project = CompassProject::load_index_project(project_id)
+        .map_err(|e| format!("Failed to load project: {}", e))?;
+    Ok(project)
 }
 
 /// Pack the working copy of a Compass project into a zip file and return the path to the zip.
@@ -88,93 +126,3 @@ pub fn cleanup_temp_zip(zip_path: &Path) {
         }
     }
 }
-/*
-pub fn unzip_project(zip_path: String, project_id: Uuid) -> serde_json::Value {
-    use std::fs::File;
-    use zip::ZipArchive;
-
-    log::info!("Unzipping project {} from {}", project_id, zip_path);
-
-    // Ensure compass directory exists
-    if let Err(e) = speleodb_compass_common::ensure_compass_dir_exists() {
-        return serde_json::json!({"ok": false, "error": format!("Failed to create compass directory: {}", e)});
-    }
-
-    // Create project-specific directory
-    let project_path = match ensure_compass_project_dirs_exist(project_id) {
-        Ok(p) => p,
-        Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to create project directory: {}", e)})
-        }
-    };
-
-    // Open the ZIP file
-    let file = match File::open(&zip_path) {
-        Ok(f) => f,
-        Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to open ZIP file: {}", e)})
-        }
-    };
-
-    let mut archive = match ZipArchive::new(file) {
-        Ok(a) => a,
-        Err(e) => {
-            return serde_json::json!({"ok": false, "error": format!("Failed to read ZIP archive: {}", e)})
-        }
-    };
-
-    // Extract all files
-    for i in 0..archive.len() {
-        let mut file = match archive.by_index(i) {
-            Ok(f) => f,
-            Err(e) => {
-                return serde_json::json!({"ok": false, "error": format!("Failed to read ZIP entry {}: {}", i, e)})
-            }
-        };
-
-        let outpath = match file.enclosed_name() {
-            Some(path) => project_path.join(path),
-            None => continue,
-        };
-
-        if file.name().ends_with('/') {
-            // Directory
-            if let Err(e) = std::fs::create_dir_all(&outpath) {
-                return serde_json::json!({"ok": false, "error": format!("Failed to create directory {}: {}", outpath.display(), e)});
-            }
-        } else {
-            // File
-            if let Some(p) = outpath.parent() {
-                if let Err(e) = std::fs::create_dir_all(p) {
-                    return serde_json::json!({"ok": false, "error": format!("Failed to create parent directory {}: {}", p.display(), e)});
-                }
-            }
-
-            let mut outfile = match File::create(&outpath) {
-                Ok(f) => f,
-                Err(e) => {
-                    return serde_json::json!({"ok": false, "error": format!("Failed to create file {}: {}", outpath.display(), e)})
-                }
-            };
-
-            if let Err(e) = std::io::copy(&mut file, &mut outfile) {
-                return serde_json::json!({"ok": false, "error": format!("Failed to write file {}: {}", outpath.display(), e)});
-            }
-        }
-    }
-
-    // Clean up temp ZIP file
-    let _ = std::fs::remove_file(&zip_path);
-
-    log::info!(
-        "Successfully unzipped project to: {}",
-        project_path.display()
-    );
-
-    serde_json::json!({
-        "ok": true,
-        "path": project_path.to_string_lossy().to_string(),
-        "message": "Project extracted successfully"
-    })
-}
-*/
