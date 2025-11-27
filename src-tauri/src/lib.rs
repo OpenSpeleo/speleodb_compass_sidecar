@@ -12,7 +12,7 @@ use crate::{
     },
     state::{ApiInfo, ProjectInfoManager},
 };
-use speleodb_compass_common::{compass_home, Project};
+use speleodb_compass_common::compass_home;
 use tauri::Manager;
 use uuid::Uuid;
 
@@ -53,7 +53,6 @@ pub fn run() {
     }
 
     let mut builder = tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             acquire_project_mutex,
