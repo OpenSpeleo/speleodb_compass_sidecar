@@ -2,6 +2,8 @@ mod commands;
 mod state;
 mod zip_management;
 
+use std::sync::{Arc, LazyLock, Mutex};
+
 use crate::{
     commands::{
         acquire_project_mutex, auth_request, clear_active_project, create_project, fetch_projects,
@@ -17,9 +19,8 @@ use tauri::Manager;
 use uuid::Uuid;
 
 // Global state for active project
-lazy_static::lazy_static! {
-    static ref ACTIVE_PROJECT_ID: std::sync::Arc<std::sync::Mutex<Option<Uuid>>> = std::sync::Arc::new(std::sync::Mutex::new(None));
-}
+static ACTIVE_PROJECT_ID: LazyLock<Arc<Mutex<Option<Uuid>>>> =
+    LazyLock::new(|| Arc::new(std::sync::Mutex::new(None)));
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
