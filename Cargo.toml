@@ -11,3 +11,4 @@ serde_json = "1"
 uuid = { version = "1", features = ["serde", "v4", "rng-rand" ] }
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+toml = "0.9.8"
