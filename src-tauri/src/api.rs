@@ -122,7 +122,15 @@ pub async fn fetch_projects(api_info: &ApiInfo) -> Result<Vec<ProjectInfo>, Stri
 
     if status.is_success() {
         match resp.json::<ProjectsResponse>().await {
-            Ok(project_response) => Ok(project_response.data),
+            Ok(project_response) => {
+                // Filter to only keep COMPASS projects
+                let compass_projects: Vec<ProjectInfo> = project_response
+                    .data
+                    .into_iter()
+                    .filter(|p| p.project_type == "COMPASS")
+                    .collect();
+                Ok(compass_projects)
+            }
             Err(e) => Err(format!("Failed to parse response: {}", e)),
         }
     } else {

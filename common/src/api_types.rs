@@ -27,6 +27,8 @@ pub struct ProjectInfo {
     pub fork_from: Option<String>,
     pub visibility: String,
     pub exclude_geojson: bool,
+    #[serde(rename = "type")]
+    pub project_type: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
