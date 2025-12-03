@@ -1,8 +1,5 @@
 pub mod auth;
-mod error;
 pub mod project;
-
-pub use error::Error;
 
 use reqwest::Client;
 use std::{sync::LazyLock, time::Duration};

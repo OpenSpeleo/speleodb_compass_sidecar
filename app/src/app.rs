@@ -9,7 +9,6 @@ use crate::{
     components::{
         auth_screen::AuthScreen, project_details::ProjectDetails, project_listing::ProjectListing,
     },
-    invoke,
     speleo_db_controller::SPELEO_DB_CONTROLLER,
 };
 
@@ -22,12 +21,22 @@ enum ActiveTab {
 #[function_component(App)]
 pub fn app() -> Html {
     // UI state
+    let booted = use_state(|| false);
     let authenticated = use_state(|| false);
     let show_error = use_state(|| false);
     let error_msg = use_state(String::new);
     let active_tab = use_state(|| ActiveTab::Listing);
     let selected_project: UseStateHandle<Option<ProjectInfo>> = use_state(|| None);
     let refresh_trigger = use_state(|| 0u32);
+
+    let booted_clone = booted.clone();
+    spawn_local(async move {
+        let mut booted_stream = listen::<bool>("event::booted").await.unwrap();
+        while let Some(event) = booted_stream.next().await {
+            info!("Authentication status changed: {}", event.payload);
+            booted_clone.set(event.payload);
+        }
+    });
 
     let authenticated_clone = authenticated.clone();
     spawn_local(async move {

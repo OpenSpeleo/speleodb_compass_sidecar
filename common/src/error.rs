@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use uuid::Uuid;
 
 #[derive(Debug, Deserialize, Error, Serialize)]
 pub enum Error {
@@ -38,7 +39,11 @@ pub enum Error {
     #[error("Network request error: {0}")]
     NetworkRequest(String),
     #[error("Api request failed with status code: {0}")]
-    ApiRequest(u16),
+    Api(u16),
     #[error("File read failed: {0}")]
     FileRead(String),
+    #[error("No project data found for : {0}")]
+    NoProjectData(Uuid),
+    #[error("Project mutex already locked")]
+    ProjectMutexLocked(Uuid),
 }

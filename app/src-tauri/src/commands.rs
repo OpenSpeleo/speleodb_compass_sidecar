@@ -210,7 +210,7 @@ pub async fn update_index(
 
             Ok(project)
         }
-        Err(api::Error::NoProjectData(project_id)) => {
+        Err(Error::NoProjectData(project_id)) => {
             info!("Empty project on SpeleoDB");
             CompassProject::empty_project(project_id).map_err(|e| e.to_string())
         }

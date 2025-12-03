@@ -1,8 +1,8 @@
 use std::path::Path;
 
-use crate::{Error, get_api_client};
+use crate::get_api_client;
 use common::{
-    UserPrefs,
+    Error, UserPrefs,
     api_types::{ProjectInfo, ProjectRevisionInfo, ProjectSaveResult},
 };
 use log::info;
@@ -20,7 +20,8 @@ pub async fn acquire_project_mutex(api_info: &UserPrefs, project_id: Uuid) -> Re
         .post(&url)
         .header("Authorization", format!("Token {}", oauth))
         .send()
-        .await?;
+        .await
+        .map_err(|e| Error::NetworkRequest(e.to_string()))?;
 
     let status = resp.status();
 
@@ -71,7 +72,8 @@ pub async fn create_project(
         .header("Authorization", format!("Token {}", oauth))
         .json(&body)
         .send()
-        .await?;
+        .await
+        .map_err(|e| Error::NetworkRequest(e.to_string()))?;
 
     let status = resp.status();
 
@@ -81,7 +83,10 @@ pub async fn create_project(
             pub data: ProjectInfo,
             // Ignore extra fields like timestamp and url
         }
-        let json = resp.json::<ProjectInfoResponse>().await?;
+        let json = resp
+            .json::<ProjectInfoResponse>()
+            .await
+            .map_err(|e| Error::Deserialization(e.to_string()))?;
 
         // Return the project data wrapped in our standard format
         Ok(json.data)
@@ -102,7 +107,8 @@ pub async fn release_project_mutex(api_info: &UserPrefs, project_id: &Uuid) -> R
         .post(&url)
         .header("Authorization", format!("Token {}", oauth))
         .send()
-        .await?;
+        .await
+        .map_err(|e| Error::NetworkRequest(e.to_string()))?;
 
     let status = resp.status();
     if status.is_success() {
@@ -124,7 +130,8 @@ pub async fn fetch_projects(api_info: &UserPrefs) -> Result<Vec<ProjectInfo>, Er
         .get(&url)
         .header("Authorization", format!("Token {}", oauth))
         .send()
-        .await?;
+        .await
+        .map_err(|e| Error::NetworkRequest(e.to_string()))?;
 
     let status = resp.status();
 
@@ -135,7 +142,11 @@ pub async fn fetch_projects(api_info: &UserPrefs) -> Result<Vec<ProjectInfo>, Er
     }
 
     if status.is_success() {
-        Ok(resp.json::<ProjectsResponse>().await?.data)
+        Ok(resp
+            .json::<ProjectsResponse>()
+            .await
+            .map_err(|e| Error::Deserialization(e.to_string()))?
+            .data)
     } else {
         Err(Error::Api(status.as_u16()))
     }
@@ -154,7 +165,8 @@ pub async fn get_project_revisions(
         .get(&url)
         .header("Authorization", format!("Token {}", oauth))
         .send()
-        .await?;
+        .await
+        .map_err(|e| Error::NetworkRequest(e.to_string()))?;
 
     let status = resp.status();
 
@@ -164,7 +176,11 @@ pub async fn get_project_revisions(
     }
 
     if status.is_success() {
-        Ok(resp.json::<RevisionsResponse>().await?.data)
+        Ok(resp
+            .json::<RevisionsResponse>()
+            .await
+            .map_err(|e| Error::Deserialization(e.to_string()))?
+            .data)
     } else {
         Err(Error::Api(status.as_u16()))
     }
@@ -187,7 +203,7 @@ pub async fn download_project_zip(
         .header("Authorization", format!("Token {}", oauth))
         .send()
         .await
-        .map_err(|e| Error::Request(e))?;
+        .map_err(|e| Error::NetworkRequest(e.to_string()))?;
 
     let status = resp.status();
 
@@ -201,7 +217,10 @@ pub async fn download_project_zip(
     }
 
     // Get the bytes
-    let bytes = resp.bytes().await.map_err(|e| Error::Request(e))?;
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| Error::Deserialization(e.to_string()))?;
     Ok(bytes)
 }
 
@@ -220,7 +239,7 @@ pub async fn upload_project_zip(
     );
     let client = get_api_client();
     // Read ZIP file
-    let zip_bytes = std::fs::read(&zip_path).map_err(Error::Io)?;
+    let zip_bytes = std::fs::read(&zip_path).map_err(|e| Error::FileRead(e.to_string()))?;
 
     // Create multipart form
     let part = reqwest::multipart::Part::bytes(zip_bytes)
@@ -240,7 +259,7 @@ pub async fn upload_project_zip(
         .multipart(form)
         .send()
         .await
-        .map_err(|e| Error::Request(e))?;
+        .map_err(|e| Error::NetworkRequest(e.to_string()))?;
 
     let status = resp.status();
 
