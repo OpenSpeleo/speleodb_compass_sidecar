@@ -514,6 +514,7 @@ pub async fn create_project(
     body.insert("name".to_string(), serde_json::json!(name));
     body.insert("description".to_string(), serde_json::json!(description));
     body.insert("country".to_string(), serde_json::json!(country));
+    body.insert("type".to_string(), serde_json::json!("COMPASS"));
     if let Some(lat) = latitude {
         if !lat.is_empty() {
             body.insert("latitude".to_string(), serde_json::json!(lat));
