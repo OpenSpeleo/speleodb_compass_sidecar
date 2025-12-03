@@ -1,12 +1,11 @@
 pub mod api_types;
-mod compass_project;
 mod error;
+pub mod project;
 mod user_prefs;
 
-pub use compass_project::{
-    CompassProject, Project, SPELEODB_COMPASS_PROJECT_FILE, SpeleoDb, SpeleoDbProjectRevision,
-};
 pub use error::Error;
+pub use project::{CompassProject, Project, SpeleoDb, SpeleoDbProjectRevision};
+use semver::Version;
 pub use user_prefs::{OauthToken, UserPrefs};
 
 use std::{
@@ -20,6 +19,10 @@ use uuid::Uuid;
 const COMPASS_HOME_DIR_NAME: &str = ".compass";
 /// Name of the compass projects folder inside the user's home directory.
 const COMPASS_PROJECT_DIR_NAME: &str = "projects";
+pub const SPELEODB_COMPASS_PROJECT_FILE: &str = "compass.toml";
+const SPELEODB_COMPASS_VERSION: Version = Version::new(0, 0, 1);
+
+const SPELEODB_PROJECT_REVISION_FILE: &str = ".revision.txt";
 
 /// Lazily-initialized full path to the application directory (home + COMPASS_HOME_DIR_NAME).
 ///
