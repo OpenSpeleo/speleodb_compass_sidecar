@@ -7,13 +7,12 @@ use std::sync::{Arc, LazyLock, Mutex};
 use crate::{
     commands::{
         acquire_project_mutex, auth_request, clear_active_project, create_project, fetch_projects,
-        forget_user_prefs, import_compass_project, load_user_prefs, open_project,
-        project_revision_is_current, project_working_copy_is_dirty, release_project_mutex,
-        save_project, save_user_prefs, set_active_project, update_index,
+        forget_user_prefs, import_compass_project, open_project, project_revision_is_current,
+        project_working_copy_is_dirty, release_project_mutex, save_project, set_active_project,
+        update_index,
     },
-    state::ProjectInfoManager,
+    state::AppState,
 };
-use api::api_info::ApiInfo;
 use common::compass_home;
 use tauri::Manager;
 use uuid::Uuid;
@@ -58,18 +57,15 @@ pub fn run() {
             fetch_projects,
             forget_user_prefs,
             import_compass_project,
-            load_user_prefs,
             open_project,
             project_revision_is_current,
             project_working_copy_is_dirty,
             release_project_mutex,
-            save_user_prefs,
             set_active_project,
             update_index,
             save_project,
         ])
-        .manage(ApiInfo::default())
-        .manage(ProjectInfoManager::new());
+        .manage(AppState::new());
     #[cfg(debug_assertions)]
     {
         builder = builder.plugin(devtools);
@@ -85,8 +81,8 @@ pub fn run() {
                         project_id
                     );
                     tauri::async_runtime::block_on(async {
-                        let api = app_handle.state::<ApiInfo>();
-                        api::project::release_project_mutex(&api, project_id)
+                        let app_state = app_handle.state::<AppState>();
+                        api::project::release_project_mutex(&app_state.api_info(), project_id)
                             .await
                             .ok();
                     });

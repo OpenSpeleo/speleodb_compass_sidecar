@@ -1,9 +1,8 @@
 use crate::{
     ACTIVE_PROJECT_ID,
-    state::ProjectInfoManager,
+    state::AppState,
     zip_management::{cleanup_temp_zip, pack_project_working_copy, unpack_project_zip},
 };
-use api::api_info::ApiInfo;
 use common::{
     CompassProject, Error, SpeleoDbProjectRevision, UserPrefs,
     api_types::{ProjectInfo, ProjectRevisionInfo, ProjectSaveResult},
@@ -15,49 +14,31 @@ use std::{
     path::Path,
     process::Command,
 };
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager, State, Url};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
 
 #[tauri::command]
-pub fn save_user_prefs(api_info: State<'_, ApiInfo>, prefs: UserPrefs) -> Result<(), String> {
-    info!("Saving user preferences: {prefs:?}");
-    UserPrefs::save(&prefs).map_err(|e| e.to_string())?;
-    api_info.set(&prefs);
+pub fn forget_user_prefs(app_state: State<'_, AppState>) -> Result<(), String> {
+    app_state.forget_user_prefs().map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
-pub fn load_user_prefs(api_info: State<'_, ApiInfo>) -> Result<Option<UserPrefs>, String> {
-    info!("Loading user preferences");
-    let user_prefs = UserPrefs::load().map_err(|e| e.to_string())?;
-    if let Some(user_prefs) = &user_prefs {
-        info!("Loaded user prefs:{user_prefs:?}");
-        api_info.set(user_prefs);
-    }
-    Ok(user_prefs)
-}
-
-#[tauri::command]
-pub fn forget_user_prefs(api_info: State<'_, ApiInfo>) -> Result<(), String> {
-    let result = UserPrefs::forget().map_err(|e| e.to_string());
-    api_info.reset();
-    result
-}
-
-#[tauri::command]
-pub async fn fetch_projects(api_info: State<'_, ApiInfo>) -> Result<Vec<ProjectInfo>, String> {
-    api::project::fetch_projects(&api_info).await
+pub async fn fetch_projects(app_state: State<'_, AppState>) -> Result<Vec<ProjectInfo>, String> {
+    api::project::fetch_projects(&app_state.api_info())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn auth_request(
-    api_info: State<'_, ApiInfo>,
+    app_state: State<'_, AppState>,
     email: Option<String>,
     password: Option<String>,
     oauth: Option<String>,
-    instance: String,
-) -> Result<String, String> {
+    instance: Url,
+) -> Result<(), String> {
     info!("Starting auth request");
     let updated_token = if let Some(oauth_token) = oauth {
         api::auth::authorize_with_token(&instance, &oauth_token).await?
@@ -67,23 +48,19 @@ pub async fn auth_request(
         api::auth::authorize_with_email(&instance, &email, &password).await?
     };
     info!("Auth request successful, updating user preferences");
-    let new_prefs = UserPrefs {
-        instance,
-        email: None,
-        password: None,
-        oauth_token: Some(updated_token.clone()),
-    };
-    api_info.set(&new_prefs);
-    UserPrefs::save(&new_prefs).map_err(|e| e.to_string())?;
-    Ok(updated_token)
+    let prefs = UserPrefs::new(instance, Some(updated_token));
+    app_state.update_user_prefs(prefs);
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn acquire_project_mutex(
-    api_info: State<'_, ApiInfo>,
+    app_state: State<'_, AppState>,
     project_id: Uuid,
 ) -> Result<(), String> {
-    api::project::acquire_project_mutex(&api_info, project_id).await
+    api::project::acquire_project_mutex(&app_state.api_info(), project_id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -115,13 +92,12 @@ pub async fn project_working_copy_is_dirty(project_id: Uuid) -> Result<bool, Str
 }
 
 pub async fn update_project_revision_info(
-    api_info: &ApiInfo,
-    project_info: &ProjectInfoManager,
+    app_state: &AppState,
     project_id: Uuid,
 ) -> Result<ProjectRevisionInfo, String> {
-    match api::project::get_project_revisions(&api_info, project_id).await {
+    match api::project::get_project_revisions(&app_state.api_info(), project_id).await {
         Ok(revisions) => {
-            project_info.update_project(&revisions);
+            app_state.update_project(&revisions);
             Ok(revisions)
         }
         Err(e) => {
@@ -136,8 +112,7 @@ pub async fn update_project_revision_info(
 
 #[tauri::command]
 pub async fn project_revision_is_current(
-    api_info: State<'_, ApiInfo>,
-    project_info: State<'_, ProjectInfoManager>,
+    app_state: State<'_, AppState>,
     project_id: Uuid,
 ) -> Result<bool, String> {
     // Get the index revision for the project, if none, we're not up to date
@@ -145,9 +120,9 @@ pub async fn project_revision_is_current(
         info!("No index revision found for project {}", project_id);
         return Ok(false);
     };
-    match api::project::get_project_revisions(&api_info, project_id).await {
+    match api::project::get_project_revisions(&app_state.api_info(), project_id).await {
         Ok(revisions) => {
-            project_info.update_project(&revisions);
+            app_state.update_project(&revisions);
             let latest_revision = match revisions.latest_commit() {
                 Some(latest) => {
                     info!(
@@ -201,17 +176,16 @@ fn copy_dir_all<A: AsRef<Path>>(src: impl AsRef<Path>, dst: A) -> std::io::Resul
 
 #[tauri::command]
 pub async fn update_index(
-    api_info: State<'_, ApiInfo>,
-    project_info: State<'_, ProjectInfoManager>,
+    app_state: State<'_, AppState>,
     project_id: Uuid,
 ) -> Result<CompassProject, String> {
-    let version_info = match project_info.get_project(project_id) {
+    let version_info = match app_state.get_project(project_id) {
         Some(info) => info,
-        None => update_project_revision_info(&api_info, &project_info, project_id).await?,
+        None => update_project_revision_info(&app_state, project_id).await?,
     };
     ensure_compass_project_dirs_exist(project_id).map_err(|e| e.to_string())?;
     log::info!("Downloading project ZIP from");
-    match api::project::download_project_zip(&api_info, project_id).await {
+    match api::project::download_project_zip(&app_state.api_info(), project_id).await {
         Ok(bytes) => {
             log::info!("Downloaded ZIP ({} bytes)", bytes.len());
             let project = unpack_project_zip(project_id, bytes)?;
@@ -301,9 +275,9 @@ pub async fn save_project(
     log::info!("Zipping project folder for project: {}", project_id);
     let zipped_project_path = pack_project_working_copy(project_id)?;
     info!("Project zipped successfully, uploading project ZIP to SpeleoDB");
-    let api_info = app_handle.state::<ApiInfo>();
+    let app_state = app_handle.state::<AppState>();
     let result = api::project::upload_project_zip(
-        &api_info,
+        &app_state.api_info(),
         project_id,
         commit_message,
         &zipped_project_path,
@@ -314,9 +288,8 @@ pub async fn save_project(
 
     let cloned_handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
-        let api_info = cloned_handle.state::<ApiInfo>();
-        let project_info = cloned_handle.state::<ProjectInfoManager>();
-        match update_project_revision_info(&api_info, &project_info, project_id).await {
+        let app_state = cloned_handle.state::<AppState>();
+        match update_project_revision_info(&app_state, project_id).await {
             Ok(project_info) => {
                 info!(
                     "Updated project revision info after save: {:?}",
@@ -377,24 +350,33 @@ pub fn clear_active_project() -> Result<(), String> {
 
 #[tauri::command]
 pub async fn release_project_mutex(
-    api_info: State<'_, ApiInfo>,
+    app_state: State<'_, AppState>,
     project_id: Uuid,
 ) -> Result<(), String> {
-    api::project::release_project_mutex(&api_info, &project_id).await?;
+    api::project::release_project_mutex(&app_state.api_info(), &project_id)
+        .await
+        .map_err(|e| e.to_string())?;
     // Always return success (fire and forget)
     Ok(())
 }
 
 #[tauri::command]
 pub async fn create_project(
-    api_info: State<'_, ApiInfo>,
+    app_state: State<'_, AppState>,
     name: String,
     description: String,
     country: String,
     latitude: Option<String>,
     longitude: Option<String>,
 ) -> Result<ProjectInfo, String> {
-    api::project::create_project(&api_info, name, description, country, latitude, longitude)
-        .await
-        .map_err(|e| e.to_string())
+    api::project::create_project(
+        &app_state.api_info(),
+        name,
+        description,
+        country,
+        latitude,
+        longitude,
+    )
+    .await
+    .map_err(|e| e.to_string())
 }

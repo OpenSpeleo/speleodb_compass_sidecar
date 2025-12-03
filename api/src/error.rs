@@ -11,6 +11,8 @@ pub enum Error {
     NoProjectData(Uuid),
     #[error("No auth token available")]
     NoAuthToken,
+    #[error("Project mutex already locked")]
+    ProjectMutexLocked(Uuid),
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }

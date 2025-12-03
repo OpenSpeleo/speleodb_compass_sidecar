@@ -1,4 +1,3 @@
-pub mod api_info;
 pub mod auth;
 mod error;
 pub mod project;

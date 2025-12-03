@@ -1,8 +1,9 @@
+use common::{UserPrefs, api_types::ProjectInfo};
 use futures::future::{Either, select};
 use gloo_timers::future::TimeoutFuture;
 use log::{error, info};
 use serde::Serialize;
-use common::{UserPrefs, api_types::ProjectInfo};
+use url::Url;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
@@ -21,7 +22,7 @@ enum ActiveTab {
 #[function_component(App)]
 pub fn app() -> Html {
     // Fields
-    let instance = use_state(|| "https://www.speleoDB.org".to_string());
+    let instance = use_state(|| "https://speleodb.org".to_string());
     // Kinda dorky to force type inference
     let email = use_state(|| {
         let initial_state: Option<String> = None;
@@ -47,65 +48,6 @@ pub fn app() -> Html {
     let refresh_trigger = use_state(|| 0u32);
     // Silent mode for validation errors (true on startup/auto-login, false on interaction)
     let validation_silent = use_state(|| true);
-
-    // Load saved prefs on startup (if any)
-    {
-        let instance = instance.clone();
-        let email = email.clone();
-        let password = password.clone();
-        let logged_in = logged_in.clone();
-
-        use_effect_with((), move |_| {
-            spawn_local(async move {
-                if let Ok(prefs) = invoke::<(), UserPrefs>("load_user_prefs", &()).await {
-                    info!("User prefs loaded successfully: {prefs:?}");
-                    if !prefs.instance.is_empty() {
-                        instance.set(prefs.instance.clone());
-                    }
-
-                    // Auto-login logic
-                    if SPELEO_DB_CONTROLLER.should_auto_login(
-                        None,
-                        None,
-                        prefs.oauth_token.as_deref(),
-                    ) {
-                        info!("Attempting silent auto-login...");
-                        let email = (*email).clone();
-                        let password = (*password).clone();
-                        let oauth_token = prefs.oauth_token.clone();
-                        let auth_future = SPELEO_DB_CONTROLLER.authenticate(
-                            email.as_deref(),
-                            password.as_deref(),
-                            oauth_token.as_deref(),
-                            &prefs.instance,
-                        );
-                        let timeout_future = TimeoutFuture::new(3_000);
-
-                        match select(Box::pin(auth_future), Box::pin(timeout_future)).await {
-                            Either::Left((Ok(()), _)) => {
-                                info!("Auto-login success with token");
-                                logged_in.set(true);
-                            }
-                            Either::Left((Err(e), _)) => {
-                                error!("Auto-login failed: {}", e);
-                                // Silent failure - do not show error modal
-                            }
-                            Either::Right((_, _)) => {
-                                web_sys::console::log_1(&"Auto-login timed out".into());
-                                // Silent failure on timeout
-                            }
-                        }
-                    }
-                }
-            });
-        });
-    }
-
-    // Validation helpers
-    let validate_instance = |val: &str| -> bool {
-        let trimmed = val.trim_end_matches('/');
-        trimmed.starts_with("http://") || trimmed.starts_with("https://")
-    };
 
     let validate_email = |val: &str| -> bool {
         if val.is_empty() {
@@ -175,13 +117,6 @@ pub fn app() -> Html {
             e.prevent_default();
             validation_silent.set(false);
             // quick validation
-            if !validate_instance(&instance) {
-                error_msg.set("SpeleoDB instance must start with http:// or https://".to_string());
-                error_is_403.set(false);
-                show_error.set(true);
-                return;
-            }
-
             let oauth_ok = oauth.as_deref().is_some_and(|oauth| {
                 oauth.len() == 40 && oauth.chars().all(|c| c.is_ascii_hexdigit())
             });
@@ -214,13 +149,23 @@ pub fn app() -> Html {
             let oauth_val = (*oauth).clone();
 
             spawn_local(async move {
+                let url = match instance_val.parse() {
+                    Ok(url) => url,
+                    Err(_) => {
+                        error_msg.set("Instance URL is invalid".to_string());
+                        error_is_403.set(false);
+                        show_error.set(true);
+                        loading.set(false);
+                        return;
+                    }
+                };
                 // use the singleton controller to authenticate; it will save prefs on success
                 match SPELEO_DB_CONTROLLER
                     .authenticate(
                         email_val.as_deref(),
                         password_val.as_deref(),
                         oauth_val.as_deref(),
-                        &instance_val,
+                        &url,
                     )
                     .await
                 {
@@ -245,8 +190,8 @@ pub fn app() -> Html {
         let instance = instance.clone();
         let validation_silent = validation_silent.clone();
         Callback::from(move |e: InputEvent| {
-            let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-            instance.set(input.value());
+            let input: web_sys::HtmlInputElement = e.target_dyn_into().unwrap();
+            instance.set(input.value().parse().unwrap());
             validation_silent.set(false);
         })
     };
@@ -259,7 +204,8 @@ pub fn app() -> Html {
             // Auto-trim trailing slash on blur
             if value.ends_with('/') {
                 value = value.trim_end_matches('/').to_string();
-                instance.set(value);
+
+                instance.set(value.parse().unwrap());
             }
         })
     };
@@ -321,19 +267,11 @@ pub fn app() -> Html {
             let active_tab = active_tab.clone();
             let selected_project = selected_project.clone();
             spawn_local(async move {
-                // Persist prefs with empty token but keep the instance
-                let prefs = UserPrefs {
-                    instance: instance_val.clone(),
-                    email: None,
-                    password: None,
-                    oauth_token: None,
-                };
+                /// Empty struct for no-argument invocations.
                 #[derive(Serialize)]
-                struct SaveArgs<'a> {
-                    prefs: &'a UserPrefs,
-                }
-                let args = SaveArgs { prefs: &prefs };
-                let _: () = invoke("save_user_prefs", &args).await.unwrap();
+                struct UnitArgs {}
+                let args = UnitArgs {};
+                let _: () = invoke("forget_user_prefs", &args).await.unwrap();
                 // Clear form fields
                 email.set(None);
                 password.set(None);
@@ -380,7 +318,6 @@ pub fn app() -> Html {
     // Field validation state for visual feedback
     // Only show errors if not in silent mode
     let show_errors = !*validation_silent;
-    let instance_invalid = show_errors && !instance.is_empty() && !validate_instance(&instance);
     let email_invalid = show_errors && email.as_deref().is_some_and(|email| !validate_email(email));
     let oauth_invalid = show_errors && oauth.as_deref().is_some_and(|oauth| !validate_oauth(oauth));
 
@@ -430,13 +367,12 @@ pub fn app() -> Html {
                         <input
                             id="instance"
                             type="text"
-                            class={if instance_invalid { "full invalid" } else { "full" }}
-                            value={(*instance).clone()}
+                            class={if false { "full invalid" } else { "full" }}
                             oninput={on_instance_input}
                             onblur={on_instance_blur}
                             placeholder="https://www.speleodb.org"
                         />
-                        { if instance_invalid {
+                        { if false {
                             html!{ <span class="field-error">{"Must start with http:// or https://"}</span> }
                         } else { html!{} } }
                     </div>

@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
     sync::LazyLock,
 };
+use url::Url;
 #[cfg(test)]
 const USER_PREFS_FILE_NAME: &str = "user_prefs_test.json";
 #[cfg(not(test))]
@@ -32,30 +33,87 @@ impl AsRef<str> for OauthToken {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct UserPrefs {
-    pub instance: String,
-    pub email: Option<String>,
-    pub password: Option<String>,
-    pub oauth_token: Option<String>,
+    instance: Url,
+    oauth_token: Option<String>,
 }
 
 impl Default for UserPrefs {
     fn default() -> Self {
         Self {
-            instance: "https://speleodb.com".to_string(),
-            email: None,
-            password: None,
+            instance: Url::parse("https://speleodb.com").unwrap(),
             oauth_token: None,
         }
     }
 }
 
 impl UserPrefs {
-    pub fn save(prefs: &Self) -> Result<(), Error> {
-        if prefs.email.is_some() || prefs.password.is_some() {
-            panic!("We should never try to persist a user's password to disk!");
+    pub fn new(instance: Url, oauth_token: Option<String>) -> Self {
+        Self {
+            instance,
+            oauth_token,
         }
+    }
+
+    pub fn load() -> Result<Option<Self>, Error> {
+        // Try to get credentials from environment variables first (for testing)
+        let instance = std::env::var("TEST_SPELEODB_INSTANCE").ok();
+        let oauth = std::env::var("TEST_SPELEODB_OAUTH").ok();
+        if let Some(instance) = instance
+            && let Some(oauth_token) = oauth
+        {
+            info!("User preferences loaded from environment variables");
+            let instance = Url::parse(&instance).map_err(|e| {
+                Error::Deserialization(format!("Invalid URL in TEST_SPELEODB_INSTANCE: {}", e))
+            })?;
+            return Ok(Some(UserPrefs {
+                instance: instance,
+                oauth_token: Some(oauth_token),
+            }));
+        }
+        if user_prefs_file_path().exists() {
+            let s = std::fs::read_to_string(user_prefs_file_path())
+                .map_err(|_| Error::UserPrefsRead(user_prefs_file_path().to_path_buf()))?;
+            let s: UserPrefs =
+                toml::from_str(&s).map_err(|e| Error::Deserialization(e.to_string()))?;
+            info!("User preferences loaded successfully");
+            Ok(Some(s))
+        } else {
+            info!("No user preferences found");
+            Ok(None)
+        }
+    }
+
+    #[cfg(test)]
+    pub fn from_env() -> Result<Self, Error> {
+        let instance = std::env::var("TEST_SPELEODB_INSTANCE").ok();
+        let oauth = std::env::var("TEST_SPELEODB_OAUTH").ok();
+        if let Some(instance) = instance
+            && let Some(oauth_token) = oauth
+        {
+            let instance = Url::parse(&instance).map_err(|e| {
+                Error::Deserialization(format!("Invalid URL in TEST_SPELEODB_INSTANCE: {}", e))
+            })?;
+            Ok(UserPrefs {
+                instance: instance,
+                oauth_token: Some(oauth_token),
+            })
+        } else {
+            Err(Error::NoAuthToken)
+        }
+    }
+
+    pub fn instance(&self) -> &Url {
+        &self.instance
+    }
+
+    pub fn oauth_token(&self) -> Option<&str> {
+        self.oauth_token.as_deref()
+    }
+
+    /// Save a user preferences object to disk in TOML format.
+    pub fn save(prefs: &Self) -> Result<(), Error> {
         let s = toml::to_string_pretty(&prefs).map_err(|_| Error::Serialization)?;
         std::fs::write(user_prefs_file_path(), s)
             .map_err(|_| Error::UserPrefsWrite(user_prefs_file_path().to_path_buf()))?;
@@ -82,32 +140,6 @@ impl UserPrefs {
         Ok(())
     }
 
-    pub fn load() -> Result<Option<Self>, Error> {
-        // Try to get credentials from environment variables first (for testing)
-        let instance = std::env::var("TEST_SPELEODB_INSTANCE").ok();
-        let oauth = std::env::var("TEST_SPELEODB_OAUTH").ok();
-        if instance.as_ref().is_some_and(|_| oauth.is_some()) {
-            info!("User preferences loaded from environment variables");
-            return Ok(Some(UserPrefs {
-                instance: instance.unwrap(),
-                email: None,
-                password: None,
-                oauth_token: oauth,
-            }));
-        }
-        if user_prefs_file_path().exists() {
-            let s = std::fs::read_to_string(user_prefs_file_path())
-                .map_err(|_| Error::UserPrefsRead(user_prefs_file_path().to_path_buf()))?;
-            let s: UserPrefs =
-                toml::from_str(&s).map_err(|e| Error::Deserialization(e.to_string()))?;
-            info!("User preferences loaded successfully");
-            Ok(Some(s))
-        } else {
-            info!("No user preferences found");
-            Ok(None)
-        }
-    }
-
     pub fn forget() -> Result<(), Error> {
         if user_prefs_file_path().exists() {
             std::fs::remove_file(user_prefs_file_path())
@@ -130,11 +162,10 @@ mod tests {
         UserPrefs::forget().expect("Successfully delete user prefs file");
         const INSTANCE_URL: &str = "https://test.example.com";
         const OAUTH_TOKEN: &str = "0123456789abcdef0123456789abcdef01234567";
+        let instance_url = Url::parse(INSTANCE_URL).unwrap();
         // Create test preferences
         let prefs = UserPrefs {
-            instance: INSTANCE_URL.to_string(),
-            email: None,
-            password: None,
+            instance: instance_url.clone(),
             oauth_token: Some(OAUTH_TOKEN.to_string()),
         };
 
@@ -149,7 +180,7 @@ mod tests {
         // Load preferences
         let load_result = UserPrefs::load().expect("Expected to load user prefs");
         let loaded = load_result.expect("User prefs should be 'Some'");
-        assert_eq!(loaded.instance, INSTANCE_URL);
+        assert_eq!(loaded.instance, instance_url);
         assert_eq!(loaded.oauth_token.unwrap(), OAUTH_TOKEN);
     }
 

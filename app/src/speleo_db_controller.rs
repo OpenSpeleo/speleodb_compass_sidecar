@@ -1,14 +1,14 @@
 // WASM controller now delegates network calls to native Tauri backend.
 use crate::{Error, invoke};
-use log::{error, info};
-use once_cell::sync::Lazy;
-use serde::Serialize;
 use common::{
     CompassProject,
     api_types::{ProjectInfo, ProjectSaveResult},
 };
+use log::{error, info};
+use once_cell::sync::Lazy;
+use serde::Serialize;
+use url::Url;
 use uuid::Uuid;
-use web_sys::Url;
 
 /// Empty struct for no-argument invocations.
 #[derive(Serialize)]
@@ -55,12 +55,10 @@ impl SpeleoDBController {
         email: Option<&str>,
         password: Option<&str>,
         oauth: Option<&str>,
-        target_instance: &str,
+        instance: &Url,
     ) -> Result<(), String> {
         // Validate instance URL
-        if Url::new(target_instance).is_err() {
-            return Err("SpeleoDB instance must be a valid URL".into());
-        }
+
         info!("token: {oauth:?}");
         // Validation: either oauth token (40 hex) OR email+password
         let oauth_ok = oauth.is_some_and(validate_oauth);
@@ -79,14 +77,14 @@ impl SpeleoDBController {
             email: Option<&'a str>,
             password: Option<&'a str>,
             oauth: Option<&'a str>,
-            instance: &'a str,
+            instance: &'a Url,
         }
 
         let args = NativeArgs {
             email,
             password,
             oauth,
-            instance: target_instance,
+            instance,
         };
 
         let _token: String = match invoke::<_, String>("auth_request", &args).await {

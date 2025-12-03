@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use serde_json::json;
+use url::Url;
 
 use crate::get_api_client;
 
@@ -21,7 +22,7 @@ async fn handle_auth_response(response: reqwest::Response) -> Result<String, Str
     }
 }
 
-pub async fn authorize_with_token(instance: &str, oauth: &str) -> Result<String, String> {
+pub async fn authorize_with_token(instance: &Url, oauth: &str) -> Result<String, String> {
     let url = format!("{}{}", instance, "/api/v1/user/auth-token/");
     let client = get_api_client();
 
@@ -35,7 +36,7 @@ pub async fn authorize_with_token(instance: &str, oauth: &str) -> Result<String,
 }
 
 pub async fn authorize_with_email(
-    instance: &str,
+    instance: &Url,
     email: &str,
     password: &str,
 ) -> Result<String, String> {
@@ -54,7 +55,6 @@ pub async fn authorize_with_email(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{api_info::ApiInfo, project::fetch_projects};
     use serial_test::serial;
 
     // Load .env file before running tests
@@ -99,53 +99,9 @@ mod tests {
             return;
         }
 
-        let instance = std::env::var("TEST_SPELEODB_INSTANCE").unwrap();
+        let instance = Url::parse(&std::env::var("TEST_SPELEODB_INSTANCE").unwrap()).unwrap();
         let oauth = std::env::var("TEST_SPELEODB_OAUTH").unwrap();
 
         authorize_with_token(&instance, &oauth).await.unwrap();
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn fetch_projects_with_real_api() {
-        if !ensure_test_env_vars() {
-            println!("Skipping test: TEST_SPELEODB_INSTANCE or TEST_SPELEODB_OAUTH not set");
-            return;
-        }
-
-        let api_info = ApiInfo::from_env().unwrap();
-
-        // Fetch projects from real API (uses env vars directly)
-        let _result = fetch_projects(&api_info).await.unwrap();
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn fetch_projects_with_invalid_token() {
-        if !ensure_test_env_vars() {
-            println!("Skipping test: TEST_SPELEODB_INSTANCE or TEST_SPELEODB_OAUTH not set");
-            return;
-        }
-
-        // Save the valid oauth token
-        let valid_oauth = std::env::var("TEST_SPELEODB_OAUTH").unwrap();
-        let instance = std::env::var("TEST_SPELEODB_INSTANCE").unwrap();
-
-        // Temporarily set environment variables with invalid token
-        unsafe {
-            std::env::set_var("TEST_SPELEODB_INSTANCE", &instance);
-            std::env::set_var(
-                "TEST_SPELEODB_OAUTH",
-                "0000000000000000000000000000000000000000",
-            ); // Fetch projects from real API (uses env vars directly)
-        }
-        let api_info = ApiInfo::from_env().unwrap();
-        let _result = fetch_projects(&api_info)
-            .await
-            .expect_err("This shouldn't work");
-        unsafe {
-            // Restore the valid token immediately
-            std::env::set_var("TEST_SPELEODB_OAUTH", valid_oauth);
-        }
     }
 }
