@@ -23,7 +23,9 @@ impl AppState {
             match api::auth::authorize_with_token(prefs.instance(), token).await {
                 Ok(_) => {
                     log::info!("User authenticated successfully");
+                    self.update_user_prefs(prefs)?;
                     app_handle.emit("event::authentication", true).unwrap();
+                    api::project::fetch_projects(&self.api_info()).await?;
                 }
                 Err(e) => {
                     log::warn!("Failed to authenticate user with saved token: {}", e);
@@ -34,8 +36,6 @@ impl AppState {
             log::info!("No user prefs found, starting unauthenticated");
             app_handle.emit("event::authentication", false).unwrap();
         }
-        self.update_user_prefs(prefs)?;
-
         Ok(())
     }
 

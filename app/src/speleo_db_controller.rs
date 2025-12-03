@@ -4,11 +4,9 @@ use common::{
     CompassProject,
     api_types::{ProjectInfo, ProjectSaveResult},
 };
-use futures::{Stream, StreamExt};
 use log::{error, info};
 use once_cell::sync::Lazy;
 use serde::Serialize;
-use tauri_sys::event::listen;
 use url::Url;
 use uuid::Uuid;
 
@@ -192,21 +190,6 @@ impl SpeleoDBController {
     pub async fn clear_active_project(&self) -> Result<(), String> {
         let _: () = invoke("clear_active_project", &()).await.unwrap();
         Ok(())
-    }
-
-    /// Determine if auto-login should be attempted based on stored credentials.
-    pub fn should_auto_login(
-        &self,
-        email: Option<&str>,
-        password: Option<&str>,
-        oauth: Option<&str>,
-    ) -> bool {
-        info!("email: {email:?}, password: {password:?}, oauth: {oauth:?}");
-        let oauth_ok = oauth.is_some_and(validate_oauth);
-        let pass_ok = email.is_some_and(|email| {
-            password.is_some_and(|password| validate_email_password(email, password))
-        });
-        oauth_ok || pass_ok
     }
 
     pub async fn create_project(
@@ -406,43 +389,5 @@ mod tests {
     fn password_special_chars() {
         assert!(validate_email_password("user@example.com", "p@$$w0rd!"));
         assert!(validate_email_password("user@example.com", "🔒secure"));
-    }
-
-    #[test]
-    fn should_auto_login_oauth() {
-        let controller = SpeleoDBController {};
-        let valid_oauth = "0123456789abcdef0123456789abcdef01234567";
-        assert!(controller.should_auto_login(None, None, Some(valid_oauth)));
-    }
-
-    #[test]
-    fn should_auto_login_email_password() {
-        let controller = SpeleoDBController {};
-        assert!(controller.should_auto_login(Some("user@example.com"), Some("password"), None));
-    }
-
-    #[test]
-    fn should_auto_login_fail_empty() {
-        let controller = SpeleoDBController {};
-        assert!(!controller.should_auto_login(None, None, None));
-    }
-
-    #[test]
-    fn should_auto_login_fail_partial_email() {
-        let controller = SpeleoDBController {};
-        assert!(!controller.should_auto_login(Some("user@example.com"), None, None));
-        assert!(!controller.should_auto_login(None, Some("password"), None));
-    }
-
-    #[test]
-    fn should_auto_login_conflict_uses_oauth() {
-        let controller = SpeleoDBController {};
-        let valid_oauth = "0123456789abcdef0123456789abcdef01234567";
-        // Should succeed and use OAuth if both are provided (OAuth takes precedence)
-        assert!(controller.should_auto_login(
-            Some("user@example.com"),
-            Some("password"),
-            Some(valid_oauth)
-        ));
     }
 }
