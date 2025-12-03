@@ -1,4 +1,4 @@
-use crate::{COMPASS_HOME_DIR, Error};
+use crate::{API_BASE_URL, COMPASS_HOME_DIR, Error};
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -42,7 +42,7 @@ pub struct UserPrefs {
 impl Default for UserPrefs {
     fn default() -> Self {
         Self {
-            instance: Url::parse("https://speleodb.com").unwrap(),
+            instance: API_BASE_URL.parse().unwrap(),
             oauth_token: None,
         }
     }
@@ -82,25 +82,6 @@ impl UserPrefs {
         } else {
             info!("No user preferences found");
             Ok(None)
-        }
-    }
-
-    #[cfg(test)]
-    pub fn from_env() -> Result<Self, Error> {
-        let instance = std::env::var("TEST_SPELEODB_INSTANCE").ok();
-        let oauth = std::env::var("TEST_SPELEODB_OAUTH").ok();
-        if let Some(instance) = instance
-            && let Some(oauth_token) = oauth
-        {
-            let instance = Url::parse(&instance).map_err(|e| {
-                Error::Deserialization(format!("Invalid URL in TEST_SPELEODB_INSTANCE: {}", e))
-            })?;
-            Ok(UserPrefs {
-                instance: instance,
-                oauth_token: Some(oauth_token),
-            })
-        } else {
-            Err(Error::NoAuthToken)
         }
     }
 

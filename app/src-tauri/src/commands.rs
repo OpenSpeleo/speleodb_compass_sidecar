@@ -49,7 +49,9 @@ pub async fn auth_request(
     };
     info!("Auth request successful, updating user preferences");
     let prefs = UserPrefs::new(instance, Some(updated_token));
-    app_state.update_user_prefs(prefs);
+    app_state
+        .update_user_prefs(prefs)
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 

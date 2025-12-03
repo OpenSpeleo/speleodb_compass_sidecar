@@ -1,9 +1,6 @@
-use common::{UserPrefs, api_types::ProjectInfo};
-use futures::future::{Either, select};
-use gloo_timers::future::TimeoutFuture;
+use common::api_types::ProjectInfo;
 use log::{error, info};
 use serde::Serialize;
-use url::Url;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
