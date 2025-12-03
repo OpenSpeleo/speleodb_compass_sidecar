@@ -23,6 +23,7 @@ futures = "0.3"
 js-sys = "0.3"
 once_cell = "1"
 serde-wasm-bindgen = "0.6"
+tauri-sys = { git = "https://github.com/JonasKruckenberg/tauri-sys", branch = "v2", features = ["all"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 wasm-logger = "0.2"

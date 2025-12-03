@@ -1,3 +1,4 @@
+use log::{error, info};
 use serde::Deserialize;
 use serde_json::json;
 use url::Url;
@@ -18,14 +19,18 @@ async fn handle_auth_response(response: reqwest::Response) -> Result<String, Str
             .map_err(|e| format!("Unexpected response body: {e}"))?;
         return Ok(token.token);
     } else {
+        error!("Authorization failed with status: {}", status);
         Err(format!("Authorization failed with status: {}", status))
     }
 }
 
 pub async fn authorize_with_token(instance: &Url, oauth: &str) -> Result<String, String> {
-    let url = format!("{}{}", instance, "/api/v1/user/auth-token/");
+    let url = format!("{}{}", instance, "api/v1/user/auth-token/");
     let client = get_api_client();
-
+    info!(
+        "Attempting to authorize with: {} using Oauth token",
+        instance
+    );
     let response = client
         .get(&url)
         .header("Authorization", format!("Token {}", oauth))

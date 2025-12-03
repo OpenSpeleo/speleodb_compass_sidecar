@@ -1,5 +1,5 @@
 use crate::{API_BASE_URL, COMPASS_HOME_DIR, Error};
-use log::info;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
@@ -56,7 +56,7 @@ impl UserPrefs {
         }
     }
 
-    pub fn load() -> Result<Option<Self>, Error> {
+    pub fn load() -> Result<Self, Error> {
         // Try to get credentials from environment variables first (for testing)
         let instance = std::env::var("TEST_SPELEODB_INSTANCE").ok();
         let oauth = std::env::var("TEST_SPELEODB_OAUTH").ok();
@@ -67,10 +67,10 @@ impl UserPrefs {
             let instance = Url::parse(&instance).map_err(|e| {
                 Error::Deserialization(format!("Invalid URL in TEST_SPELEODB_INSTANCE: {}", e))
             })?;
-            return Ok(Some(UserPrefs {
+            return Ok(UserPrefs {
                 instance: instance,
                 oauth_token: Some(oauth_token),
-            }));
+            });
         }
         if user_prefs_file_path().exists() {
             let s = std::fs::read_to_string(user_prefs_file_path())
@@ -78,10 +78,10 @@ impl UserPrefs {
             let s: UserPrefs =
                 toml::from_str(&s).map_err(|e| Error::Deserialization(e.to_string()))?;
             info!("User preferences loaded successfully");
-            Ok(Some(s))
+            Ok(s)
         } else {
-            info!("No user preferences found");
-            Ok(None)
+            warn!("No user preferences found");
+            Err(Error::NoUserPrefs)
         }
     }
 
@@ -159,8 +159,7 @@ mod tests {
         );
 
         // Load preferences
-        let load_result = UserPrefs::load().expect("Expected to load user prefs");
-        let loaded = load_result.expect("User prefs should be 'Some'");
+        let loaded = UserPrefs::load().expect("Expected to load user prefs");
         assert_eq!(loaded.instance, instance_url);
         assert_eq!(loaded.oauth_token.unwrap(), OAUTH_TOKEN);
     }
@@ -179,8 +178,9 @@ mod tests {
         UserPrefs::forget().expect("forget_user_prefs should succeed");
 
         // Try to load - should get None
-        let load_result = UserPrefs::load().expect("Expected no errors loading prefs");
-        assert!(load_result.is_none(), "Preferences should be deleted");
+        let Err(Error::NoUserPrefs) = UserPrefs::load() else {
+            panic!("Should return error loading prefs when preferences are deleted");
+        };
     }
 
     #[test]
@@ -200,11 +200,10 @@ mod tests {
         // Delete prefs first
         let _ = UserPrefs::forget();
 
-        let result = UserPrefs::load().expect("Loading should not fail, even with no prefs set");
-        assert!(
-            result.is_none(),
-            "Should return None when no preferences exist"
-        );
+        let result = UserPrefs::load();
+        let Err(Error::NoUserPrefs) = result else {
+            panic!("Should return None when no preferences exist");
+        };
     }
 
     #[cfg(unix)]

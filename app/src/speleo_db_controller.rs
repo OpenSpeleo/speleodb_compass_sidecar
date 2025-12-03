@@ -4,9 +4,11 @@ use common::{
     CompassProject,
     api_types::{ProjectInfo, ProjectSaveResult},
 };
+use futures::{Stream, StreamExt};
 use log::{error, info};
 use once_cell::sync::Lazy;
 use serde::Serialize;
+use tauri_sys::event::listen;
 use url::Url;
 use uuid::Uuid;
 
@@ -252,6 +254,11 @@ impl SpeleoDBController {
             .map_err(|e| format!("Failed to parse project data: {}", e))?;
 
         Ok(project)
+    }
+    pub async fn sign_out(&self) -> Result<(), String> {
+        let args = UnitArgs::new();
+        let _: () = invoke("sign_out", &args).await.unwrap();
+        Ok(())
     }
 }
 

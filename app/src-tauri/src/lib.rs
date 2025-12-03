@@ -74,6 +74,15 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
+            if let tauri::RunEvent::Ready = event {
+                let movable = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    let app_state = movable.state::<AppState>();
+                    if let Err(e) = app_state.init_app_state(movable.clone()).await {
+                        log::error!("Failed to initialize application state: {}", e);
+                    }
+                });
+            }
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 if let Some(project_id) = ACTIVE_PROJECT_ID.lock().unwrap().as_ref() {
                     log::info!(
