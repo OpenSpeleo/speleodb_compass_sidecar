@@ -238,6 +238,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
             let upload_error = upload_error.clone();
             let upload_error_for_timeout = upload_error.clone();
             let upload_timeout_handle = upload_timeout_handle.clone();
+            let commit_message = commit_message.clone();
 
             uploading.set(true);
             upload_error.set(None);
@@ -276,6 +277,8 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                     .await
                 {
                     Ok(status) => {
+                        // Clear commit message on successful upload
+                        commit_message.set(String::new());
                         if status == 304 {
                             show_no_changes_modal.set(true);
                         } else {
