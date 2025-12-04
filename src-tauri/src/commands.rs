@@ -471,6 +471,88 @@ pub fn open_project_folder(project_id: String) -> serde_json::Value {
 }
 
 #[tauri::command]
+pub fn open_with_compass(project_id: String) -> serde_json::Value {
+    const COMPASS_EXE: &str = r"C:\Fountainware\Compass\wcomp32\comp32.exe";
+
+    // Check if Compass is installed
+    let compass_path = std::path::Path::new(COMPASS_EXE);
+    if !compass_path.exists() {
+        return serde_json::json!({
+            "ok": false,
+            "error": "Compass software not found. Please install Compass from Fountainware or verify it is installed at C:\\Fountainware\\Compass\\wcomp32\\comp32.exe"
+        });
+    }
+
+    // Get project folder path
+    let project_path = speleodb_compass_common::project_compass_path(&project_id);
+
+    if !project_path.exists() {
+        return serde_json::json!({
+            "ok": false,
+            "error": "Project folder does not exist. Please download the project first."
+        });
+    }
+
+    // Find .MAK file in the project folder
+    let mak_file = match std::fs::read_dir(&project_path) {
+        Ok(entries) => {
+            let mut found_mak: Option<std::path::PathBuf> = None;
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(ext) = path.extension() {
+                    if ext.to_ascii_lowercase() == "mak" {
+                        found_mak = Some(path);
+                        break;
+                    }
+                }
+            }
+            found_mak
+        }
+        Err(e) => {
+            return serde_json::json!({
+                "ok": false,
+                "error": format!("Failed to read project folder: {}", e)
+            });
+        }
+    };
+
+    let mak_file = match mak_file {
+        Some(path) => path,
+        None => {
+            return serde_json::json!({
+                "ok": false,
+                "error": "No .MAK file found in project folder. The project may be empty or not initialized."
+            });
+        }
+    };
+
+    log::info!(
+        "Opening {} with Compass: {}",
+        mak_file.display(),
+        COMPASS_EXE
+    );
+
+    // Open the .MAK file with Compass
+    match std::process::Command::new(COMPASS_EXE)
+        .arg(&mak_file)
+        .spawn()
+    {
+        Ok(_) => {
+            serde_json::json!({
+                "ok": true,
+                "message": format!("Opened {} with Compass", mak_file.file_name().unwrap_or_default().to_string_lossy())
+            })
+        }
+        Err(e) => {
+            serde_json::json!({
+                "ok": false,
+                "error": format!("Failed to launch Compass: {}", e)
+            })
+        }
+    }
+}
+
+#[tauri::command]
 pub fn zip_project_folder(project_id: String) -> serde_json::Value {
     use std::fs::{self, File};
     use std::io::Write;

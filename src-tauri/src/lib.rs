@@ -4,8 +4,8 @@ mod commands;
 use commands::{
     acquire_project_mutex, clear_active_project, create_project, download_project_zip,
     fetch_projects, forget_user_prefs, load_user_prefs, native_auth_request, open_project_folder,
-    release_project_mutex, save_user_prefs, select_zip_file, set_active_project, unzip_project,
-    upload_project_zip, zip_project_folder,
+    open_with_compass, release_project_mutex, save_user_prefs, select_zip_file, set_active_project,
+    unzip_project, upload_project_zip, zip_project_folder,
 };
 use log::error;
 use speleodb_compass_common::{compass_home, UserPrefs};
@@ -357,6 +357,7 @@ pub fn run() {
             load_user_prefs,
             native_auth_request,
             open_project_folder,
+            open_with_compass,
             release_project_mutex,
             save_user_prefs,
             select_zip_file,

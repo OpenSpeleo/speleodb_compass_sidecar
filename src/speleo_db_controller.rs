@@ -342,6 +342,33 @@ impl SpeleoDBController {
         Ok(())
     }
 
+    pub async fn open_with_compass(&self, project_id: &str) -> Result<(), String> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args<'a> {
+            project_id: &'a str,
+        }
+
+        let args = Args { project_id };
+        let serialized_args = serde_wasm_bindgen::to_value(&args)
+            .map_err(|e| format!("Failed to serialize args: {:?}", e))?;
+
+        let rv = invoke("open_with_compass", serialized_args).await;
+
+        let json = serde_wasm_bindgen::from_value::<serde_json::Value>(rv)
+            .map_err(|e| format!("Failed to convert response: {:?}", e))?;
+
+        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+            let err_msg = json
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Failed to open with Compass");
+            return Err(err_msg.to_string());
+        }
+
+        Ok(())
+    }
+
     pub async fn zip_project(&self, project_id: &str) -> Result<String, String> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]

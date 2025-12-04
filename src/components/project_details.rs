@@ -168,6 +168,23 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         })
     };
 
+    // Open with Compass handler
+    let compass_error: UseStateHandle<Option<String>> = use_state(|| None);
+    let on_open_compass = {
+        let project_id = props.project.id.clone();
+        let compass_error = compass_error.clone();
+        Callback::from(move |_: ()| {
+            let project_id = project_id.clone();
+            let compass_error = compass_error.clone();
+            compass_error.set(None);
+            spawn_local(async move {
+                if let Err(e) = SPELEO_DB_CONTROLLER.open_with_compass(&project_id).await {
+                    compass_error.set(Some(e));
+                }
+            });
+        })
+    };
+
     // Commit message handler
     let onchange_message = {
         let commit_message = commit_message.clone();
@@ -400,13 +417,50 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         <section style="width:100%;">
             <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
                 <button onclick={on_back_click}>{"← Back to Projects"}</button>
-                <button
-                    onclick={on_open_folder.reform(|_| ())}
-                    style="background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
-                >
-                    {"🟢 Open Folder"}
-                </button>
+                <div style="display: flex; gap: 8px;">
+                    <button
+                        onclick={on_open_compass.reform(|_| ())}
+                        style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
+                    >
+                        {"🧭 Open with Compass"}
+                    </button>
+                    <button
+                        onclick={on_open_folder.reform(|_| ())}
+                        style="background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
+                    >
+                        {"📁 Open Folder"}
+                    </button>
+                </div>
             </div>
+
+            // Compass error message
+            {
+                if let Some(err) = &*compass_error {
+                    html! {
+                        <div style="
+                            padding: 12px 16px;
+                            background-color: #fee2e2;
+                            border: 1px solid #ef4444;
+                            border-radius: 8px;
+                            margin-bottom: 16px;
+                        ">
+                            <strong style="color: #dc2626;">{"⚠️ Compass Error: "}</strong>
+                            <span style="color: #991b1b;">{err}</span>
+                            <button
+                                onclick={{
+                                    let compass_error = compass_error.clone();
+                                    move |_| compass_error.set(None)
+                                }}
+                                style="margin-left: 12px; background: none; border: none; color: #dc2626; cursor: pointer; font-weight: bold;"
+                            >
+                                {"✕"}
+                            </button>
+                        </div>
+                    }
+                } else {
+                    html! {}
+                }
+            }
 
             <h2>{"Project Details"}</h2>
             <p><strong>{"Project: "}</strong>{&props.project.name}</p>
