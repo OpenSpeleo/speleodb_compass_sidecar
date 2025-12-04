@@ -602,45 +602,75 @@ pub fn zip_project_folder(project_id: String) -> serde_json::Value {
 
     let mut zip = ZipWriter::new(zip_file);
 
-    // Helper function to recursively add directory to ZIP
-    fn add_dir_to_zip(
-        zip: &mut ZipWriter<File>,
-        path: &std::path::Path,
-        prefix: &str,
-    ) -> std::io::Result<()> {
-        let entries = fs::read_dir(path)?;
-
-        for entry in entries {
-            let entry = entry?;
-            let entry_path = entry.path();
-            let name = entry.file_name();
-            let name_str = name.to_string_lossy();
-            let zip_path = if prefix.is_empty() {
-                name_str.to_string()
-            } else {
-                format!("{}/{}", prefix, name_str)
-            };
-
-            if entry_path.is_dir() {
-                // Add directory - use () for default options
-                zip.add_directory::<_, ()>(&zip_path, Default::default())?;
-                // Recurse into subdirectory
-                add_dir_to_zip(zip, &entry_path, &zip_path)?;
-            } else {
-                // Add file - use () for default options
-                zip.start_file::<_, ()>(&zip_path, Default::default())?;
-                let contents = fs::read(&entry_path)?;
-                zip.write_all(&contents)?;
-            }
-        }
-        Ok(())
+    // Helper function to check if a file should be included in the ZIP
+    // Only includes: compass.toml, *.mak, *.dat (case insensitive)
+    fn should_include_file(filename: &str) -> bool {
+        let lower = filename.to_lowercase();
+        lower == "compass.toml" || lower.ends_with(".mak") || lower.ends_with(".dat")
     }
 
-    // Add all files to ZIP
-    if let Err(e) = add_dir_to_zip(&mut zip, &project_path, "") {
+    // Add only matching files from the project folder (no subdirectories)
+    let entries = match fs::read_dir(&project_path) {
+        Ok(e) => e,
+        Err(e) => {
+            return serde_json::json!({
+                "ok": false,
+                "error": format!("Failed to read project folder: {}", e)
+            });
+        }
+    };
+
+    let mut files_added = 0;
+    for entry in entries.flatten() {
+        let entry_path = entry.path();
+
+        // Skip directories - only process files
+        if entry_path.is_dir() {
+            continue;
+        }
+
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+
+        // Check if file matches our filter
+        if !should_include_file(&name_str) {
+            log::debug!("Skipping file (not matching filter): {}", name_str);
+            continue;
+        }
+
+        // Add file to ZIP
+        if let Err(e) = zip.start_file::<_, ()>(&*name_str, Default::default()) {
+            return serde_json::json!({
+                "ok": false,
+                "error": format!("Failed to add file {} to ZIP: {}", name_str, e)
+            });
+        }
+
+        let contents = match fs::read(&entry_path) {
+            Ok(c) => c,
+            Err(e) => {
+                return serde_json::json!({
+                    "ok": false,
+                    "error": format!("Failed to read file {}: {}", name_str, e)
+                });
+            }
+        };
+
+        if let Err(e) = zip.write_all(&contents) {
+            return serde_json::json!({
+                "ok": false,
+                "error": format!("Failed to write file {} to ZIP: {}", name_str, e)
+            });
+        }
+
+        log::info!("Added to ZIP: {}", name_str);
+        files_added += 1;
+    }
+
+    if files_added == 0 {
         return serde_json::json!({
             "ok": false,
-            "error": format!("Failed to add files to ZIP: {}", e)
+            "error": "No Compass files found to upload (compass.toml, *.mak, *.dat)"
         });
     }
 
