@@ -34,6 +34,8 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
     let selected_zip: UseStateHandle<Option<String>> = use_state(|| None);
     let upload_timeout_handle: UseStateHandle<Option<Rc<RefCell<Option<Timeout>>>>> =
         use_state(|| None);
+    let download_timeout_handle: UseStateHandle<Option<Rc<RefCell<Option<Timeout>>>>> =
+        use_state(|| None);
     let platform = use_state(|| "unknown".to_string());
 
     // Fetch platform on mount
@@ -58,9 +60,30 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let project_folder_path = project_folder_path.clone();
         let is_readonly = is_readonly.clone();
         let download_complete = download_complete.clone();
+        let download_timeout_handle = download_timeout_handle.clone();
 
         use_effect_with((), move |_| {
             let project_id = project_id.clone();
+            let downloading_for_timeout = downloading.clone();
+            let error_message_for_timeout = error_message.clone();
+
+            // Set up 15 second timeout for download
+            let timeout_handle = Rc::new(RefCell::new(None::<Timeout>));
+            let timeout_handle_clone = timeout_handle.clone();
+
+            let timeout = Timeout::new(15_000, move || {
+                // Timeout reached - cancel the operation
+                if *downloading_for_timeout {
+                    downloading_for_timeout.set(false);
+                    error_message_for_timeout.set(Some(
+                        "Download timed out after 15 seconds. Please check your connection and try again.".to_string()
+                    ));
+                }
+            });
+
+            *timeout_handle.borrow_mut() = Some(timeout);
+            download_timeout_handle.set(Some(timeout_handle_clone));
+
             spawn_local(async move {
                 downloading.set(true);
 
@@ -493,31 +516,9 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
             <p><strong>{"Project: "}</strong>{&props.project.name}</p>
             <p style="color: #6b7280; font-size: 14px;">{format!("ID: {}", props.project.id)}</p>
 
+            // Show error message if download failed
             {
-                if *downloading {
-                    html! {
-                        <div style="
-                            padding: 24px;
-                            text-align: center;
-                            background-color: #f3f4f6;
-                            border-radius: 8px;
-                            margin: 20px 0;
-                        ">
-                            <div style="
-                                border: 4px solid #e5e7eb;
-                                border-top-color: #3b82f6;
-                                border-radius: 50%;
-                                width: 48px;
-                                height: 48px;
-                                animation: spin 1s linear infinite;
-                                margin: 0 auto 16px;
-                            " />
-                            <p style="color: #4b5563; font-size: 16px;">
-                                {"Downloading and extracting project..."}
-                            </p>
-                        </div>
-                    }
-                } else if let Some(err) = &*error_message {
+                if let Some(err) = &*error_message {
                     html! {
                         <div style="
                             padding: 16px;
@@ -797,7 +798,66 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                 }
             }
 
-            // Full-screen loading overlay
+            // Full-screen loading overlay for DOWNLOAD
+            {
+                if *downloading {
+                    html! {
+                        <div style="
+                            position: fixed;
+                            top: 0;
+                            left: 0;
+                            right: 0;
+                            bottom: 0;
+                            background-color: rgba(0, 0, 0, 0.6);
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: center;
+                            align-items: center;
+                            z-index: 9999;
+                            backdrop-filter: blur(2px);
+                        ">
+                            <div style="
+                                background-color: white;
+                                padding: 32px 48px;
+                                border-radius: 12px;
+                                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+                                display: flex;
+                                flex-direction: column;
+                                align-items: center;
+                                gap: 16px;
+                            ">
+                                <div style="
+                                    border: 4px solid #e5e7eb;
+                                    border-top-color: #3b82f6;
+                                    border-radius: 50%;
+                                    width: 48px;
+                                    height: 48px;
+                                    animation: spin 0.8s linear infinite;
+                                " />
+                                <p style="
+                                    color: #1f2937;
+                                    font-size: 18px;
+                                    font-weight: 500;
+                                    margin: 0;
+                                ">
+                                    {"Downloading project..."}
+                                </p>
+                                <p style="
+                                    color: #6b7280;
+                                    font-size: 14px;
+                                    margin: 0;
+                                ">
+                                    {"Please wait while the project is being downloaded and extracted."}
+                                </p>
+                            </div>
+                        </div>
+                    }
+                } else {
+                    html! {}
+                }
+            }
+
+            // Full-screen loading overlay for UPLOAD
             {
                 if *uploading {
                     html! {
