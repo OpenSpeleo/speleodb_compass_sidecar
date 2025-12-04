@@ -37,6 +37,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
     let download_timeout_handle: UseStateHandle<Option<Rc<RefCell<Option<Timeout>>>>> =
         use_state(|| None);
     let platform = use_state(|| "unknown".to_string());
+    let show_compass_running_modal = use_state(|| false);
 
     // Fetch platform on mount
     {
@@ -316,7 +317,30 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         })
     };
 
-    // Reload Project Handler
+    // Reload button click handler - checks for Compass before showing confirmation
+    let on_reload_click = {
+        let show_reload_confirm = show_reload_confirm.clone();
+        let platform = platform.clone();
+        let show_compass_running_modal = show_compass_running_modal.clone();
+
+        Callback::from(move |_| {
+            let show_reload_confirm = show_reload_confirm.clone();
+            let platform = platform.clone();
+            let show_compass_running_modal = show_compass_running_modal.clone();
+
+            spawn_local(async move {
+                // Check if Compass is running first
+                if *platform == "windows" && SPELEO_DB_CONTROLLER.is_compass_running().await {
+                    show_compass_running_modal.set(true);
+                    return;
+                }
+
+                show_reload_confirm.set(true);
+            });
+        })
+    };
+
+    // Reload Project Handler (after confirmation)
     let on_confirm_reload = {
         let project_id = props.project.id.clone();
         let downloading = downloading.clone();
@@ -367,13 +391,23 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let selected_zip = selected_zip.clone();
         let show_load_confirm = show_load_confirm.clone();
         let error_message = error_message.clone();
+        let platform = platform.clone();
+        let show_compass_running_modal = show_compass_running_modal.clone();
 
         Callback::from(move |_| {
             let selected_zip = selected_zip.clone();
             let show_load_confirm = show_load_confirm.clone();
             let error_message = error_message.clone();
+            let platform = platform.clone();
+            let show_compass_running_modal = show_compass_running_modal.clone();
 
             spawn_local(async move {
+                // Check if Compass is running first
+                if *platform == "windows" && SPELEO_DB_CONTROLLER.is_compass_running().await {
+                    show_compass_running_modal.set(true);
+                    return;
+                }
+
                 match SPELEO_DB_CONTROLLER.select_zip_file().await {
                     Ok(path) => {
                         selected_zip.set(Some(path));
@@ -432,16 +466,28 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         })
     };
 
-    // Back button handler - release mutex before navigating back
+    // Back button handler - check if Compass is running before navigating back
     let on_back_click = {
         let project_id = props.project.id.clone();
         let on_back = props.on_back.clone();
+        let platform = platform.clone();
+        let show_compass_running_modal = show_compass_running_modal.clone();
 
         Callback::from(move |_| {
             let project_id = project_id.clone();
             let on_back = on_back.clone();
+            let platform = platform.clone();
+            let show_compass_running_modal = show_compass_running_modal.clone();
 
             spawn_local(async move {
+                // On Windows, check if Compass is still running
+                if *platform == "windows" {
+                    if SPELEO_DB_CONTROLLER.is_compass_running().await {
+                        show_compass_running_modal.set(true);
+                        return;
+                    }
+                }
+
                 // Release mutex and clear active project first
                 let _ = SPELEO_DB_CONTROLLER.release_mutex(&project_id).await;
                 let _ = SPELEO_DB_CONTROLLER.clear_active_project().await;
@@ -591,10 +637,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                                     {"Save Project"}
                                 </button>
                                 <button
-                                    onclick={
-                                        let show_reload_confirm = show_reload_confirm.clone();
-                                        move |_| show_reload_confirm.set(true)
-                                    }
+                                    onclick={on_reload_click.clone()}
                                     style="background-color: #f3f4f6; color: #1f2937; border: 1px solid #d1d5db; padding: 8px 16px; border-radius: 4px; cursor: pointer;"
                                 >
                                     {"Reload Project"}
@@ -771,6 +814,31 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                             modal_type={ModalType::Warning}
                             show_close_button={true}
                             on_close={move |_| show_no_changes_modal.set(false)}
+                        />
+                    }
+                } else {
+                    html! {}
+                }
+            }
+
+            // Compass Running Warning Modal
+            {
+                if *show_compass_running_modal {
+                    html! {
+                        <Modal
+                            title="Compass is Still Running"
+                            message="This action cannot be performed while Compass is open.\n\n\
+                                Please save your work in Compass and close the application before:\n\
+                                • Going back to projects\n\
+                                • Reloading the project\n\
+                                • Importing from disk\n\
+                                • Closing the application"
+                            modal_type={ModalType::Warning}
+                            show_close_button={true}
+                            on_close={{
+                                let show_compass_running_modal = show_compass_running_modal.clone();
+                                move |_| show_compass_running_modal.set(false)
+                            }}
                         />
                     }
                 } else {

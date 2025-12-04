@@ -520,6 +520,33 @@ impl SpeleoDBController {
         }
     }
 
+    /// Check if Compass is currently running
+    pub async fn is_compass_running(&self) -> bool {
+        let rv = invoke(
+            "is_compass_running",
+            serde_wasm_bindgen::to_value(&()).unwrap(),
+        )
+        .await;
+
+        if let Ok(json) = serde_wasm_bindgen::from_value::<serde_json::Value>(rv) {
+            json.get("running")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+        } else {
+            false
+        }
+    }
+
+    /// Clear the stored Compass PID
+    pub async fn clear_compass_pid(&self) -> Result<(), String> {
+        invoke(
+            "clear_compass_pid",
+            serde_wasm_bindgen::to_value(&()).unwrap(),
+        )
+        .await;
+        Ok(())
+    }
+
     /// Determine if auto-login should be attempted based on stored credentials.
     pub fn should_auto_login(&self, email: &str, password: &str, oauth: &str) -> bool {
         let oauth_ok = !oauth.is_empty() && validate_oauth(oauth);

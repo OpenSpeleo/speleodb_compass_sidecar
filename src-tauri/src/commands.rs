@@ -487,6 +487,8 @@ pub fn open_project_folder(project_id: String) -> serde_json::Value {
 
 #[tauri::command]
 pub fn open_with_compass(project_id: String) -> serde_json::Value {
+    use crate::COMPASS_PID;
+
     const COMPASS_EXE: &str = r"C:\Fountainware\Compass\wcomp32\comp32.exe";
 
     // Check if Compass is installed
@@ -552,10 +554,19 @@ pub fn open_with_compass(project_id: String) -> serde_json::Value {
         .arg(&mak_file)
         .spawn()
     {
-        Ok(_) => {
+        Ok(child) => {
+            let pid = child.id();
+            log::info!("Compass started with PID: {}", pid);
+
+            // Store the PID globally
+            if let Ok(mut compass_pid) = COMPASS_PID.lock() {
+                *compass_pid = Some(pid);
+            }
+
             serde_json::json!({
                 "ok": true,
-                "message": format!("Opened {} with Compass", mak_file.file_name().unwrap_or_default().to_string_lossy())
+                "pid": pid,
+                "message": format!("Opened {} with Compass (PID: {})", mak_file.file_name().unwrap_or_default().to_string_lossy(), pid)
             })
         }
         Err(e) => {
@@ -565,6 +576,95 @@ pub fn open_with_compass(project_id: String) -> serde_json::Value {
             })
         }
     }
+}
+
+/// Check if Compass is still running
+#[tauri::command]
+pub fn is_compass_running() -> serde_json::Value {
+    use crate::COMPASS_PID;
+
+    let pid = match COMPASS_PID.lock() {
+        Ok(guard) => *guard,
+        Err(_) => {
+            return serde_json::json!({
+                "ok": true,
+                "running": false,
+                "pid": null
+            });
+        }
+    };
+
+    let Some(pid) = pid else {
+        return serde_json::json!({
+            "ok": true,
+            "running": false,
+            "pid": null
+        });
+    };
+
+    // Check if process is still running on Windows
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+
+        // Use tasklist to check if the process exists
+        let output = Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {}", pid), "/NH"])
+            .output();
+
+        match output {
+            Ok(out) => {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                let running =
+                    stdout.contains(&pid.to_string()) && stdout.to_lowercase().contains("comp32");
+
+                if !running {
+                    // Clear the PID if process is no longer running
+                    if let Ok(mut compass_pid) = COMPASS_PID.lock() {
+                        *compass_pid = None;
+                    }
+                }
+
+                serde_json::json!({
+                    "ok": true,
+                    "running": running,
+                    "pid": if running { Some(pid) } else { None }
+                })
+            }
+            Err(e) => {
+                log::warn!("Failed to check Compass process: {}", e);
+                serde_json::json!({
+                    "ok": true,
+                    "running": false,
+                    "pid": null
+                })
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // On non-Windows, Compass doesn't run, so always return false
+        serde_json::json!({
+            "ok": true,
+            "running": false,
+            "pid": null
+        })
+    }
+}
+
+/// Clear the stored Compass PID (called when we know Compass has been closed)
+#[tauri::command]
+pub fn clear_compass_pid() -> serde_json::Value {
+    use crate::COMPASS_PID;
+
+    if let Ok(mut compass_pid) = COMPASS_PID.lock() {
+        *compass_pid = None;
+    }
+
+    serde_json::json!({
+        "ok": true
+    })
 }
 
 #[tauri::command]

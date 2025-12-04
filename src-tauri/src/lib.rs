@@ -2,17 +2,21 @@ mod api;
 mod commands;
 
 use commands::{
-    acquire_project_mutex, clear_active_project, create_project, download_project_zip,
-    fetch_projects, forget_user_prefs, get_platform, load_user_prefs, native_auth_request,
-    open_project_folder, open_with_compass, release_project_mutex, save_user_prefs,
-    select_zip_file, set_active_project, unzip_project, upload_project_zip, zip_project_folder,
+    acquire_project_mutex, clear_active_project, clear_compass_pid, create_project,
+    download_project_zip, fetch_projects, forget_user_prefs, get_platform, is_compass_running,
+    load_user_prefs, native_auth_request, open_project_folder, open_with_compass,
+    release_project_mutex, save_user_prefs, select_zip_file, set_active_project, unzip_project,
+    upload_project_zip, zip_project_folder,
 };
 use log::error;
 use speleodb_compass_common::{compass_home, UserPrefs};
+use tauri::Emitter;
 
 // Global state for active project
 lazy_static::lazy_static! {
     static ref ACTIVE_PROJECT_ID: std::sync::Arc<std::sync::Mutex<Option<String>>> = std::sync::Arc::new(std::sync::Mutex::new(None));
+    // Global state for Compass process PID
+    pub static ref COMPASS_PID: std::sync::Arc<std::sync::Mutex<Option<u32>>> = std::sync::Arc::new(std::sync::Mutex::new(None));
 }
 
 async fn release_project_mutex_internal(project_id: &str) {
@@ -351,10 +355,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             acquire_project_mutex,
             clear_active_project,
+            clear_compass_pid,
+            create_project,
             download_project_zip,
             fetch_projects,
             forget_user_prefs,
             get_platform,
+            is_compass_running,
             load_user_prefs,
             native_auth_request,
             open_project_folder,
@@ -366,20 +373,62 @@ pub fn run() {
             unzip_project,
             upload_project_zip,
             zip_project_folder,
-            create_project,
         ]);
     #[cfg(debug_assertions)]
     {
         builder = builder.plugin(devtools);
     }
     builder
-        .build(tauri::generate_context!())
-        .expect("error while building tauri application")
-        .run(|_app_handle, event| {
-            if let tauri::RunEvent::ExitRequested { .. } = event {
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // Check if Compass is still running
+                let compass_running = {
+                    if let Ok(guard) = COMPASS_PID.lock() {
+                        if let Some(pid) = *guard {
+                            // Check if process is still running
+                            #[cfg(target_os = "windows")]
+                            {
+                                use std::process::Command;
+                                if let Ok(out) = Command::new("tasklist")
+                                    .args(["/FI", &format!("PID eq {}", pid), "/NH"])
+                                    .output()
+                                {
+                                    let stdout = String::from_utf8_lossy(&out.stdout);
+                                    stdout.contains(&pid.to_string())
+                                        && stdout.to_lowercase().contains("comp32")
+                                } else {
+                                    false
+                                }
+                            }
+                            #[cfg(not(target_os = "windows"))]
+                            {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                };
+
+                if compass_running {
+                    log::warn!(
+                        "Window close blocked: Compass is still running. Please close Compass first."
+                    );
+                    // Prevent the window from closing
+                    api.prevent_close();
+
+                    // Emit event to frontend to show the modal
+                    let _ = window.emit("compass-running-block-close", ());
+
+                    return;
+                }
+
+                // Release mutex if we have an active project
                 if let Some(project_id) = ACTIVE_PROJECT_ID.lock().unwrap().as_ref() {
                     log::info!(
-                        "App exit requested, releasing mutex for project: {}",
+                        "Window close requested, releasing mutex for project: {}",
                         project_id
                     );
                     let runtime = tokio::runtime::Runtime::new().unwrap();
@@ -388,5 +437,10 @@ pub fn run() {
                     });
                 }
             }
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app_handle, _event| {
+            // Additional run event handling if needed
         });
 }

@@ -2,11 +2,13 @@ use futures::future::{Either, select};
 use gloo_timers::future::TimeoutFuture;
 use serde::{Deserialize, Serialize};
 use speleodb_compass_common::UserPrefs;
-use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::spawn_local;
+use wasm_bindgen::closure::Closure;
 use yew::prelude::*;
 
+use crate::components::modal::{Modal, ModalType};
 use crate::components::project_details::ProjectDetails;
 use crate::components::project_listing::ProjectListing;
 use crate::speleo_db_controller::Project;
@@ -57,6 +59,8 @@ pub fn app() -> Html {
     let refresh_trigger = use_state(|| 0u32);
     // Silent mode for validation errors (true on startup/auto-login, false on interaction)
     let validation_silent = use_state(|| true);
+    // Modal for Compass running warning (when trying to close app)
+    let show_compass_close_modal = use_state(|| false);
 
     // Load saved prefs on startup (if any)
     {
@@ -120,6 +124,35 @@ pub fn app() -> Html {
                         web_sys::console::log_1(&format!("Failed to load prefs: {:?}", e).into());
                     }
                 }
+            });
+
+            || ()
+        });
+    }
+
+    // Listen for Compass running close block event from backend
+    {
+        let show_compass_close_modal = show_compass_close_modal.clone();
+
+        use_effect_with((), move |_| {
+            let show_compass_close_modal = show_compass_close_modal.clone();
+
+            // Set up Tauri event listener
+            spawn_local(async move {
+                #[wasm_bindgen]
+                extern "C" {
+                    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "event"])]
+                    async fn listen(event: &str, handler: &js_sys::Function) -> JsValue;
+                }
+
+                let closure = Closure::wrap(Box::new(move |_: JsValue| {
+                    show_compass_close_modal.set(true);
+                }) as Box<dyn Fn(JsValue)>);
+
+                let _ = listen("compass-running-block-close", closure.as_ref().unchecked_ref()).await;
+
+                // Keep the closure alive
+                closure.forget();
             });
 
             || ()
@@ -409,29 +442,55 @@ pub fn app() -> Html {
     let email_missing_password = has_email && !has_password && !has_oauth;
     let password_missing_email = has_password && !has_email && !has_oauth;
 
+    // Compass running modal (shown when trying to close app while Compass is running)
+    let compass_close_modal = if *show_compass_close_modal {
+        html! {
+            <Modal
+                title="Compass is Still Running"
+                message="This action cannot be performed while Compass is open.\n\n\
+                    Please save your work in Compass and close the application before:\n\
+                    • Going back to projects\n\
+                    • Reloading the project\n\
+                    • Importing from disk\n\
+                    • Closing the application"
+                modal_type={ModalType::Warning}
+                show_close_button={true}
+                on_close={{
+                    let show_compass_close_modal = show_compass_close_modal.clone();
+                    move |_| show_compass_close_modal.set(false)
+                }}
+            />
+        }
+    } else {
+        html! {}
+    };
+
     if *logged_in {
         html! {
-            <main class="container">
-                <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; width:100%;">
-                    <h1>{"SpeleoDB - Compass Sidecar"}</h1>
-                    <div style="gap:8px;">
-                        <button style="background-color:red; color:white;" onclick={on_disconnect.clone()}>{ "Disconnect" }</button>
-                    </div>
-                </header>
-                <section style="width:100%;">
-                    {
-                        if *active_tab == ActiveTab::Listing {
-                            html!{ <ProjectListing on_select={on_project_selected.clone()} refresh_trigger={*refresh_trigger} /> }
-                        } else {
-                            if let Some(project) = &*selected_project {
-                                html!{ <ProjectDetails project={project.clone()} on_back={on_back_to_listing.clone()} /> }
+            <>
+                <main class="container">
+                    <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; width:100%;">
+                        <h1>{"SpeleoDB - Compass Sidecar"}</h1>
+                        <div style="gap:8px;">
+                            <button style="background-color:red; color:white;" onclick={on_disconnect.clone()}>{ "Disconnect" }</button>
+                        </div>
+                    </header>
+                    <section style="width:100%;">
+                        {
+                            if *active_tab == ActiveTab::Listing {
+                                html!{ <ProjectListing on_select={on_project_selected.clone()} refresh_trigger={*refresh_trigger} /> }
                             } else {
-                                html!{ <p>{"Select a project from the listing first."}</p> }
+                                if let Some(project) = &*selected_project {
+                                    html!{ <ProjectDetails project={project.clone()} on_back={on_back_to_listing.clone()} /> }
+                                } else {
+                                    html!{ <p>{"Select a project from the listing first."}</p> }
+                                }
                             }
                         }
-                    }
-                </section>
-            </main>
+                    </section>
+                </main>
+                { compass_close_modal }
+            </>
         }
     } else {
         html! {
@@ -549,6 +608,7 @@ pub fn app() -> Html {
                         </div>
                     }
                 } else { html!{<></>} } }
+                { compass_close_modal }
             </main>
         }
     }
