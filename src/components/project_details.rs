@@ -34,6 +34,19 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
     let selected_zip: UseStateHandle<Option<String>> = use_state(|| None);
     let upload_timeout_handle: UseStateHandle<Option<Rc<RefCell<Option<Timeout>>>>> =
         use_state(|| None);
+    let platform = use_state(|| "unknown".to_string());
+
+    // Fetch platform on mount
+    {
+        let platform = platform.clone();
+        use_effect_with((), move |_| {
+            spawn_local(async move {
+                let p = SPELEO_DB_CONTROLLER.get_platform().await;
+                platform.set(p);
+            });
+            || ()
+        });
+    }
 
     // Run the download workflow automatically on mount
     {
@@ -418,18 +431,29 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
             <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
                 <button onclick={on_back_click}>{"← Back to Projects"}</button>
                 <div style="display: flex; gap: 8px;">
-                    <button
-                        onclick={on_open_compass.reform(|_| ())}
-                        style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
-                    >
-                        {"🧭 Open with Compass"}
-                    </button>
-                    <button
-                        onclick={on_open_folder.reform(|_| ())}
-                        style="background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
-                    >
-                        {"📁 Open Folder"}
-                    </button>
+                    {
+                        if *platform == "windows" {
+                            // Windows: Only show "Open with Compass" button
+                            html! {
+                                <button
+                                    onclick={on_open_compass.reform(|_| ())}
+                                    style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
+                                >
+                                    {"🧭 Open with Compass"}
+                                </button>
+                            }
+                        } else {
+                            // Linux/macOS: Only show "Open Folder" button
+                            html! {
+                                <button
+                                    onclick={on_open_folder.reform(|_| ())}
+                                    style="background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
+                                >
+                                    {"📁 Open Folder"}
+                                </button>
+                            }
+                        }
+                    }
                 </div>
             </div>
 
@@ -621,27 +645,51 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                 }
             }
 
-            // Success modal (Download)
+            // Success modal (Download) - Platform-specific buttons
             {
                 if *show_success_modal {
-                    html! {
-                        <Modal
-                            title="Project Downloaded Successfully"
-                            message="The project has been successfully downloaded and extracted. \
-                                Click 'Open Folder' to view the project files in your file explorer."
-                            modal_type={ModalType::Success}
-                            show_close_button={true}
-                            primary_button_text={Some("Open Folder".to_string())}
-                            on_close={close_success_modal}
-                            on_primary_action={
-                                let on_open_folder = on_open_folder.clone();
-                                let show_success_modal = show_success_modal.clone();
-                                Callback::from(move |_| {
-                                    on_open_folder.emit(());
-                                    show_success_modal.set(false);
-                                })
-                            }
-                        />
+                    if *platform == "windows" {
+                        // Windows: Show "Open with Compass" as primary action
+                        html! {
+                            <Modal
+                                title="Project Downloaded Successfully"
+                                message="The project has been successfully downloaded and extracted. \
+                                    Click 'Open with Compass' to edit the project in Compass software."
+                                modal_type={ModalType::Success}
+                                show_close_button={true}
+                                primary_button_text={Some("Open with Compass".to_string())}
+                                on_close={close_success_modal.clone()}
+                                on_primary_action={
+                                    let on_open_compass = on_open_compass.clone();
+                                    let show_success_modal = show_success_modal.clone();
+                                    Callback::from(move |_| {
+                                        on_open_compass.emit(());
+                                        show_success_modal.set(false);
+                                    })
+                                }
+                            />
+                        }
+                    } else {
+                        // Linux/macOS: Show "Open Folder" as primary action
+                        html! {
+                            <Modal
+                                title="Project Downloaded Successfully"
+                                message="The project has been successfully downloaded and extracted. \
+                                    Click 'Open Folder' to view the project files in your file explorer."
+                                modal_type={ModalType::Success}
+                                show_close_button={true}
+                                primary_button_text={Some("Open Folder".to_string())}
+                                on_close={close_success_modal.clone()}
+                                on_primary_action={
+                                    let on_open_folder = on_open_folder.clone();
+                                    let show_success_modal = show_success_modal.clone();
+                                    Callback::from(move |_| {
+                                        on_open_folder.emit(());
+                                        show_success_modal.set(false);
+                                    })
+                                }
+                            />
+                        }
                     }
                 } else {
                     html! {}

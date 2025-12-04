@@ -3,6 +3,21 @@ use log::info;
 use speleodb_compass_common::UserPrefs;
 
 #[tauri::command]
+pub fn get_platform() -> String {
+    #[cfg(target_os = "windows")]
+    return "windows".to_string();
+
+    #[cfg(target_os = "macos")]
+    return "macos".to_string();
+
+    #[cfg(target_os = "linux")]
+    return "linux".to_string();
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    return "unknown".to_string();
+}
+
+#[tauri::command]
 pub fn save_user_prefs(prefs: UserPrefs) -> Result<(), String> {
     info!("Saving user preferences: {prefs:?}");
     UserPrefs::save(&prefs).map_err(|e| e.to_string())?;

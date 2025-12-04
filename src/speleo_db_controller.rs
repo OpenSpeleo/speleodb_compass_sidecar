@@ -508,6 +508,18 @@ impl SpeleoDBController {
         Ok(())
     }
 
+    pub async fn get_platform(&self) -> String {
+        let rv = invoke("get_platform", serde_wasm_bindgen::to_value(&()).unwrap()).await;
+
+        // The result should be a simple string
+        if let Some(platform) = rv.as_string() {
+            platform
+        } else {
+            // Fallback - try to deserialize
+            serde_wasm_bindgen::from_value::<String>(rv).unwrap_or_else(|_| "unknown".to_string())
+        }
+    }
+
     /// Determine if auto-login should be attempted based on stored credentials.
     pub fn should_auto_login(&self, email: &str, password: &str, oauth: &str) -> bool {
         let oauth_ok = !oauth.is_empty() && validate_oauth(oauth);
