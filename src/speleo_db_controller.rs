@@ -1,5 +1,5 @@
 // WASM controller now delegates network calls to native Tauri backend.
-use crate::{invoke, invoke_without_args};
+use crate::invoke;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen;
@@ -710,7 +710,7 @@ mod tests {
 
     #[test]
     fn prefs_deserialization() {
-        let json = r#"{"instance":"https://test.com","oauth":"token123"}"#;
+        let json = r#"{"instance":"https://test.com","oauth_token":"token123"}"#;
         let prefs: UserPrefs = serde_json::from_str(json).unwrap();
 
         assert_eq!(prefs.instance, "https://test.com");

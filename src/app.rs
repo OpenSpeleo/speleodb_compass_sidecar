@@ -37,14 +37,13 @@ pub fn app() -> Html {
     let password = use_state(|| String::new());
     let oauth = use_state(|| String::new());
 
-    #[derive(Serialize, Deserialize)]
-    struct Prefs {
+    // Struct matching the backend UserPrefs structure
+    #[derive(Serialize, Deserialize, Debug)]
+    struct LoadedPrefs {
+        #[serde(default)]
         instance: String,
         #[serde(default)]
-        email: String,
-        #[serde(default)]
-        password: String,
-        oauth: String,
+        oauth_token: Option<String>,
     }
 
     // UI state
@@ -62,60 +61,63 @@ pub fn app() -> Html {
     // Load saved prefs on startup (if any)
     {
         let instance = instance.clone();
-        let email = email.clone();
-        let password = password.clone();
         let oauth = oauth.clone();
         let logged_in = logged_in.clone();
 
         use_effect_with((), move |_| {
             spawn_local(async move {
                 let rv = invoke_without_args("load_user_prefs").await;
-                if let Some(s) = rv.as_string() {
-                    match serde_json::from_str::<Prefs>(&s) {
-                        Ok(p) => {
-                            if !p.instance.is_empty() {
-                                instance.set(p.instance.clone());
-                            }
-                            email.set(p.email.clone());
-                            password.set(p.password.clone());
-                            oauth.set(p.oauth.clone());
+                
+                // The Tauri command returns Result<Option<UserPrefs>, String>
+                // On success, we get the inner Option<UserPrefs> as a JsValue
+                // Try to deserialize directly from JsValue
+                match serde_wasm_bindgen::from_value::<Option<LoadedPrefs>>(rv) {
+                    Ok(Some(p)) => {
+                        web_sys::console::log_1(&format!("Loaded prefs: {:?}", p).into());
+                        
+                        if !p.instance.is_empty() {
+                            instance.set(p.instance.clone());
+                        }
+                        
+                        let oauth_val = p.oauth_token.clone().unwrap_or_default();
+                        oauth.set(oauth_val.clone());
 
-                            // Auto-login logic
-                            if SPELEO_DB_CONTROLLER.should_auto_login(
-                                &p.email,
-                                &p.password,
-                                &p.oauth,
-                            ) {
-                                web_sys::console::log_1(&"Attempting silent auto-login...".into());
+                        // Auto-login logic - only if we have an oauth token
+                        if !oauth_val.is_empty() {
+                            web_sys::console::log_1(&"Attempting silent auto-login...".into());
 
-                                let auth_future = SPELEO_DB_CONTROLLER.authenticate(
-                                    &p.email,
-                                    &p.password,
-                                    &p.oauth,
-                                    &p.instance,
-                                );
-                                let timeout_future = TimeoutFuture::new(3_000);
+                            let auth_future = SPELEO_DB_CONTROLLER.authenticate(
+                                "",  // no email
+                                "",  // no password
+                                &oauth_val,
+                                &p.instance,
+                            );
+                            let timeout_future = TimeoutFuture::new(3_000);
 
-                                match select(Box::pin(auth_future), Box::pin(timeout_future)).await
-                                {
-                                    Either::Left((Ok(()), _)) => {
-                                        web_sys::console::log_1(&"Auto-login success".into());
-                                        logged_in.set(true);
-                                    }
-                                    Either::Left((Err(e), _)) => {
-                                        web_sys::console::log_1(
-                                            &format!("Auto-login failed: {}", e).into(),
-                                        );
-                                        // Silent failure - do not show error modal
-                                    }
-                                    Either::Right((_, _)) => {
-                                        web_sys::console::log_1(&"Auto-login timed out".into());
-                                        // Silent failure on timeout
-                                    }
+                            match select(Box::pin(auth_future), Box::pin(timeout_future)).await
+                            {
+                                Either::Left((Ok(()), _)) => {
+                                    web_sys::console::log_1(&"Auto-login success".into());
+                                    logged_in.set(true);
+                                }
+                                Either::Left((Err(e), _)) => {
+                                    web_sys::console::log_1(
+                                        &format!("Auto-login failed: {}", e).into(),
+                                    );
+                                    // Silent failure - do not show error modal
+                                }
+                                Either::Right((_, _)) => {
+                                    web_sys::console::log_1(&"Auto-login timed out".into());
+                                    // Silent failure on timeout
                                 }
                             }
                         }
-                        Err(_) => {}
+                    }
+                    Ok(None) => {
+                        web_sys::console::log_1(&"No saved preferences found".into());
+                    }
+                    Err(e) => {
+                        web_sys::console::log_1(&format!("Failed to load prefs: {:?}", e).into());
                     }
                 }
             });
