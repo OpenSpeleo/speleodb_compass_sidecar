@@ -74,7 +74,20 @@ pub async fn fetch_projects() -> serde_json::Value {
 
     if status.is_success() {
         match resp.json::<serde_json::Value>().await {
-            Ok(json) => json,
+            Ok(mut json) => {
+                // Filter to only keep COMPASS projects
+                if let Some(data) = json.get_mut("data") {
+                    if let Some(projects) = data.as_array() {
+                        let compass_projects: Vec<serde_json::Value> = projects
+                            .iter()
+                            .filter(|p| p.get("type").and_then(|t| t.as_str()) == Some("COMPASS"))
+                            .cloned()
+                            .collect();
+                        *data = serde_json::json!(compass_projects);
+                    }
+                }
+                json
+            }
             Err(e) => {
                 serde_json::json!({"ok": false, "error": format!("Failed to parse response: {}", e)})
             }
@@ -742,6 +755,7 @@ pub async fn create_project(
     body.insert("name".to_string(), serde_json::json!(name));
     body.insert("description".to_string(), serde_json::json!(description));
     body.insert("country".to_string(), serde_json::json!(country));
+    body.insert("type".to_string(), serde_json::json!("COMPASS"));
     if let Some(lat) = latitude {
         if !lat.is_empty() {
             body.insert("latitude".to_string(), serde_json::json!(lat));
