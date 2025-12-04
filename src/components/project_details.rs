@@ -1,5 +1,8 @@
 use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::{Project, SPELEO_DB_CONTROLLER};
+use gloo_timers::callback::Timeout;
+use std::cell::RefCell;
+use std::rc::Rc;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
@@ -29,6 +32,8 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
     let commit_message = use_state(|| String::new());
     let commit_message_error = use_state(|| false);
     let selected_zip: UseStateHandle<Option<String>> = use_state(|| None);
+    let upload_timeout_handle: UseStateHandle<Option<Rc<RefCell<Option<Timeout>>>>> =
+        use_state(|| None);
 
     // Run the download workflow automatically on mount
     {
@@ -185,6 +190,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let show_upload_success = show_upload_success.clone();
         let show_no_changes_modal = show_no_changes_modal.clone();
         let upload_error = upload_error.clone();
+        let upload_timeout_handle = upload_timeout_handle.clone();
 
         Callback::from(move |_| {
             let project_id = project_id.clone();
@@ -196,12 +202,32 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
             }
 
             let uploading = uploading.clone();
+            let uploading_for_timeout = uploading.clone();
             let show_upload_success = show_upload_success.clone();
             let show_no_changes_modal = show_no_changes_modal.clone();
             let upload_error = upload_error.clone();
+            let upload_error_for_timeout = upload_error.clone();
+            let upload_timeout_handle = upload_timeout_handle.clone();
 
             uploading.set(true);
             upload_error.set(None);
+
+            // Set up 15 second timeout
+            let timeout_handle = Rc::new(RefCell::new(None::<Timeout>));
+            let timeout_handle_clone = timeout_handle.clone();
+
+            let timeout = Timeout::new(15_000, move || {
+                // Timeout reached - cancel the operation
+                if *uploading_for_timeout {
+                    uploading_for_timeout.set(false);
+                    upload_error_for_timeout.set(Some(
+                        "Operation timed out after 15 seconds. Please check your connection and try again.".to_string()
+                    ));
+                }
+            });
+
+            *timeout_handle.borrow_mut() = Some(timeout);
+            upload_timeout_handle.set(Some(timeout_handle_clone));
 
             spawn_local(async move {
                 // 1. ZIP project
@@ -478,9 +504,9 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                                 <button
                                     onclick={on_save}
                                     disabled={*uploading}
-                                    style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: disabled ? 0.5 : 1;"
+                                    style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;"
                                 >
-                                    {if *uploading { "Saving..." } else { "Save Project" }}
+                                    {"Save Project"}
                                 </button>
                                 <button
                                     onclick={
@@ -663,6 +689,65 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                     } else {
                         html! {}
                     }
+                }
+            }
+
+            // Full-screen loading overlay
+            {
+                if *uploading {
+                    html! {
+                        <div style="
+                            position: fixed;
+                            top: 0;
+                            left: 0;
+                            right: 0;
+                            bottom: 0;
+                            background-color: rgba(0, 0, 0, 0.6);
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: center;
+                            align-items: center;
+                            z-index: 9999;
+                            backdrop-filter: blur(2px);
+                        ">
+                            <div style="
+                                background-color: white;
+                                padding: 32px 48px;
+                                border-radius: 12px;
+                                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+                                display: flex;
+                                flex-direction: column;
+                                align-items: center;
+                                gap: 16px;
+                            ">
+                                <div style="
+                                    border: 4px solid #e5e7eb;
+                                    border-top-color: #2563eb;
+                                    border-radius: 50%;
+                                    width: 48px;
+                                    height: 48px;
+                                    animation: spin 0.8s linear infinite;
+                                " />
+                                <p style="
+                                    color: #1f2937;
+                                    font-size: 18px;
+                                    font-weight: 500;
+                                    margin: 0;
+                                ">
+                                    {"Saving project..."}
+                                </p>
+                                <p style="
+                                    color: #6b7280;
+                                    font-size: 14px;
+                                    margin: 0;
+                                ">
+                                    {"Please wait while your changes are being uploaded."}
+                                </p>
+                            </div>
+                        </div>
+                    }
+                } else {
+                    html! {}
                 }
             }
 
