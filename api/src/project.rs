@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::get_api_client;
 use common::{
     Error, UserPrefs,
-    api_types::{ProjectInfo, ProjectRevisionInfo, ProjectSaveResult},
+    api_types::{ProjectInfo, ProjectSaveResult},
 };
 use log::info;
 use serde::Deserialize;
@@ -13,11 +13,12 @@ pub async fn acquire_project_mutex(api_info: &UserPrefs, project_id: Uuid) -> Re
     log::info!("Acquiring project mutex for project: {}", project_id);
     let base = api_info.instance();
     let oauth = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
-    let url = format!("{}/api/v1/projects/{}/acquire/", base, project_id);
+    let route = format!("api/v1/projects/{}/acquire/", project_id);
+    let url = base.join(&route).unwrap();
     let client = get_api_client();
 
     let resp = client
-        .post(&url)
+        .post(url)
         .header("Authorization", format!("Token {}", oauth))
         .send()
         .await
@@ -47,7 +48,7 @@ pub async fn create_project(
     log::info!("Creating new project: {}", name);
     let base = api_info.instance();
     let oauth = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
-    let url = format!("{}{}", base, "/api/v1/projects/");
+    let url = format!("{}{}", base, "api/v1/projects/");
     let client = get_api_client();
 
     let mut body = serde_json::Map::new();
@@ -99,7 +100,7 @@ pub async fn release_project_mutex(api_info: &UserPrefs, project_id: &Uuid) -> R
     info!("Releasing project mutex for project: {}", project_id);
     let base = api_info.instance();
     let oauth = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
-    let url = format!("{}/api/v1/projects/{}/release/", base, project_id);
+    let url = format!("{}api/v1/projects/{}/release/", base, project_id);
     let client = get_api_client();
 
     // Fire and forget
@@ -123,11 +124,12 @@ pub async fn release_project_mutex(api_info: &UserPrefs, project_id: &Uuid) -> R
 pub async fn fetch_projects(api_info: &UserPrefs) -> Result<Vec<ProjectInfo>, Error> {
     let base = api_info.instance();
     let oauth = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
-    let url = format!("{}{}", base, "/api/v1/projects/");
+    let url = base.join("api/v1/projects/").unwrap();
+    info!("Fetching projects from server: {url}");
     let client = get_api_client();
 
     let resp = client
-        .get(&url)
+        .get(url)
         .header("Authorization", format!("Token {}", oauth))
         .send()
         .await
@@ -152,17 +154,20 @@ pub async fn fetch_projects(api_info: &UserPrefs) -> Result<Vec<ProjectInfo>, Er
     }
 }
 
-pub async fn get_project_revisions(
+pub async fn fetch_project_info(
     api_info: &UserPrefs,
     project_id: Uuid,
-) -> Result<ProjectRevisionInfo, Error> {
+) -> Result<ProjectInfo, Error> {
     let base = api_info.instance();
     let oauth = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
-    let url = format!("{}/api/v1/projects/{}/revisions/", base, project_id);
+    let url = base
+        .join(&format!("api/v1/projects/{}/", project_id))
+        .unwrap();
+    info!("Fetching project info from server: {url}");
     let client = get_api_client();
 
     let resp = client
-        .get(&url)
+        .get(url)
         .header("Authorization", format!("Token {}", oauth))
         .send()
         .await
@@ -171,13 +176,14 @@ pub async fn get_project_revisions(
     let status = resp.status();
 
     #[derive(Deserialize)]
-    struct RevisionsResponse {
-        pub data: ProjectRevisionInfo,
+    pub struct ProjectInfoResponse {
+        pub data: ProjectInfo,
+        // Ignore extra fields like timestamp and url
     }
 
     if status.is_success() {
         Ok(resp
-            .json::<RevisionsResponse>()
+            .json::<ProjectInfoResponse>()
             .await
             .map_err(|e| Error::Deserialization(e.to_string()))?
             .data)

@@ -27,26 +27,15 @@ pub struct ProjectInfo {
     pub fork_from: Option<String>,
     pub visibility: String,
     pub exclude_geojson: bool,
+    pub latest_commit: Option<CommitInfo>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CommitInfo {
-    pub hexsha: String,
+    pub id: String,
     pub message: String,
     pub author_name: String,
     pub dt_since: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct ProjectRevisionInfo {
-    pub commits: Vec<CommitInfo>,
-    pub project: ProjectInfo,
-}
-
-impl ProjectRevisionInfo {
-    pub fn latest_commit(&self) -> Option<&CommitInfo> {
-        self.commits.last()
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

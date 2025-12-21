@@ -5,10 +5,7 @@ mod speleo_db_controller;
 
 use app::App;
 pub use error::Error;
-use futures::{Stream, channel::mpsc};
 use serde::{Serialize, de::DeserializeOwned};
-use tauri_sys::event::Event;
-use wasm_bindgen::prelude::*;
 
 pub(crate) type Result<T> = core::result::Result<T, Error>;
 

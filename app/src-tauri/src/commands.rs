@@ -5,7 +5,7 @@ use crate::{
 };
 use common::{
     CompassProject, Error, SpeleoDbProjectRevision, UserPrefs,
-    api_types::{ProjectInfo, ProjectRevisionInfo, ProjectSaveResult},
+    api_types::{ProjectInfo, ProjectSaveResult},
     compass_project_index_path, compass_project_working_path, ensure_compass_project_dirs_exist,
 };
 use log::{error, info};
@@ -93,11 +93,11 @@ pub async fn project_working_copy_is_dirty(project_id: Uuid) -> Result<bool, Str
     }
 }
 
-pub async fn update_project_revision_info(
+pub async fn update_project_info(
     app_state: &AppState,
     project_id: Uuid,
-) -> Result<ProjectRevisionInfo, String> {
-    match api::project::get_project_revisions(&app_state.api_info(), project_id).await {
+) -> Result<ProjectInfo, String> {
+    match api::project::fetch_project_info(&app_state.api_info(), project_id).await {
         Ok(revisions) => {
             app_state.update_project(&revisions);
             Ok(revisions)
@@ -122,14 +122,14 @@ pub async fn project_revision_is_current(
         info!("No index revision found for project {}", project_id);
         return Ok(false);
     };
-    match api::project::get_project_revisions(&app_state.api_info(), project_id).await {
-        Ok(revisions) => {
-            app_state.update_project(&revisions);
-            let latest_revision = match revisions.latest_commit() {
+    match update_project_info(&app_state, project_id).await {
+        Ok(project_info) => {
+            app_state.update_project(&project_info);
+            let latest_revision = match project_info.latest_commit.as_ref() {
                 Some(latest) => {
                     info!(
                         "Latest revision for project {} is {}",
-                        project_id, latest.hexsha
+                        project_id, latest.id
                     );
                     SpeleoDbProjectRevision::from(latest)
                 }
@@ -183,7 +183,7 @@ pub async fn update_index(
 ) -> Result<CompassProject, String> {
     let version_info = match app_state.get_project(project_id) {
         Some(info) => info,
-        None => update_project_revision_info(&app_state, project_id).await?,
+        None => update_project_info(&app_state, project_id).await?,
     };
     ensure_compass_project_dirs_exist(project_id).map_err(|e| e.to_string())?;
     log::info!("Downloading project ZIP from");
@@ -191,7 +191,7 @@ pub async fn update_index(
         Ok(bytes) => {
             log::info!("Downloaded ZIP ({} bytes)", bytes.len());
             let project = unpack_project_zip(project_id, bytes)?;
-            if let Some(latest_commit) = version_info.latest_commit() {
+            if let Some(latest_commit) = version_info.latest_commit.as_ref() {
                 SpeleoDbProjectRevision::from(latest_commit)
                     .save_revision_for_project(project_id)
                     .map_err(|e| e.to_string())?;
@@ -291,13 +291,13 @@ pub async fn save_project(
     let cloned_handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
         let app_state = cloned_handle.state::<AppState>();
-        match update_project_revision_info(&app_state, project_id).await {
+        match update_project_info(&app_state, project_id).await {
             Ok(project_info) => {
                 info!(
                     "Updated project revision info after save: {:?}",
                     project_info
                 );
-                if let Some(latest_commit) = project_info.latest_commit() {
+                if let Some(latest_commit) = project_info.latest_commit.as_ref() {
                     let latest_rev = SpeleoDbProjectRevision::from(latest_commit);
                     if let Err(e) = latest_rev.save_revision_for_project(project_id) {
                         error!(

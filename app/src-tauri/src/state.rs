@@ -1,10 +1,10 @@
-use common::{Error, UserPrefs, api_types::ProjectRevisionInfo};
+use common::{Error, UserPrefs, api_types::ProjectInfo};
 use std::{collections::HashMap, sync::Mutex};
 use tauri::{AppHandle, Emitter, ipc::private::tracing::info};
 
 pub struct AppState {
     api_info: Mutex<UserPrefs>,
-    project_info: Mutex<HashMap<uuid::Uuid, ProjectRevisionInfo>>,
+    project_info: Mutex<HashMap<uuid::Uuid, ProjectInfo>>,
 }
 
 impl AppState {
@@ -55,12 +55,12 @@ impl AppState {
         Ok(())
     }
 
-    pub fn update_project(&self, project_info: &ProjectRevisionInfo) {
+    pub fn update_project(&self, project_info: &ProjectInfo) {
         let mut project_lock = self.project_info.lock().unwrap();
-        project_lock.insert(project_info.project.id, project_info.clone());
+        project_lock.insert(project_info.id, project_info.clone());
     }
 
-    pub fn get_project(&self, project_id: uuid::Uuid) -> Option<ProjectRevisionInfo> {
+    pub fn get_project(&self, project_id: uuid::Uuid) -> Option<ProjectInfo> {
         let project_lock = self.project_info.lock().unwrap();
         project_lock.get(&project_id).cloned()
     }

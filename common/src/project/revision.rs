@@ -30,7 +30,7 @@ impl SpeleoDbProjectRevision {
 impl From<&CommitInfo> for SpeleoDbProjectRevision {
     fn from(commit_info: &CommitInfo) -> Self {
         Self {
-            revision: commit_info.hexsha.clone(),
+            revision: commit_info.id.clone(),
         }
     }
 }
