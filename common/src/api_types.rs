@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use toml::ser;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -28,6 +29,8 @@ pub struct ProjectInfo {
     pub visibility: String,
     pub exclude_geojson: bool,
     pub latest_commit: Option<CommitInfo>,
+    #[serde(rename = "type")]
+    pub project_type: ProjectType,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -42,4 +45,11 @@ pub struct CommitInfo {
 pub enum ProjectSaveResult {
     Saved,
     NoChanges,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ProjectType {
+    Ariane,
+    Compass,
 }

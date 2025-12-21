@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::get_api_client;
 use common::{
     Error, UserPrefs,
-    api_types::{ProjectInfo, ProjectSaveResult},
+    api_types::{ProjectInfo, ProjectSaveResult, ProjectType},
 };
 use log::info;
 use serde::Deserialize;
@@ -144,11 +144,14 @@ pub async fn fetch_projects(api_info: &UserPrefs) -> Result<Vec<ProjectInfo>, Er
     }
 
     if status.is_success() {
-        Ok(resp
+        let mut projects = resp
             .json::<ProjectsResponse>()
             .await
             .map_err(|e| Error::Deserialization(e.to_string()))?
-            .data)
+            .data;
+        // Filter to only Compass projects
+        projects.retain(|project| project.project_type == ProjectType::Compass);
+        Ok(projects)
     } else {
         Err(Error::Api(status.as_u16()))
     }
