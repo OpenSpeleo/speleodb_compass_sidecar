@@ -92,15 +92,13 @@ impl SpeleoDBController {
             instance,
         };
 
-        let _token: String = match invoke::<_, String>("auth_request", &args).await {
-            Ok(token) => token,
+        match invoke::<_, ()>("auth_request", &args).await {
+            Ok(()) => Ok(()),
             Err(e) => {
                 error!("Authentication failed: {}", e);
-                return Err(e.to_string());
+                Err(e.to_string())
             }
-        };
-        info!("{_token}");
-        Ok(())
+        }
     }
 
     pub async fn acquire_project_mutex(&self, project_id: Uuid) -> Result<(), String> {

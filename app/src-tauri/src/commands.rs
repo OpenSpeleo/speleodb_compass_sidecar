@@ -26,8 +26,9 @@ pub async fn ensure_initialized(app_handle: AppHandle) {
 }
 
 #[tauri::command]
-pub fn forget_user_prefs(app_state: State<'_, AppState>) -> Result<(), String> {
-    app_state.forget_user_prefs().map_err(|e| e.to_string())?;
+pub fn sign_out(app_handle: AppHandle) -> Result<(), String> {
+    let app_state = app_handle.state::<AppState>();
+    app_state.sign_out(&app_handle).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -40,7 +41,7 @@ pub async fn fetch_projects(app_state: State<'_, AppState>) -> Result<Vec<Projec
 
 #[tauri::command]
 pub async fn auth_request(
-    app_state: State<'_, AppState>,
+    app_handle: AppHandle,
     email: Option<String>,
     password: Option<String>,
     oauth: Option<String>,
@@ -56,9 +57,11 @@ pub async fn auth_request(
     };
     info!("Auth request successful, updating user preferences");
     let prefs = UserPrefs::new(instance, Some(updated_token));
+    let app_state = app_handle.state::<AppState>();
     app_state
-        .update_user_prefs(prefs)
+        .update_user_prefs(prefs, &app_handle)
         .map_err(|e| e.to_string())?;
+    app_state.authenticated(&app_handle).await;
     Ok(())
 }
 

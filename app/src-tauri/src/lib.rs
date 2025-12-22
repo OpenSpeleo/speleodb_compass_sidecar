@@ -7,9 +7,9 @@ use std::sync::{Arc, LazyLock, Mutex};
 use crate::{
     commands::{
         acquire_project_mutex, auth_request, clear_active_project, create_project,
-        ensure_initialized, fetch_projects, forget_user_prefs, import_compass_project,
-        open_project, project_revision_is_current, project_working_copy_is_dirty,
-        release_project_mutex, save_project, set_active_project, update_index,
+        ensure_initialized, fetch_projects, import_compass_project, open_project,
+        project_revision_is_current, project_working_copy_is_dirty, release_project_mutex,
+        save_project, set_active_project, sign_out, update_index,
     },
     state::AppState,
 };
@@ -56,7 +56,7 @@ pub fn run() {
             create_project,
             ensure_initialized,
             fetch_projects,
-            forget_user_prefs,
+            sign_out,
             import_compass_project,
             open_project,
             project_revision_is_current,

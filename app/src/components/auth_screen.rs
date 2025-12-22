@@ -29,7 +29,6 @@ pub fn auth_screen() -> Html {
     let show_error = use_state(|| false);
     let error_msg = use_state(String::new);
     let error_is_403 = use_state(|| false);
-    let refresh_trigger = use_state(|| 0u32);
     // Silent mode for validation errors (true on startup/auto-login, false on interaction)
     let validation_silent = use_state(|| true);
 

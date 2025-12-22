@@ -3,7 +3,7 @@ use crate::{
         auth_screen::AuthScreen, loading_screen::LoadingScreen, project_details::ProjectDetails,
         project_listing::ProjectListing,
     },
-    speleo_db_controller::{SPELEO_DB_CONTROLLER, SpeleoDBController},
+    speleo_db_controller::SPELEO_DB_CONTROLLER,
 };
 use common::{LoadingState, UI_STATE_NOTIFICATION_KEY, UiState, api_types::ProjectInfo};
 use futures::StreamExt;
