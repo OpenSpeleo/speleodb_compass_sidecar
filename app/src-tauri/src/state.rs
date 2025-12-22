@@ -4,7 +4,7 @@ use common::{
     ui_state::{LoadingState, UI_STATE_NOTIFICATION_KEY, UiState},
 };
 use log::warn;
-use std::{collections::HashMap, sync::Mutex};
+use std::{collections::HashMap, sync::Mutex, time::Duration};
 use tauri::{AppHandle, Emitter, ipc::private::tracing::info};
 use uuid::Uuid;
 
@@ -199,6 +199,7 @@ impl AppState {
 
     pub async fn init_internal(&self, app_handle: &AppHandle) -> LoadingState {
         let loading_state = self.loading_state();
+        let sec_delay = 2;
         match loading_state {
             LoadingState::NotStarted => {
                 self.set_loading_state(LoadingState::CheckingForUpdates, app_handle)
@@ -207,24 +208,29 @@ impl AppState {
                 Ok(update_available) => {
                     if update_available {
                         log::info!("Update available, upating...");
+                        tokio::time::sleep(std::time::Duration::from_secs(sec_delay)).await;
                         self.set_loading_state(LoadingState::Updating, app_handle)
                     } else {
                         log::info!("No updates available, attempting to load user preferences");
+                        tokio::time::sleep(Duration::from_secs(sec_delay)).await;
                         self.set_loading_state(LoadingState::LoadingPrefs, app_handle)
                     }
                 }
                 Err(e) => {
                     log::warn!("Failed to check for updates: {}", e);
+                    tokio::time::sleep(Duration::from_secs(sec_delay)).await;
                     self.set_loading_state(LoadingState::Failed(e), app_handle)
                 }
             },
             LoadingState::Updating => match self.update_app().await {
                 Ok(_) => {
                     log::info!("Update successful, loading user preferences");
+                    tokio::time::sleep(std::time::Duration::from_secs(sec_delay)).await;
                     self.set_loading_state(LoadingState::LoadingPrefs, app_handle)
                 }
                 Err(e) => {
                     log::warn!("Failed to update application: {}", e);
+                    tokio::time::sleep(std::time::Duration::from_secs(sec_delay)).await;
                     self.set_loading_state(LoadingState::LoadingPrefs, app_handle)
                 }
             },
@@ -232,30 +238,38 @@ impl AppState {
                 let prefs = self.load_user_preferences(app_handle);
                 if let Some(_token) = prefs.api_info().oauth_token() {
                     info!("User prefs found, attempting to authenticate user");
+                    tokio::time::sleep(Duration::from_secs(sec_delay)).await;
                     self.set_loading_state(LoadingState::Authenticating, app_handle)
                 } else {
                     info!("No user prefs found, starting unauthenticated");
+                    tokio::time::sleep(Duration::from_secs(sec_delay)).await;
                     self.set_loading_state(LoadingState::Unauthenticated, app_handle)
                 }
             }
-            LoadingState::Authenticating => match self.authenticate_user(app_handle).await {
-                Ok(_) => self.set_loading_state(LoadingState::LoadingProjects, app_handle),
-                Err(e) => {
-                    // TODO:: Handle different authentication errors appropriately
-                    log::warn!("Authentication failed: {}", e);
-                    self.set_loading_state(LoadingState::Unauthenticated, app_handle)
+            LoadingState::Authenticating => {
+                tokio::time::sleep(Duration::from_secs(sec_delay)).await;
+                match self.authenticate_user(app_handle).await {
+                    Ok(_) => self.set_loading_state(LoadingState::LoadingProjects, app_handle),
+                    Err(e) => {
+                        // TODO:: Handle different authentication errors appropriately
+                        log::warn!("Authentication failed: {}", e);
+                        self.set_loading_state(LoadingState::Unauthenticated, app_handle)
+                    }
                 }
-            },
-            LoadingState::LoadingProjects => match self.load_user_projects().await {
-                Ok(_) => {
-                    log::info!("User projects loaded successfully, app is ready");
-                    self.set_loading_state(LoadingState::Ready, app_handle)
+            }
+            LoadingState::LoadingProjects => {
+                tokio::time::sleep(Duration::from_secs(sec_delay)).await;
+                match self.load_user_projects().await {
+                    Ok(_) => {
+                        log::info!("User projects loaded successfully, app is ready");
+                        self.set_loading_state(LoadingState::Ready, app_handle)
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to load user projects: {}", e);
+                        self.set_loading_state(LoadingState::Failed(e), app_handle)
+                    }
                 }
-                Err(e) => {
-                    log::warn!("Failed to load user projects: {}", e);
-                    self.set_loading_state(LoadingState::Failed(e), app_handle)
-                }
-            },
+            }
             _ => {
                 log::info!("App already initialized or in progress");
                 loading_state
