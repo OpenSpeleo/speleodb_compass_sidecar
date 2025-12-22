@@ -1,4 +1,4 @@
-use common::api_types::ProjectInfo;
+use common::{UI_STATE_NOTIFICATION_KEY, UiState, api_types::ProjectInfo};
 use futures::StreamExt;
 use log::{error, info};
 use tauri_sys::event::listen;
@@ -21,7 +21,7 @@ enum ActiveTab {
 #[function_component(App)]
 pub fn app() -> Html {
     // UI state
-    let booted = use_state(|| false);
+    let ui_state = use_state(|| UiState::new());
     let authenticated = use_state(|| false);
     let show_error = use_state(|| false);
     let error_msg = use_state(String::new);
@@ -29,12 +29,13 @@ pub fn app() -> Html {
     let selected_project: UseStateHandle<Option<ProjectInfo>> = use_state(|| None);
     let refresh_trigger = use_state(|| 0u32);
 
-    let booted_clone = booted.clone();
+    let ui_state_clone = ui_state.clone();
     spawn_local(async move {
-        let mut booted_stream = listen::<bool>("event::booted").await.unwrap();
+        let mut booted_stream = listen::<UiState>(UI_STATE_NOTIFICATION_KEY).await.unwrap();
         while let Some(event) = booted_stream.next().await {
-            info!("Authentication status changed: {}", event.payload);
-            booted_clone.set(event.payload);
+            let updated_ui_state = event.payload;
+            info!("ui_state : {:?}", updated_ui_state);
+            ui_state_clone.set(updated_ui_state);
         }
     });
 

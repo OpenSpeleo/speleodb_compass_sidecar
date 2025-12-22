@@ -1,11 +1,13 @@
 pub mod api_types;
 mod error;
 pub mod project;
+mod ui_state;
 mod user_prefs;
 
 pub use error::Error;
 pub use project::{CompassProject, Project, SpeleoDb, SpeleoDbProjectRevision};
 use semver::Version;
+pub use ui_state::{LoadingState, UI_STATE_NOTIFICATION_KEY, UiState};
 pub use user_prefs::{OauthToken, UserPrefs};
 
 use std::{

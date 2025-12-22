@@ -1,4 +1,4 @@
-use common::{Error, UserPrefs, api_types::ProjectInfo};
+use common::{Error, UI_STATE_NOTIFICATION_KEY, UiState, UserPrefs, api_types::ProjectInfo};
 use std::{collections::HashMap, sync::Mutex};
 use tauri::{AppHandle, Emitter, ipc::private::tracing::info};
 
@@ -17,6 +17,10 @@ impl AppState {
 
     pub async fn init_app_state(&self, app_handle: AppHandle) -> Result<(), Error> {
         info!("Attempting to load user preferences from disk");
+        let ui_state = UiState::new();
+        app_handle
+            .emit(UI_STATE_NOTIFICATION_KEY, &ui_state)
+            .unwrap();
         let prefs = UserPrefs::load().unwrap_or_default();
         if let Some(token) = prefs.oauth_token() {
             log::info!("User prefs found, attempting to authenticate user");
