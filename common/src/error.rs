@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
-#[derive(Debug, Deserialize, Error, Serialize)]
+#[derive(Clone, Debug, Deserialize, Error, PartialEq, Serialize)]
 pub enum Error {
     #[error("No auth token set")]
     NoAuthToken,

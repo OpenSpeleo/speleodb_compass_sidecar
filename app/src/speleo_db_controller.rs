@@ -36,6 +36,11 @@ impl ProjectIdArgs {
 pub struct SpeleoDBController {}
 
 impl SpeleoDBController {
+    pub async fn ensure_initialized(&self) {
+        let args = UnitArgs::new();
+        let _: () = invoke("ensure_initialized", &args).await.unwrap();
+    }
+
     pub async fn fetch_projects(&self) -> Result<Vec<ProjectInfo>, String> {
         // Call the Tauri backend to fetch projects
 

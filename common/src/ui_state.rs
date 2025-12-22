@@ -1,9 +1,9 @@
-use crate::{Error, UserPrefs, api_types::ProjectInfo};
+use crate::{Error, UserPrefs, api_types::ProjectInfo, user_prefs};
 use serde::{Deserialize, Serialize};
 
 pub const UI_STATE_NOTIFICATION_KEY: &str = "event::ui_state";
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum LoadingState {
     NotStarted,
     CheckingForUpdates,
@@ -12,7 +12,7 @@ pub enum LoadingState {
     Authenticating,
     LoadingProjects,
     Unauthenticated,
-    Loaded,
+    Ready,
     Failed(Error),
 }
 
@@ -28,12 +28,17 @@ pub struct UiState {
     pub loading_state: LoadingState,
     pub platform: Platform,
     pub user_prefs: UserPrefs,
-    pub projects: Vec<ProjectInfo>,
+    pub project_info: Vec<ProjectInfo>,
     pub selected_project: Option<ProjectInfo>,
 }
 
 impl UiState {
-    pub fn new() -> Self {
+    pub fn new(
+        loading_state: LoadingState,
+        user_prefs: UserPrefs,
+        project_info: Vec<ProjectInfo>,
+        selected_project: Option<ProjectInfo>,
+    ) -> Self {
         let platform = if cfg!(target_os = "windows") {
             Platform::Windows
         } else if cfg!(target_os = "macos") {
@@ -42,11 +47,17 @@ impl UiState {
             Platform::Linux
         };
         Self {
-            loading_state: LoadingState::NotStarted,
+            loading_state,
             platform,
-            user_prefs: UserPrefs::default(),
-            projects: vec![],
-            selected_project: None,
+            user_prefs,
+            project_info,
+            selected_project,
         }
+    }
+}
+
+impl Default for UiState {
+    fn default() -> Self {
+        Self::new(LoadingState::NotStarted, UserPrefs::default(), vec![], None)
     }
 }

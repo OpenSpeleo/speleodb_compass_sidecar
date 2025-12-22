@@ -6,10 +6,10 @@ use std::sync::{Arc, LazyLock, Mutex};
 
 use crate::{
     commands::{
-        acquire_project_mutex, auth_request, clear_active_project, create_project, fetch_projects,
-        forget_user_prefs, import_compass_project, open_project, project_revision_is_current,
-        project_working_copy_is_dirty, release_project_mutex, save_project, set_active_project,
-        update_index,
+        acquire_project_mutex, auth_request, clear_active_project, create_project,
+        ensure_initialized, fetch_projects, forget_user_prefs, import_compass_project,
+        open_project, project_revision_is_current, project_working_copy_is_dirty,
+        release_project_mutex, save_project, set_active_project, update_index,
     },
     state::AppState,
 };
@@ -54,6 +54,7 @@ pub fn run() {
             auth_request,
             clear_active_project,
             create_project,
+            ensure_initialized,
             fetch_projects,
             forget_user_prefs,
             import_compass_project,
@@ -78,9 +79,7 @@ pub fn run() {
                 let movable = app_handle.clone();
                 tauri::async_runtime::spawn(async move {
                     let app_state = movable.state::<AppState>();
-                    if let Err(e) = app_state.init_app_state(movable.clone()).await {
-                        log::error!("Failed to initialize application state: {}", e);
-                    }
+                    app_state.init_app_state(&movable).await;
                 });
             }
             if let tauri::RunEvent::ExitRequested { .. } = event {

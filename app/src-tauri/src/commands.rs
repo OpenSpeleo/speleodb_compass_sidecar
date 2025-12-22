@@ -19,6 +19,13 @@ use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
 
 #[tauri::command]
+pub async fn ensure_initialized(app_handle: AppHandle) {
+    info!("Ensuring app is initialized");
+    let app_state = app_handle.state::<AppState>();
+    app_state.init_app_state(&app_handle).await;
+}
+
+#[tauri::command]
 pub fn forget_user_prefs(app_state: State<'_, AppState>) -> Result<(), String> {
     app_state.forget_user_prefs().map_err(|e| e.to_string())?;
     Ok(())
@@ -99,7 +106,7 @@ pub async fn update_project_info(
 ) -> Result<ProjectInfo, String> {
     match api::project::fetch_project_info(&app_state.api_info(), project_id).await {
         Ok(revisions) => {
-            app_state.update_project(&revisions);
+            app_state.update_project_info(&revisions);
             Ok(revisions)
         }
         Err(e) => {
@@ -124,7 +131,7 @@ pub async fn project_revision_is_current(
     };
     match update_project_info(&app_state, project_id).await {
         Ok(project_info) => {
-            app_state.update_project(&project_info);
+            app_state.update_project_info(&project_info);
             let latest_revision = match project_info.latest_commit.as_ref() {
                 Some(latest) => {
                     info!(
