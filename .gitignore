@@ -2,6 +2,8 @@ dist/
 target/
 Cargo.lock
 gen/
+node_modules/
+app/app.css
 
 .DS_Store
 

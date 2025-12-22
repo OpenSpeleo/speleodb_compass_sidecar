@@ -1,7 +1,6 @@
 [workspace]
 resolver = "3"
 members = ["api","app","app/src-tauri", "common"]
-defau = ["api","app/src-tauri", "common"]
 
 [workspace.dependencies]
 bytes = "1"

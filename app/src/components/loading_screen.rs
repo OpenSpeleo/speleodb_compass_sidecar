@@ -46,7 +46,7 @@ pub fn loading_screen(&LoadingScreenProps { ref loading_state }: &LoadingScreenP
                     font-size: 18px;
                     font-weight: 500;
                     margin: 0;
-                ">
+                " class="text-red">
                 {
                     match loading_state {
                     LoadingState::NotStarted=>

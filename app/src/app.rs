@@ -95,7 +95,7 @@ pub fn app() -> Html {
             return html! {
                 <main class="container">
                     <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; width:100%;">
-                        <h1>{"SpeleoDB - Compass Sidecar"}</h1>
+                    <h1>{"SpeleoDB - Compass Sidecar"}</h1>
                         <div style="gap:8px;">
                             <button style="background-color:red; color:white;" onclick={on_disconnect.clone()}>{ "Disconnect" }</button>
                         </div>

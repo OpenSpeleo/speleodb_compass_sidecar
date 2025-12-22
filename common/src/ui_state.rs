@@ -1,4 +1,4 @@
-use crate::{Error, UserPrefs, api_types::ProjectInfo, user_prefs};
+use crate::{Error, api_types::ProjectInfo};
 use serde::{Deserialize, Serialize};
 
 pub const UI_STATE_NOTIFICATION_KEY: &str = "event::ui_state";

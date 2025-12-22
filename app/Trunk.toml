@@ -7,3 +7,8 @@ ignore = ["./src-tauri"]
 [serve]
 port = 1420
 open = false
+
+[[hooks]]
+stage = "pre_build"
+command = "tailwindcss"
+command_arguments = ["-i", "input.css", "-o", "app.css"]
