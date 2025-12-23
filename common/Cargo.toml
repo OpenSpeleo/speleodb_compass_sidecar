@@ -5,7 +5,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Local dependencies
+errors = { path = "../errors" }
 # Workspace dependencies
+bytes.workspace = true
 log.workspace = true
 serde.workspace = true
 thiserror.workspace = true
@@ -14,10 +17,8 @@ url.workspace = true
 uuid.workspace = true
 
 # Cargo dependencies
-compass_data = "0.0.4"
 dirs = "6.0.0"
 flexi_logger = "0.31.7"
-semver = { version = "1.0.27", features = ["serde"] }
 
 [dev-dependencies]
 serial_test = "3"

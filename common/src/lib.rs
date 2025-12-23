@@ -1,14 +1,11 @@
+mod api_info;
 pub mod api_types;
-mod error;
-pub mod project;
-mod ui_state;
+pub mod ui_state;
 mod user_prefs;
 
-pub use error::Error;
-pub use project::{CompassProject, Project, SpeleoDb, SpeleoDbProjectRevision};
-use semver::Version;
-pub use ui_state::{LoadingState, UI_STATE_NOTIFICATION_KEY, UiState};
-pub use user_prefs::{OauthToken, UserPrefs};
+pub use api_info::{ApiInfo, OauthToken};
+pub use errors::Error;
+pub use user_prefs::UserPrefs;
 
 use std::{
     path::{Path, PathBuf},
@@ -21,10 +18,6 @@ use uuid::Uuid;
 const COMPASS_HOME_DIR_NAME: &str = ".compass";
 /// Name of the compass projects folder inside the user's home directory.
 const COMPASS_PROJECT_DIR_NAME: &str = "projects";
-pub const SPELEODB_COMPASS_PROJECT_FILE: &str = "compass.toml";
-const SPELEODB_COMPASS_VERSION: Version = Version::new(0, 0, 1);
-
-const SPELEODB_PROJECT_REVISION_FILE: &str = ".revision.txt";
 
 #[cfg(debug_assertions)]
 pub const API_BASE_URL: &str = "https://stage.speleodb.org";

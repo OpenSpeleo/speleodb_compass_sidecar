@@ -19,11 +19,11 @@ pub enum Error {
     #[error("Error serializing TOML")]
     Serialization,
     #[error("No user preferences found")]
-    NoUserPrefs,
+    NoUserPreferences,
     #[error("Error reading user preferece file")]
-    UserPrefsRead(PathBuf),
+    ApiInfoRead(PathBuf),
     #[error("Error writing user preference file")]
-    UserPrefsWrite(PathBuf),
+    ApiInfoWrite(PathBuf),
     #[error("Error importing project file from: {0} to {1}")]
     ProjectImport(PathBuf, PathBuf),
     #[error("Error writing project file")]

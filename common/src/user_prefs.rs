@@ -1,4 +1,5 @@
-use crate::{API_BASE_URL, COMPASS_HOME_DIR, Error};
+use crate::{ApiInfo, COMPASS_HOME_DIR};
+use errors::Error;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -23,37 +24,24 @@ static USER_PREFS_FILE_PATH_BUFFER: LazyLock<PathBuf> = LazyLock::new(|| {
 pub fn user_prefs_file_path() -> &'static Path {
     &USER_PREFS_FILE_PATH_BUFFER
 }
-// TODO:: Add newtype to encapsulate Oauth token validaiton
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
-pub struct OauthToken(String);
 
-impl AsRef<str> for OauthToken {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
+/// User preferences structure
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct UserPrefs {
-    instance: Url,
-    oauth_token: Option<String>,
+    api_info: ApiInfo,
 }
 
 impl Default for UserPrefs {
     fn default() -> Self {
         Self {
-            instance: API_BASE_URL.parse().unwrap(),
-            oauth_token: None,
+            api_info: ApiInfo::default(),
         }
     }
 }
 
 impl UserPrefs {
-    pub fn new(instance: Url, oauth_token: Option<String>) -> Self {
-        Self {
-            instance,
-            oauth_token,
-        }
+    pub fn new(api_info: ApiInfo) -> Self {
+        Self { api_info }
     }
 
     pub fn load() -> Result<Self, Error> {
@@ -67,37 +55,30 @@ impl UserPrefs {
             let instance = Url::parse(&instance).map_err(|e| {
                 Error::Deserialization(format!("Invalid URL in TEST_SPELEODB_INSTANCE: {}", e))
             })?;
-            return Ok(UserPrefs {
-                instance: instance,
-                oauth_token: Some(oauth_token),
-            });
+            return Ok(UserPrefs::new(ApiInfo::new(instance, Some(oauth_token))));
         }
         if user_prefs_file_path().exists() {
-            let s = std::fs::read_to_string(user_prefs_file_path())
-                .map_err(|_| Error::UserPrefsRead(user_prefs_file_path().to_path_buf()))?;
-            let s: UserPrefs =
-                toml::from_str(&s).map_err(|e| Error::Deserialization(e.to_string()))?;
+            let user_preferences_string = std::fs::read_to_string(user_prefs_file_path())
+                .map_err(|_| Error::ApiInfoRead(user_prefs_file_path().to_path_buf()))?;
+            let prefs: UserPrefs = toml::from_str(&user_preferences_string)
+                .map_err(|e| Error::Deserialization(e.to_string()))?;
             info!("User preferences loaded successfully");
-            Ok(s)
+            Ok(prefs)
         } else {
             warn!("No user preferences found");
-            Err(Error::NoUserPrefs)
+            Err(Error::NoUserPreferences)
         }
     }
 
-    pub fn instance(&self) -> &Url {
-        &self.instance
-    }
-
-    pub fn oauth_token(&self) -> Option<&str> {
-        self.oauth_token.as_deref()
+    pub fn api_info(&self) -> &ApiInfo {
+        &self.api_info
     }
 
     /// Save a user preferences object to disk in TOML format.
-    pub fn save(prefs: &Self) -> Result<(), Error> {
-        let s = toml::to_string_pretty(&prefs).map_err(|_| Error::Serialization)?;
+    pub fn save(&self) -> Result<(), Error> {
+        let s = toml::to_string_pretty(self).map_err(|_| Error::Serialization)?;
         std::fs::write(user_prefs_file_path(), s)
-            .map_err(|_| Error::UserPrefsWrite(user_prefs_file_path().to_path_buf()))?;
+            .map_err(|_| Error::ApiInfoWrite(user_prefs_file_path().to_path_buf()))?;
 
         // On Unix, tighten permissions so only the owner can read/write the prefs file.
         #[cfg(unix)]
@@ -124,7 +105,7 @@ impl UserPrefs {
     pub fn forget() -> Result<(), Error> {
         if user_prefs_file_path().exists() {
             std::fs::remove_file(user_prefs_file_path())
-                .map_err(|_| Error::UserPrefsWrite(user_prefs_file_path().to_path_buf()))?;
+                .map_err(|_| Error::ApiInfoWrite(user_prefs_file_path().to_path_buf()))?;
         }
         Ok(())
     }
@@ -145,13 +126,13 @@ mod tests {
         const OAUTH_TOKEN: &str = "0123456789abcdef0123456789abcdef01234567";
         let instance_url = Url::parse(INSTANCE_URL).unwrap();
         // Create test preferences
-        let prefs = UserPrefs {
-            instance: instance_url.clone(),
-            oauth_token: Some(OAUTH_TOKEN.to_string()),
-        };
+        let prefs = UserPrefs::new(ApiInfo::new(
+            instance_url.clone(),
+            Some(OAUTH_TOKEN.to_string()),
+        ));
 
         // Save preferences
-        let save_result = UserPrefs::save(&prefs);
+        let save_result = prefs.save();
         assert!(
             save_result.is_ok(),
             "save_user_prefs should succeed: {:?}",
@@ -160,8 +141,9 @@ mod tests {
 
         // Load preferences
         let loaded = UserPrefs::load().expect("Expected to load user prefs");
-        assert_eq!(loaded.instance, instance_url);
-        assert_eq!(loaded.oauth_token.unwrap(), OAUTH_TOKEN);
+        let api_info = loaded.api_info();
+        assert_eq!(api_info.instance(), &instance_url);
+        assert_eq!(api_info.oauth_token().unwrap(), OAUTH_TOKEN);
     }
 
     #[test]
@@ -172,13 +154,13 @@ mod tests {
 
         // Create and save test preferences
         let prefs = UserPrefs::default();
-        let _ = UserPrefs::save(&prefs);
+        let _ = prefs.save();
 
         // Forget preferences
         UserPrefs::forget().expect("forget_user_prefs should succeed");
 
         // Try to load - should get None
-        let Err(Error::NoUserPrefs) = UserPrefs::load() else {
+        let Err(Error::NoUserPreferences) = UserPrefs::load() else {
             panic!("Should return error loading prefs when preferences are deleted");
         };
     }
@@ -201,7 +183,7 @@ mod tests {
         let _ = UserPrefs::forget();
 
         let result = UserPrefs::load();
-        let Err(Error::NoUserPrefs) = result else {
+        let Err(Error::NoUserPreferences) = result else {
             panic!("Should return None when no preferences exist");
         };
     }
@@ -216,7 +198,7 @@ mod tests {
 
         // Save preferences
         let prefs = UserPrefs::default();
-        let _ = UserPrefs::save(&prefs);
+        let _ = prefs.save();
 
         // Check file permissions
         let metadata = std::fs::metadata(&user_prefs_file_path())

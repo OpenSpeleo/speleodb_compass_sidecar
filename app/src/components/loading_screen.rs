@@ -1,4 +1,4 @@
-use common::LoadingState;
+use common::ui_state::LoadingState;
 use yew::{Html, Properties, function_component, html};
 
 #[derive(Properties, PartialEq)]

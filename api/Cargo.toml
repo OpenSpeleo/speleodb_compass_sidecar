@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-# local dependencies
+# Local dependencies
 common = { path = "../common" }
-
+errors  = { path = "../errors" }
 # workspace dependencies
 bytes.workspace = true
 log.workspace = true

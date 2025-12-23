@@ -1,15 +1,19 @@
 use common::{
-    Error, LoadingState, UI_STATE_NOTIFICATION_KEY, UiState, UserPrefs, api_types::ProjectInfo,
+    ApiInfo, Error, UserPrefs,
+    api_types::ProjectInfo,
+    ui_state::{LoadingState, UI_STATE_NOTIFICATION_KEY, UiState},
 };
 use log::warn;
 use std::{collections::HashMap, sync::Mutex};
 use tauri::{AppHandle, Emitter, ipc::private::tracing::info};
 use uuid::Uuid;
 
+use crate::project::ProjectManager;
+
 pub struct AppState {
     loading_state: Mutex<LoadingState>,
-    api_info: Mutex<UserPrefs>,
-    project_info: Mutex<HashMap<uuid::Uuid, ProjectInfo>>,
+    api_info: Mutex<ApiInfo>,
+    project_info: Mutex<HashMap<uuid::Uuid, ProjectManager>>,
     active_project: Mutex<Option<uuid::Uuid>>,
 }
 
@@ -17,7 +21,7 @@ impl AppState {
     pub fn new() -> Self {
         Self {
             loading_state: Mutex::new(LoadingState::NotStarted),
-            api_info: Mutex::new(UserPrefs::default()),
+            api_info: Mutex::new(ApiInfo::default()),
             project_info: Mutex::new(HashMap::new()),
             active_project: Mutex::new(None),
         }
@@ -53,13 +57,13 @@ impl AppState {
         }
     }
 
-    pub fn api_info(&self) -> UserPrefs {
+    pub fn api_info(&self) -> ApiInfo {
         self.api_info.lock().unwrap().clone()
     }
 
     pub fn update_user_prefs(&self, prefs: UserPrefs, app_handle: &AppHandle) -> Result<(), Error> {
-        UserPrefs::save(&prefs)?;
-        *self.api_info.lock().unwrap() = prefs;
+        prefs.save()?;
+        *self.api_info.lock().unwrap() = prefs.api_info().clone();
         self.emit_app_state_change(app_handle);
         Ok(())
     }
@@ -76,7 +80,7 @@ impl AppState {
             project_lock.clear();
         }
         {
-            let user_prefs = UserPrefs::default();
+            let user_prefs = ApiInfo::default();
             *self.api_info.lock().unwrap() = user_prefs;
         }
         self.set_loading_state(LoadingState::NotStarted, app_handle);
@@ -85,12 +89,13 @@ impl AppState {
 
     pub fn update_project_info(&self, project_info: &ProjectInfo) {
         let mut project_lock = self.project_info.lock().unwrap();
-        project_lock.insert(project_info.id, project_info.clone());
-    }
-
-    pub fn get_project(&self, project_id: uuid::Uuid) -> Option<ProjectInfo> {
-        let project_lock = self.project_info.lock().unwrap();
-        project_lock.get(&project_id).cloned()
+        if project_lock.contains_key(&project_info.id) {
+            let existing_project = project_lock.get_mut(&project_info.id).unwrap();
+            existing_project.update_project_info(project_info);
+        } else {
+            let new_project = ProjectManager::initialize_from_info(project_info.clone());
+            project_lock.insert(project_info.id, new_project);
+        }
     }
 
     pub fn set_active_project(&self, project_id: Option<Uuid>, app_handle: &AppHandle) {
@@ -109,7 +114,7 @@ impl AppState {
             .lock()
             .unwrap()
             .values()
-            .cloned()
+            .map(|p| p.get_ui_status())
             .collect();
         let active_project_id = self.get_active_project();
         let ui_state = UiState::new(loading_state, project_info, active_project_id);
@@ -153,16 +158,16 @@ impl AppState {
     }
 
     async fn authenticate_user(&self, app_handle: &AppHandle) -> Result<(), String> {
-        let prefs = self.api_info();
+        let api_info = self.api_info();
         info!("Authenticating user");
-        let Some(token) = prefs.oauth_token() else {
+        let Some(token) = api_info.oauth_token() else {
             log::warn!("No OAuth token found in user preferences");
             return Err("No OAuth token found".to_string());
         };
-        match api::auth::authorize_with_token(prefs.instance(), &token).await {
-            Ok(_) => {
+        match api::auth::authorize_with_token(api_info.instance(), &token).await {
+            Ok(api_info) => {
                 log::info!("User authenticated successfully");
-                let prefs = UserPrefs::new(prefs.instance().clone(), Some(token.to_string()));
+                let prefs = UserPrefs::new(api_info);
                 if self.update_user_prefs(prefs, app_handle).is_err() {
                     log::warn!("Failed to save user preferences after authentication");
                 }
@@ -225,7 +230,7 @@ impl AppState {
             },
             LoadingState::LoadingPrefs => {
                 let prefs = self.load_user_preferences(app_handle);
-                if let Some(_token) = prefs.oauth_token() {
+                if let Some(_token) = prefs.api_info().oauth_token() {
                     info!("User prefs found, attempting to authenticate user");
                     self.set_loading_state(LoadingState::Authenticating, app_handle)
                 } else {

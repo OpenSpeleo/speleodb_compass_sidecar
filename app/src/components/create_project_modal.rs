@@ -1,5 +1,6 @@
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use common::api_types::ProjectInfo;
+use log::{error, info};
 use std::collections::BTreeMap;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
@@ -43,7 +44,6 @@ pub fn create_project_modal(props: &CreateProjectModalProps) -> Html {
         let longitude = longitude.clone();
         let error_message = error_message.clone();
         let is_submitting = is_submitting.clone();
-        let on_success = props.on_success.clone();
 
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
@@ -85,7 +85,6 @@ pub fn create_project_modal(props: &CreateProjectModalProps) -> Html {
 
             let error_message = error_message.clone();
             let is_submitting = is_submitting.clone();
-            let on_success = on_success.clone();
 
             is_submitting.set(true);
             error_message.set(None);
@@ -110,10 +109,11 @@ pub fn create_project_modal(props: &CreateProjectModalProps) -> Html {
                     .await
                 {
                     Ok(project) => {
+                        info!("Project created successfully: {}", project.id);
                         is_submitting.set(false);
-                        on_success.emit(project);
                     }
                     Err(e) => {
+                        error!("Error creating project: {}", e);
                         is_submitting.set(false);
                         error_message.set(Some(e));
                     }

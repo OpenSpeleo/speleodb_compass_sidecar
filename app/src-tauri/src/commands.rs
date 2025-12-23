@@ -1,18 +1,11 @@
-use crate::{
-    state::AppState,
-    zip_management::{cleanup_temp_zip, pack_project_working_copy, unpack_project_zip},
-};
+use crate::state::AppState;
 use common::{
-    CompassProject, Error, SpeleoDbProjectRevision, UserPrefs,
+    Error, UserPrefs,
     api_types::{ProjectInfo, ProjectSaveResult},
-    compass_project_index_path, compass_project_working_path, ensure_compass_project_dirs_exist,
+    compass_project_working_path,
 };
 use log::{error, info};
-use std::{
-    fs::{copy, create_dir_all, read_dir},
-    path::Path,
-    process::Command,
-};
+use std::process::Command;
 use tauri::{AppHandle, Manager, State, Url};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
@@ -53,7 +46,7 @@ pub async fn auth_request(
     instance: Url,
 ) -> Result<(), String> {
     info!("Starting auth request");
-    let updated_token = if let Some(oauth_token) = oauth {
+    let api_info = if let Some(oauth_token) = oauth {
         api::auth::authorize_with_token(&instance, &oauth_token).await?
     } else {
         let email = email.ok_or("Email is required for email/password authentication")?;
@@ -61,7 +54,7 @@ pub async fn auth_request(
         api::auth::authorize_with_email(&instance, &email, &password).await?
     };
     info!("Auth request successful, updating user preferences");
-    let prefs = UserPrefs::new(instance, Some(updated_token));
+    let prefs = UserPrefs::new(api_info);
     let app_state = app_handle.state::<AppState>();
     app_state
         .update_user_prefs(prefs, &app_handle)
@@ -80,6 +73,7 @@ pub async fn acquire_project_mutex(
         .map_err(|e| e.to_string())
 }
 
+/*
 #[tauri::command]
 pub async fn project_working_copy_is_dirty(project_id: Uuid) -> Result<bool, String> {
     info!("Checking if working copy is dirty");
@@ -91,12 +85,12 @@ pub async fn project_working_copy_is_dirty(project_id: Uuid) -> Result<bool, Str
     else if !compass_project_index_path(project_id).exists() {
         return Ok(false);
     }
-    let index_project = match CompassProject::load_index_project(project_id) {
-        Ok(p) => p.project,
+    let index_project = match LocalProject::load_index_project(project_id) {
+        Ok(p) => p.map,
         Err(_) => return Ok(false),
     };
-    let working_project = match CompassProject::load_working_project(project_id) {
-        Ok(p) => p.project,
+    let working_project = match LocalProject::load_working_project(project_id) {
+        Ok(p) => p.map,
         Err(_) => return Ok(false),
     };
     if index_project != working_project {
@@ -107,6 +101,7 @@ pub async fn project_working_copy_is_dirty(project_id: Uuid) -> Result<bool, Str
         Ok(false)
     }
 }
+*/
 
 pub async fn update_project_info(
     app_state: &AppState,
@@ -127,6 +122,7 @@ pub async fn update_project_info(
     }
 }
 
+/*
 #[tauri::command]
 pub async fn project_revision_is_current(
     app_state: State<'_, AppState>,
@@ -176,62 +172,7 @@ pub async fn project_revision_is_current(
         }
     }
 }
-
-fn copy_dir_all<A: AsRef<Path>>(src: impl AsRef<Path>, dst: A) -> std::io::Result<()> {
-    create_dir_all(&dst)?;
-    for entry in read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        if ty.is_dir() {
-            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
-        } else {
-            copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
-        }
-    }
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn update_index(
-    app_state: State<'_, AppState>,
-    project_id: Uuid,
-) -> Result<CompassProject, String> {
-    let version_info = match app_state.get_project(project_id) {
-        Some(info) => info,
-        None => update_project_info(&app_state, project_id).await?,
-    };
-    ensure_compass_project_dirs_exist(project_id).map_err(|e| e.to_string())?;
-    log::info!("Downloading project ZIP from");
-    match api::project::download_project_zip(&app_state.api_info(), project_id).await {
-        Ok(bytes) => {
-            log::info!("Downloaded ZIP ({} bytes)", bytes.len());
-            let project = unpack_project_zip(project_id, bytes)?;
-            if let Some(latest_commit) = version_info.latest_commit.as_ref() {
-                SpeleoDbProjectRevision::from(latest_commit)
-                    .save_revision_for_project(project_id)
-                    .map_err(|e| e.to_string())?;
-            };
-            // Copy index to working copy
-            let src = compass_project_index_path(project_id);
-            let dst = compass_project_working_path(project_id);
-            copy_dir_all(&src, &dst).map_err(|e| {
-                format!(
-                    "Failed to copy index to working copy ({} -> {}): {}",
-                    src.display(),
-                    dst.display(),
-                    e
-                )
-            })?;
-
-            Ok(project)
-        }
-        Err(Error::NoProjectData(project_id)) => {
-            info!("Empty project on SpeleoDB");
-            CompassProject::empty_project(project_id).map_err(|e| e.to_string())
-        }
-        Err(e) => Err(format!("Failed to download project ZIP: {}", e)),
-    }
-}
+*/
 
 #[tauri::command]
 pub fn open_project(project_id: Uuid) -> Result<(), String> {
@@ -258,7 +199,7 @@ pub fn open_project(project_id: Uuid) -> Result<(), String> {
     // On Windows, actually try to open the project with Compass if possible
     #[cfg(target_os = "windows")]
     {
-        let compass_project = CompassProject::load_working_project(project_id)
+        let compass_project = LocalProject::load_working_project(project_id)
             .map_err(|e| e.to_string())?
             .project
             .mak_file;
@@ -289,6 +230,7 @@ pub async fn save_project(
     project_id: Uuid,
     commit_message: String,
 ) -> Result<ProjectSaveResult, String> {
+    /*
     log::info!("Zipping project folder for project: {}", project_id);
     let zipped_project_path = pack_project_working_copy(project_id)?;
     info!("Project zipped successfully, uploading project ZIP to SpeleoDB");
@@ -326,13 +268,12 @@ pub async fn save_project(
         }
     });
     Ok(result.map_err(|e| format!("Failed to upload project ZIP: {}", e))?)
+    */
+    Err("Saving projects is not yet implemented".to_string())
 }
 
 #[tauri::command]
-pub async fn import_compass_project(
-    app: tauri::AppHandle,
-    project_id: Uuid,
-) -> Result<CompassProject, Error> {
+pub async fn import_compass_project(app: tauri::AppHandle, project_id: Uuid) -> Result<(), Error> {
     tauri::async_runtime::spawn(async move {
         let Some(FilePath::Path(file_path)) = app
             .dialog()
@@ -344,9 +285,10 @@ pub async fn import_compass_project(
         };
         info!("Selected MAK file: {}", file_path.display());
         info!("Importing into Compass project: {:?}", project_id);
-        let project = CompassProject::import_compass_project(&file_path, project_id)?;
-        info!("Successfully imported Compass project: {project:?}");
-        Ok(project)
+        //let project = LocalProject::import_compass_project(&file_path, project_id)?;
+        error!("Importing Compass projects is not yet implemented");
+        //info!("Successfully imported Compass project: {project:?}");
+        Ok(())
     })
     .await
     .unwrap()
@@ -382,14 +324,15 @@ pub async fn release_project_mutex(
 
 #[tauri::command]
 pub async fn create_project(
-    app_state: State<'_, AppState>,
+    app_handle: AppHandle,
     name: String,
     description: String,
     country: String,
     latitude: Option<String>,
     longitude: Option<String>,
 ) -> Result<ProjectInfo, String> {
-    api::project::create_project(
+    let app_state = app_handle.state::<AppState>();
+    let project_info = api::project::create_project(
         &app_state.api_info(),
         name,
         description,
@@ -398,5 +341,8 @@ pub async fn create_project(
         longitude,
     )
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    app_state.update_project_info(&project_info);
+    app_state.set_active_project(Some(project_info.id), &app_handle);
+    Ok(project_info)
 }

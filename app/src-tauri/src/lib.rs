@@ -1,18 +1,20 @@
 mod commands;
+mod project;
 mod state;
-mod zip_management;
 
 use crate::{
     commands::{
         acquire_project_mutex, auth_request, clear_active_project, create_project,
         ensure_initialized, fetch_projects, import_compass_project, open_project,
-        project_revision_is_current, project_working_copy_is_dirty, release_project_mutex,
-        save_project, set_active_project, sign_out, update_index,
+        release_project_mutex, save_project, set_active_project, sign_out,
     },
     state::AppState,
 };
 use common::compass_home;
+use semver::Version;
 use tauri::Manager;
+
+const SPELEODB_COMPASS_VERSION: Version = Version::new(0, 0, 1);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -52,11 +54,8 @@ pub fn run() {
             sign_out,
             import_compass_project,
             open_project,
-            project_revision_is_current,
-            project_working_copy_is_dirty,
             release_project_mutex,
             set_active_project,
-            update_index,
             save_project,
         ])
         .manage(AppState::new());

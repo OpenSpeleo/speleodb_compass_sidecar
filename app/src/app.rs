@@ -2,7 +2,7 @@ use crate::{
     components::{auth_screen::AuthScreen, loading_screen::LoadingScreen, main_layout::MainLayout},
     speleo_db_controller::SPELEO_DB_CONTROLLER,
 };
-use common::{LoadingState, UI_STATE_NOTIFICATION_KEY, UiState};
+use common::ui_state::{LoadingState, UI_STATE_NOTIFICATION_KEY, UiState};
 use futures::StreamExt;
 use log::info;
 use tauri_sys::event::listen;

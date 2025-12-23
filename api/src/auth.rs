@@ -1,3 +1,4 @@
+use common::ApiInfo;
 use log::{error, info};
 use serde::Deserialize;
 use serde_json::json;
@@ -5,7 +6,10 @@ use url::Url;
 
 use crate::get_api_client;
 
-async fn handle_auth_response(response: reqwest::Response) -> Result<String, String> {
+async fn handle_auth_response(
+    instance: &Url,
+    response: reqwest::Response,
+) -> Result<ApiInfo, String> {
     let status = response.status();
     #[derive(Deserialize)]
     struct TokenResponse {
@@ -17,14 +21,15 @@ async fn handle_auth_response(response: reqwest::Response) -> Result<String, Str
             .json::<TokenResponse>()
             .await
             .map_err(|e| format!("Unexpected response body: {e}"))?;
-        return Ok(token.token);
+        let api_info = ApiInfo::new(instance.clone(), Some(token.token.clone()));
+        return Ok(api_info);
     } else {
         error!("Authorization failed with status: {}", status);
         Err(format!("Authorization failed with status: {}", status))
     }
 }
 
-pub async fn authorize_with_token(instance: &Url, oauth: &str) -> Result<String, String> {
+pub async fn authorize_with_token(instance: &Url, oauth: &str) -> Result<ApiInfo, String> {
     let url = instance.join("api/v1/user/auth-token/").unwrap();
     let client = get_api_client();
     info!(
@@ -37,14 +42,14 @@ pub async fn authorize_with_token(instance: &Url, oauth: &str) -> Result<String,
         .send()
         .await
         .map_err(|e| format!("Network request failed: {}", e))?;
-    handle_auth_response(response).await
+    handle_auth_response(instance, response).await
 }
 
 pub async fn authorize_with_email(
     instance: &Url,
     email: &str,
     password: &str,
-) -> Result<String, String> {
+) -> Result<ApiInfo, String> {
     let client = get_api_client();
     let url = instance.join("api/v1/user/auth-token/").unwrap();
     let body = json!({"email": email, "password": password});
@@ -54,7 +59,7 @@ pub async fn authorize_with_email(
         .send()
         .await
         .map_err(|e| format!("Network request failed: {}", e))?;
-    handle_auth_response(response).await
+    handle_auth_response(instance, response).await
 }
 
 #[cfg(test)]

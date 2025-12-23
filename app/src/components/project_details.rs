@@ -1,13 +1,14 @@
 use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
-use common::api_types::{ProjectInfo, ProjectSaveResult};
+use common::api_types::ProjectSaveResult;
+use common::ui_state::ProjectStatus;
 use log::{error, info};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct ProjectDetailsProps {
-    pub project: ProjectInfo,
+    pub project: ProjectStatus,
 }
 
 #[function_component(ProjectDetails)]
@@ -33,7 +34,7 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
 
     // Run the download workflow automatically on mount
     {
-        let project_id = project.id;
+        let project_id = project.id();
         let downloading = downloading.clone();
         let show_readonly_modal = show_readonly_modal.clone();
         let show_empty_project_modal_effect = show_empty_project_modal.clone();
@@ -93,15 +94,17 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
                 // Step 4: Update project from SpeleoDB server
                 match SPELEO_DB_CONTROLLER.update_project(project_id).await {
                     Ok(updated_project) => {
+                        /*
                         info!("Successfully updated compass project data{updated_project:?}!");
                         downloading.set(false);
-                        let mak_path = updated_project.project.mak_file.clone();
+                        let mak_path = updated_project.map.mak_file.clone();
                         project_file_path.set(mak_path);
                         if updated_project.is_empty() {
                             show_empty_project_modal_effect.set(true);
                         } else {
                             download_complete.set(true);
                         }
+                        */
                     }
                     Err(error) => {
                         downloading.set(false);
@@ -158,7 +161,7 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
 
     // Open folder handler
     let on_open_project = {
-        let project_id = project.id;
+        let project_id = project.id();
         Callback::from(move |_: ()| {
             spawn_local(async move {
                 let _ = SPELEO_DB_CONTROLLER.open_project(project_id).await;
@@ -181,7 +184,7 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
 
     // Save Project Handler
     let on_save = {
-        let project_id = project.id;
+        let project_id = project.id();
         let commit_message = commit_message.clone();
         let commit_message_error = commit_message_error.clone();
         let uploading = uploading.clone();
@@ -233,7 +236,7 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
         let download_complete = download_complete.clone();
         let error_message = error_message.clone();
         let project_file_path = project_file_path.clone();
-        let project_id = project.id;
+        let project_id = project.id();
         let show_empty_project_modal = show_empty_project_modal.clone();
         let show_reload_confirm = show_reload_confirm.clone();
         Callback::from(move |_: ()| {
@@ -251,15 +254,17 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
                 // Step 2: Update project index
                 match SPELEO_DB_CONTROLLER.update_project(project_id).await {
                     Ok(updated_project) => {
+                        /*
                         info!("Successfully updated compass project data{updated_project:?}!");
                         downloading.set(false);
-                        let mak_path = updated_project.project.mak_file.clone();
+                        let mak_path = updated_project.map.mak_file.clone();
                         project_file_path.set(mak_path);
                         if updated_project.is_empty() {
                             show_empty_project_modal.set(true);
                         } else {
                             download_complete.set(true);
                         }
+                        */
                     }
                     Err(error) => {
                         error!("Error updating compass project data: {error:?}!");
@@ -274,7 +279,7 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
         let selected_zip = selected_zip.clone();
         let show_load_confirm = show_load_confirm.clone();
         let error_message = error_message.clone();
-        let project_id = project.id;
+        let project_id = project.id();
 
         Callback::from(move |_| {
             let selected_zip = selected_zip.clone();
@@ -287,7 +292,7 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
                     .await
                 {
                     Ok(imported_project) => {
-                        selected_zip.set(imported_project.project.mak_file);
+                        //selected_zip.set(imported_project.map.mak_file);
                         show_load_confirm.set(true);
                     }
                     Err(e) => {
@@ -300,7 +305,7 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
 
     // Confirm Load from Disk (Upload)
     let on_confirm_load = {
-        let project_id = project.id;
+        let project_id = project.id();
         let uploading = uploading.clone();
         let show_load_confirm = show_load_confirm.clone();
         let show_upload_success = show_upload_success.clone();
@@ -336,7 +341,7 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
 
     // Back button handler - release mutex before navigating back
     let on_back_click = {
-        let project_id = project.id;
+        let project_id = project.id();
         Callback::from(move |_| {
             spawn_local(async move {
                 // Release mutex and clear active project first
@@ -359,8 +364,8 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
             </div>
 
             <h2>{"Project Details"}</h2>
-            <p><strong>{"Project: "}</strong>{&project.name}</p>
-            <p style="color: #6b7280; font-size: 14px;">{format!("ID: {}", project.id)}</p>
+            <p><strong>{"Project: "}</strong>{&project.name()}</p>
+            <p style="color: #6b7280; font-size: 14px;">{format!("ID: {}", project.id())}</p>
 
             {
                 if *downloading {
@@ -505,7 +510,7 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
                                 - the project is currently locked by another user\n\
                                 - you do not have edit permissions to the project\n\n\
                                 Contact a Project Administrator if you believe this is a mistake.",
-                                project.name
+                                project.name()
                             )}
                             modal_type={ModalType::Warning}
                             show_close_button={true}

@@ -1,13 +1,12 @@
-use std::path::Path;
-
+use crate::{SPELEODB_COMPASS_VERSION, project::SPELEODB_COMPASS_PROJECT_FILE};
+use common::{
+    Error, compass_project_index_path, compass_project_working_path,
+    ensure_compass_project_dirs_exist,
+};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use uuid::Uuid;
-
-use crate::{
-    Error, SPELEODB_COMPASS_PROJECT_FILE, SPELEODB_COMPASS_VERSION, compass_project_index_path,
-    compass_project_working_path, ensure_compass_project_dirs_exist,
-};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct SpeleoDb {
@@ -25,13 +24,13 @@ impl Default for SpeleoDb {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct Project {
+pub struct ProjectMap {
     pub mak_file: Option<String>,
     pub dat_files: Vec<String>,
     pub plt_files: Vec<String>,
 }
 
-impl Project {
+impl ProjectMap {
     pub fn import(mak_file: String, dat_files: Vec<String>) -> Self {
         let plt_files = vec![];
         Self {
@@ -46,7 +45,7 @@ impl Project {
     }
 }
 
-impl Default for Project {
+impl Default for ProjectMap {
     fn default() -> Self {
         let mak_file = None;
         let dat_files = vec![];
@@ -60,12 +59,12 @@ impl Default for Project {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct CompassProject {
+pub struct LocalProject {
     pub speleodb: SpeleoDb,
-    pub project: Project,
+    pub map: ProjectMap,
 }
 
-impl CompassProject {
+impl LocalProject {
     pub fn import_compass_project(mak_path: &Path, id: Uuid) -> Result<Self, Error> {
         info!("Attempting to import {mak_path:?} to project {id}");
         // Verify that the .mak file exists
@@ -114,7 +113,7 @@ impl CompassProject {
                 id,
                 version: SPELEODB_COMPASS_VERSION,
             },
-            project: Project::import(
+            map: ProjectMap::import(
                 mak_path.file_name().unwrap().to_string_lossy().to_string(),
                 project_files.clone(),
             ),
@@ -138,24 +137,17 @@ impl CompassProject {
         Ok(new_project)
     }
 
-    /// Create an empty Compass project with no files, and populate the working copy.
-    pub fn empty_project(id: Uuid) -> Result<Self, Error> {
+    /// Create an empty Compass project with no files.
+    pub fn empty_project(id: Uuid) -> Self {
         info!("Creating empty Compass project for id: {id}");
-        ensure_compass_project_dirs_exist(id)?;
         let new_project = Self {
             speleodb: SpeleoDb {
                 id,
                 version: SPELEODB_COMPASS_VERSION,
             },
-            project: Project::new(),
+            map: ProjectMap::new(),
         };
-        let serialized_project =
-            toml::to_string_pretty(&new_project).map_err(|_| Error::Serialization)?;
-        let mut working_copy_path = compass_project_working_path(id);
-        working_copy_path.push(SPELEODB_COMPASS_PROJECT_FILE);
-        std::fs::write(&working_copy_path, &serialized_project)
-            .map_err(|_| Error::ProjectWrite(working_copy_path.clone()))?;
-        Ok(new_project)
+        new_project
     }
 
     pub fn load_working_project(id: Uuid) -> Result<Self, Error> {
@@ -163,7 +155,7 @@ impl CompassProject {
         project_path.push(SPELEODB_COMPASS_PROJECT_FILE);
         let project_data = std::fs::read_to_string(&project_path)
             .map_err(|_| Error::ProjectNotFound(project_path.clone()))?;
-        let project: CompassProject =
+        let project: LocalProject =
             toml::from_str(&project_data).map_err(|e| Error::Deserialization(e.to_string()))?;
         Ok(project)
     }
@@ -173,13 +165,13 @@ impl CompassProject {
         project_path.push(SPELEODB_COMPASS_PROJECT_FILE);
         let project_data = std::fs::read_to_string(&project_path)
             .map_err(|_| Error::ProjectNotFound(project_path.clone()))?;
-        let project: CompassProject =
+        let project: LocalProject =
             toml::from_str(&project_data).map_err(|e| Error::Deserialization(e.to_string()))?;
         Ok(project)
     }
 
     pub fn is_empty(&self) -> bool {
-        self.project.mak_file.is_none()
+        self.map.mak_file.is_none()
     }
 }
 
@@ -193,7 +185,7 @@ mod test {
     #[serial]
     fn test_project_import() {
         let id = Uuid::new_v4();
-        let project = CompassProject::import_compass_project(
+        let project = LocalProject::import_compass_project(
             &PathBuf::from_str("assets/test_data/Fulfords.mak").unwrap(),
             id,
         )

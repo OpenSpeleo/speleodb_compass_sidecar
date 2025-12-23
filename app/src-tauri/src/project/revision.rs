@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{Error, SPELEODB_PROJECT_REVISION_FILE, api_types::CommitInfo, compass_project_path};
+use common::{Error, api_types::CommitInfo, compass_project_path};
+
+use crate::project::SPELEODB_PROJECT_REVISION_FILE;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct SpeleoDbProjectRevision {

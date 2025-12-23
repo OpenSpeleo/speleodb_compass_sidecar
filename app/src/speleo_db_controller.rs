@@ -1,9 +1,6 @@
 // WASM controller now delegates network calls to native Tauri backend.
 use crate::{Error, invoke};
-use common::{
-    CompassProject,
-    api_types::{ProjectInfo, ProjectSaveResult},
-};
+use common::ui_state::{ProjectInfo, ProjectSaveResult};
 use log::{error, info};
 use once_cell::sync::Lazy;
 use serde::Serialize;
@@ -132,13 +129,13 @@ impl SpeleoDBController {
         Ok(is_current)
     }
 
-    pub async fn update_project(&self, project_id: Uuid) -> Result<CompassProject, String> {
+    pub async fn update_project(&self, project_id: Uuid) -> Result<(), String> {
         let args = ProjectIdArgs::new(project_id);
-        let project: CompassProject = invoke("update_index", &args)
+        let _: () = invoke("update_index", &args)
             .await
             .map_err(|e| e.to_string())?;
 
-        Ok(project)
+        Ok(())
     }
 
     pub async fn open_project(&self, project_id: Uuid) -> Result<(), String> {
@@ -178,7 +175,7 @@ impl SpeleoDBController {
         Ok(())
     }
 
-    pub async fn import_compass_project(&self, id: Uuid) -> Result<CompassProject, Error> {
+    pub async fn import_compass_project(&self, id: Uuid) -> Result<(), Error> {
         let args = ProjectIdArgs::new(id);
         invoke("import_compass_project", &args).await
     }
@@ -220,25 +217,11 @@ impl SpeleoDBController {
             longitude,
         };
 
-        let json: serde_json::Value = invoke("create_project", &args).await.unwrap();
+        let project_info: ProjectInfo = invoke("create_project", &args)
+            .await
+            .map_err(|e| e.to_string())?;
 
-        // Check if operation was successful
-        if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
-            let msg = json
-                .get("error")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Failed to create project");
-            return Err(msg.to_string());
-        }
-
-        // Extract project data
-        let project_data = json.get("data").ok_or("No project data in response")?;
-
-        // Deserialize to Project
-        let project: ProjectInfo = serde_json::from_value(project_data.clone())
-            .map_err(|e| format!("Failed to parse project data: {}", e))?;
-
-        Ok(project)
+        Ok(project_info)
     }
     pub async fn sign_out(&self) -> Result<(), String> {
         let args = UnitArgs::new();

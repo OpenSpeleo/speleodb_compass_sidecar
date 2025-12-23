@@ -1,15 +1,17 @@
 use std::path::Path;
 
-use crate::get_api_client;
 use common::{
-    Error, UserPrefs,
+    ApiInfo,
     api_types::{ProjectInfo, ProjectSaveResult, ProjectType},
 };
-use log::info;
+use errors::Error;
+use log::{error, info};
 use serde::Deserialize;
 use uuid::Uuid;
 
-pub async fn acquire_project_mutex(api_info: &UserPrefs, project_id: Uuid) -> Result<(), Error> {
+use crate::get_api_client;
+
+pub async fn acquire_project_mutex(api_info: &ApiInfo, project_id: Uuid) -> Result<(), Error> {
     log::info!("Acquiring project mutex for project: {}", project_id);
     let base = api_info.instance();
     let oauth = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
@@ -38,7 +40,7 @@ pub async fn acquire_project_mutex(api_info: &UserPrefs, project_id: Uuid) -> Re
 }
 
 pub async fn create_project(
-    api_info: &UserPrefs,
+    api_info: &ApiInfo,
     name: String,
     description: String,
     country: String,
@@ -48,13 +50,14 @@ pub async fn create_project(
     log::info!("Creating new project: {}", name);
     let base = api_info.instance();
     let oauth = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
-    let url = format!("{}{}", base, "api/v1/projects/");
+    let url = base.join("api/v1/projects/").unwrap();
     let client = get_api_client();
 
     let mut body = serde_json::Map::new();
     body.insert("name".to_string(), serde_json::json!(name));
     body.insert("description".to_string(), serde_json::json!(description));
     body.insert("country".to_string(), serde_json::json!(country));
+    body.insert("type".to_string(), serde_json::json!(&ProjectType::Compass));
     if let Some(lat) = latitude {
         if !lat.is_empty() {
             body.insert("latitude".to_string(), serde_json::json!(lat));
@@ -66,15 +69,16 @@ pub async fn create_project(
         }
     }
 
-    log::info!("Creating project: {}", name);
-
     let resp = client
-        .post(&url)
+        .post(url)
         .header("Authorization", format!("Token {}", oauth))
         .json(&body)
         .send()
         .await
-        .map_err(|e| Error::NetworkRequest(e.to_string()))?;
+        .map_err(|e| {
+            error!("Error attempting to create new project: {e:?}");
+            Error::NetworkRequest(e.to_string())
+        })?;
 
     let status = resp.status();
 
@@ -84,19 +88,21 @@ pub async fn create_project(
             pub data: ProjectInfo,
             // Ignore extra fields like timestamp and url
         }
-        let json = resp
-            .json::<ProjectInfoResponse>()
-            .await
-            .map_err(|e| Error::Deserialization(e.to_string()))?;
+        let json = resp.json::<ProjectInfoResponse>().await.map_err(|e| {
+            error!("Failed to deserialize project creation response: {e:?}");
+            Error::Deserialization(e.to_string())
+        })?;
 
         // Return the project data wrapped in our standard format
         Ok(json.data)
     } else {
+        let status_code = status.as_u16();
+        error!("Project creation failed with status code: {}", status_code);
         Err(Error::Api(status.as_u16()))
     }
 }
 
-pub async fn release_project_mutex(api_info: &UserPrefs, project_id: Uuid) -> Result<(), Error> {
+pub async fn release_project_mutex(api_info: &ApiInfo, project_id: Uuid) -> Result<(), Error> {
     info!("Releasing project mutex for project: {}", project_id);
     let base = api_info.instance();
     let oauth = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
@@ -121,7 +127,7 @@ pub async fn release_project_mutex(api_info: &UserPrefs, project_id: Uuid) -> Re
     }
 }
 
-pub async fn fetch_projects(api_info: &UserPrefs) -> Result<Vec<ProjectInfo>, Error> {
+pub async fn fetch_projects(api_info: &ApiInfo) -> Result<Vec<ProjectInfo>, Error> {
     let base = api_info.instance();
     let oauth = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
     let url = base.join("api/v1/projects/").unwrap();
@@ -158,7 +164,7 @@ pub async fn fetch_projects(api_info: &UserPrefs) -> Result<Vec<ProjectInfo>, Er
 }
 
 pub async fn fetch_project_info(
-    api_info: &UserPrefs,
+    api_info: &ApiInfo,
     project_id: Uuid,
 ) -> Result<ProjectInfo, Error> {
     let base = api_info.instance();
@@ -196,13 +202,13 @@ pub async fn fetch_project_info(
 }
 
 pub async fn download_project_zip(
-    api_info: &UserPrefs,
+    api_info: &ApiInfo,
     project_id: Uuid,
 ) -> Result<bytes::Bytes, Error> {
     let base = api_info.instance();
     let oauth = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
     let url = format!(
-        "{}/api/v1/projects/{}/download/compass_zip/",
+        "{}api/v1/projects/{}/download/compass_zip/",
         base, project_id
     );
     let client = get_api_client();
@@ -234,7 +240,7 @@ pub async fn download_project_zip(
 }
 
 pub async fn upload_project_zip(
-    api_info: &UserPrefs,
+    api_info: &ApiInfo,
     project_id: Uuid,
     commit_message: String,
     zip_path: &Path,
