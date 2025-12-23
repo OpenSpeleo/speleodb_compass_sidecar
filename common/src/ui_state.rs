@@ -1,5 +1,6 @@
 use crate::{Error, api_types::ProjectInfo};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 pub const UI_STATE_NOTIFICATION_KEY: &str = "event::ui_state";
 
@@ -28,14 +29,14 @@ pub struct UiState {
     pub loading_state: LoadingState,
     pub platform: Platform,
     pub project_info: Vec<ProjectInfo>,
-    pub selected_project: Option<ProjectInfo>,
+    pub selected_project: Option<Uuid>,
 }
 
 impl UiState {
     pub fn new(
         loading_state: LoadingState,
         project_info: Vec<ProjectInfo>,
-        selected_project: Option<ProjectInfo>,
+        selected_project: Option<Uuid>,
     ) -> Self {
         let platform = if cfg!(target_os = "windows") {
             Platform::Windows

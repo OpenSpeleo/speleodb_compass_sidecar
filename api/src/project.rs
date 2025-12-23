@@ -96,7 +96,7 @@ pub async fn create_project(
     }
 }
 
-pub async fn release_project_mutex(api_info: &UserPrefs, project_id: &Uuid) -> Result<(), Error> {
+pub async fn release_project_mutex(api_info: &UserPrefs, project_id: Uuid) -> Result<(), Error> {
     info!("Releasing project mutex for project: {}", project_id);
     let base = api_info.instance();
     let oauth = api_info.oauth_token().ok_or(Error::NoAuthToken)?;

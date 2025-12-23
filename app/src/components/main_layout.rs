@@ -43,6 +43,7 @@ pub fn main_layout(&MainLayoutProps { ref ui_state }: &MainLayoutProps) -> Html 
             <section style="width:100%;">
                 {
                     if let Some(selected_project) = &ui_state.selected_project {
+                        let selected_project = ui_state.project_info.iter().find(|p| p.id == *selected_project).unwrap();
                         html!{ <ProjectDetails project={selected_project.clone()} /> }
                     } else {
                         html!{ <ProjectListing  ui_state={ui_state}/> }

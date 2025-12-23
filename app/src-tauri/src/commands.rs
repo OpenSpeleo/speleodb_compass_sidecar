@@ -1,5 +1,4 @@
 use crate::{
-    ACTIVE_PROJECT_ID,
     state::AppState,
     zip_management::{cleanup_temp_zip, pack_project_working_copy, unpack_project_zip},
 };
@@ -348,15 +347,18 @@ pub async fn import_compass_project(
 }
 
 #[tauri::command]
-pub fn set_active_project(project_id: Uuid) -> Result<(), String> {
+pub fn set_active_project(app_handle: AppHandle, project_id: Uuid) -> Result<(), String> {
     info!("Setting active project: {project_id}");
-    *ACTIVE_PROJECT_ID.lock().unwrap() = Some(project_id);
+    let app_state = app_handle.state::<AppState>();
+    app_state.set_active_project(Some(project_id), &app_handle);
     Ok(())
 }
 
 #[tauri::command]
-pub fn clear_active_project() -> Result<(), String> {
-    *ACTIVE_PROJECT_ID.lock().unwrap() = None;
+pub fn clear_active_project(app_handle: AppHandle) -> Result<(), String> {
+    info!("Clearing active project");
+    let app_state = app_handle.state::<AppState>();
+    app_state.set_active_project(None, &app_handle);
     Ok(())
 }
 
@@ -365,7 +367,7 @@ pub async fn release_project_mutex(
     app_state: State<'_, AppState>,
     project_id: Uuid,
 ) -> Result<(), String> {
-    api::project::release_project_mutex(&app_state.api_info(), &project_id)
+    api::project::release_project_mutex(&app_state.api_info(), project_id)
         .await
         .map_err(|e| e.to_string())?;
     // Always return success (fire and forget)

@@ -1,14 +1,17 @@
 use common::{
-    Error, LoadingState, UI_STATE_NOTIFICATION_KEY, UiState, UserPrefs, api_types::ProjectInfo,
+    Error, LoadingState, UI_STATE_NOTIFICATION_KEY, UiState, UserPrefs,
+    api_types::{ActiveMutex, ProjectInfo},
 };
 use log::warn;
 use std::{collections::HashMap, sync::Mutex};
 use tauri::{AppHandle, Emitter, ipc::private::tracing::info};
+use uuid::Uuid;
 
 pub struct AppState {
     loading_state: Mutex<LoadingState>,
     api_info: Mutex<UserPrefs>,
     project_info: Mutex<HashMap<uuid::Uuid, ProjectInfo>>,
+    active_project: Mutex<Option<uuid::Uuid>>,
 }
 
 impl AppState {
@@ -17,6 +20,7 @@ impl AppState {
             loading_state: Mutex::new(LoadingState::NotStarted),
             api_info: Mutex::new(UserPrefs::default()),
             project_info: Mutex::new(HashMap::new()),
+            active_project: Mutex::new(None),
         }
     }
 
@@ -90,6 +94,15 @@ impl AppState {
         project_lock.get(&project_id).cloned()
     }
 
+    pub fn set_active_project(&self, project_id: Option<Uuid>, app_handle: &AppHandle) {
+        *self.active_project.lock().unwrap() = project_id;
+        self.emit_app_state_change(app_handle);
+    }
+
+    pub fn get_active_project(&self) -> Option<uuid::Uuid> {
+        *self.active_project.lock().unwrap()
+    }
+
     fn emit_app_state_change(&self, app_handle: &AppHandle) {
         let loading_state = self.loading_state();
         let project_info = self
@@ -99,8 +112,8 @@ impl AppState {
             .values()
             .cloned()
             .collect();
-        let selected_project = None; // Placeholder for selected project
-        let ui_state = UiState::new(loading_state, project_info, selected_project);
+        let active_project_id = self.get_active_project();
+        let ui_state = UiState::new(loading_state, project_info, active_project_id);
         app_handle
             .emit(UI_STATE_NOTIFICATION_KEY, &ui_state)
             .unwrap();
