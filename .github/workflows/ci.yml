@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - tailwindcss
   pull_request:
     branches:
       - main
@@ -32,6 +33,11 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: lts/*
+
+      - name: install node dependencies
+        run: |
+          cd app
+          npm install
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
