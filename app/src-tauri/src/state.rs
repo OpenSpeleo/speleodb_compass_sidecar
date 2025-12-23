@@ -1,6 +1,5 @@
 use common::{
-    Error, LoadingState, UI_STATE_NOTIFICATION_KEY, UiState, UserPrefs,
-    api_types::{ActiveMutex, ProjectInfo},
+    Error, LoadingState, UI_STATE_NOTIFICATION_KEY, UiState, UserPrefs, api_types::ProjectInfo,
 };
 use log::warn;
 use std::{collections::HashMap, sync::Mutex};
@@ -103,7 +102,7 @@ impl AppState {
         *self.active_project.lock().unwrap()
     }
 
-    fn emit_app_state_change(&self, app_handle: &AppHandle) {
+    pub fn emit_app_state_change(&self, app_handle: &AppHandle) {
         let loading_state = self.loading_state();
         let project_info = self
             .project_info

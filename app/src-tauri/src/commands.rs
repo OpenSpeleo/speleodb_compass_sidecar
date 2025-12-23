@@ -32,10 +32,16 @@ pub fn sign_out(app_handle: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn fetch_projects(app_state: State<'_, AppState>) -> Result<Vec<ProjectInfo>, String> {
-    api::project::fetch_projects(&app_state.api_info())
+pub async fn fetch_projects(app_handle: AppHandle) -> Result<(), String> {
+    let app_state = app_handle.state::<AppState>();
+    let projects = api::project::fetch_projects(&app_state.api_info())
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    for project_info in &projects {
+        app_state.update_project_info(project_info);
+    }
+    app_state.emit_app_state_change(&app_handle);
+    Ok(())
 }
 
 #[tauri::command]
