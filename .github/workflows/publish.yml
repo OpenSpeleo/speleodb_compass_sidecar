@@ -57,7 +57,7 @@ jobs:
       # Cache cargo binaries (tauri-cli and trunk) - this saves ~25 minutes
       # Cache Trunk frontend build artifacts
       - name: Cache Trunk build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             dist
