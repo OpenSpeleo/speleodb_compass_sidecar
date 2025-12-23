@@ -25,14 +25,14 @@ async fn handle_auth_response(response: reqwest::Response) -> Result<String, Str
 }
 
 pub async fn authorize_with_token(instance: &Url, oauth: &str) -> Result<String, String> {
-    let url = format!("{}{}", instance, "api/v1/user/auth-token/");
+    let url = instance.join("api/v1/user/auth-token/").unwrap();
     let client = get_api_client();
     info!(
         "Attempting to authorize with: {} using Oauth token",
         instance
     );
     let response = client
-        .get(&url)
+        .get(url)
         .header("Authorization", format!("Token {}", oauth))
         .send()
         .await
@@ -46,10 +46,10 @@ pub async fn authorize_with_email(
     password: &str,
 ) -> Result<String, String> {
     let client = get_api_client();
-    let url = format!("{}{}", instance, "/api/v1/user/auth-token/");
+    let url = instance.join("api/v1/user/auth-token/").unwrap();
     let body = json!({"email": email, "password": password});
     let response = client
-        .post(&url)
+        .post(url)
         .json(&body)
         .send()
         .await
