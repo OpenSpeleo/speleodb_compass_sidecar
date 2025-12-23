@@ -37,5 +37,5 @@ uuid.workspace = true
 tauri = { version = "2", features = [] }
 tauri-plugin-devtools = "2"
 tauri-plugin-dialog = "2"
-zip = "6.0.0"
+zip = "7.0.0"
 sentry = "0.46.0"
