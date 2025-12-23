@@ -33,10 +33,14 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: lts/*
-          steps:
-      - uses: ./.github/actions/setup-tailwind
-        with:
-          version: "v4.1.18"
+
+      - name: add workspace to the path
+        run: |
+          echo "::add-path::${env:GITHUB_WORKSPACE}"
+
+      - name: tailwindcss.exe
+        run: |
+          curl "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.1.18/tailwindcss-windows-x64.exe" --output "tailwindcss.exe"
 
       - name: install node dependencies
         run: |
@@ -48,10 +52,9 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - uses: cargo-bins/cargo-binstall@main
-
-      - name: Install trunk and wasm-pack
-        run: cargo binstall trunk wasm-pack
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-binstall, trunk, wasm-pack
 
       # Cache Rust dependencies and build artifacts
       - name: Rust cache
