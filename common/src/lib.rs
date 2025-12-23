@@ -27,9 +27,9 @@ const SPELEODB_COMPASS_VERSION: Version = Version::new(0, 0, 1);
 const SPELEODB_PROJECT_REVISION_FILE: &str = ".revision.txt";
 
 #[cfg(debug_assertions)]
-const API_BASE_URL: &str = "https://stage.speleodb.org";
+pub const API_BASE_URL: &str = "https://stage.speleodb.org";
 #[cfg(not(debug_assertions))]
-const API_BASE_URL: &str = "https://www.speleodb.com";
+pub const API_BASE_URL: &str = "https://www.speleodb.com";
 
 /// Lazily-initialized full path to the application directory (home + COMPASS_HOME_DIR_NAME).
 ///

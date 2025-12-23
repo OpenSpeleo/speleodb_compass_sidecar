@@ -1,3 +1,4 @@
+use common::API_BASE_URL;
 use wasm_bindgen_futures::spawn_local;
 use yew::{
     Callback, FocusEvent, Html, InputEvent, SubmitEvent, TargetCast, function_component, html,
@@ -9,7 +10,7 @@ use crate::{invoke, speleo_db_controller::SPELEO_DB_CONTROLLER};
 #[function_component(AuthScreen)]
 pub fn auth_screen() -> Html {
     // Fields
-    let instance = use_state(|| "https://speleodb.org".to_string());
+    let instance = use_state(|| API_BASE_URL.to_string());
     // Kinda dorky to force type inference
     let email = use_state(|| {
         let initial_state: Option<String> = None;
@@ -274,7 +275,7 @@ pub fn auth_screen() -> Html {
                         class={if false { "full invalid" } else { "full" }}
                         oninput={on_instance_input}
                         onblur={on_instance_blur}
-                        placeholder="https://www.speleodb.org"
+                        placeholder={API_BASE_URL}
                     />
                     { if false {
                         html!{ <span class="field-error">{"Must start with http:// or https://"}</span> }

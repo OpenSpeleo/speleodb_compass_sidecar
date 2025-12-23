@@ -1,19 +1,17 @@
 use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
-use log::{error, info};
 use common::api_types::{ProjectInfo, ProjectSaveResult};
+use log::{error, info};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct ProjectDetailsProps {
     pub project: ProjectInfo,
-    #[prop_or_default]
-    pub on_back: Callback<()>,
 }
 
 #[function_component(ProjectDetails)]
-pub fn project_details(props: &ProjectDetailsProps) -> Html {
+pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) -> Html {
     let downloading = use_state(|| false);
     let uploading = use_state(|| false);
     let show_readonly_modal = use_state(|| false);
@@ -35,7 +33,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
     // Run the download workflow automatically on mount
     {
-        let project_id = props.project.id;
+        let project_id = project.id;
         let downloading = downloading.clone();
         let show_readonly_modal = show_readonly_modal.clone();
         let show_empty_project_modal_effect = show_empty_project_modal.clone();
@@ -160,7 +158,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
     // Open folder handler
     let on_open_project = {
-        let project_id = props.project.id;
+        let project_id = project.id;
         Callback::from(move |_: ()| {
             spawn_local(async move {
                 let _ = SPELEO_DB_CONTROLLER.open_project(project_id).await;
@@ -183,7 +181,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
     // Save Project Handler
     let on_save = {
-        let project_id = props.project.id;
+        let project_id = project.id;
         let commit_message = commit_message.clone();
         let commit_message_error = commit_message_error.clone();
         let uploading = uploading.clone();
@@ -235,7 +233,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let download_complete = download_complete.clone();
         let error_message = error_message.clone();
         let project_file_path = project_file_path.clone();
-        let project_id = props.project.id;
+        let project_id = project.id;
         let show_empty_project_modal = show_empty_project_modal.clone();
         let show_reload_confirm = show_reload_confirm.clone();
         Callback::from(move |_: ()| {
@@ -276,7 +274,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
         let selected_zip = selected_zip.clone();
         let show_load_confirm = show_load_confirm.clone();
         let error_message = error_message.clone();
-        let project_id = props.project.id;
+        let project_id = project.id;
 
         Callback::from(move |_| {
             let selected_zip = selected_zip.clone();
@@ -302,7 +300,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
     // Confirm Load from Disk (Upload)
     let on_confirm_load = {
-        let project_id = props.project.id;
+        let project_id = project.id;
         let uploading = uploading.clone();
         let show_load_confirm = show_load_confirm.clone();
         let show_upload_success = show_upload_success.clone();
@@ -338,19 +336,12 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
 
     // Back button handler - release mutex before navigating back
     let on_back_click = {
-        let project_id = props.project.id;
-        let on_back = props.on_back.clone();
-
+        let project_id = project.id;
         Callback::from(move |_| {
-            let on_back = on_back.clone();
-
             spawn_local(async move {
                 // Release mutex and clear active project first
                 let _ = SPELEO_DB_CONTROLLER.release_mutex(project_id).await;
                 let _ = SPELEO_DB_CONTROLLER.clear_active_project().await;
-
-                // Then navigate back (which will trigger refresh)
-                on_back.emit(());
             });
         })
     };
@@ -368,8 +359,8 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
             </div>
 
             <h2>{"Project Details"}</h2>
-            <p><strong>{"Project: "}</strong>{&props.project.name}</p>
-            <p style="color: #6b7280; font-size: 14px;">{format!("ID: {}", props.project.id)}</p>
+            <p><strong>{"Project: "}</strong>{&project.name}</p>
+            <p style="color: #6b7280; font-size: 14px;">{format!("ID: {}", project.id)}</p>
 
             {
                 if *downloading {
@@ -514,7 +505,7 @@ pub fn project_details(props: &ProjectDetailsProps) -> Html {
                                 - the project is currently locked by another user\n\
                                 - you do not have edit permissions to the project\n\n\
                                 Contact a Project Administrator if you believe this is a mistake.",
-                                props.project.name
+                                project.name
                             )}
                             modal_type={ModalType::Warning}
                             show_close_button={true}

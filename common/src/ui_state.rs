@@ -1,4 +1,4 @@
-use crate::{Error, UserPrefs, api_types::ProjectInfo, user_prefs};
+use crate::{Error, api_types::ProjectInfo};
 use serde::{Deserialize, Serialize};
 
 pub const UI_STATE_NOTIFICATION_KEY: &str = "event::ui_state";
@@ -16,14 +16,14 @@ pub enum LoadingState {
     Failed(Error),
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub enum Platform {
     Windows,
     MacOS,
     Linux,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct UiState {
     pub loading_state: LoadingState,
     pub platform: Platform,
