@@ -10,5 +10,5 @@ open = false
 
 [[hooks]]
 stage = "pre_build"
-command = "tailwindcss"
-command_arguments = ["-i", "input.css", "-o", "app.css"]
+command = "npx"
+command_arguments = ["@tailwindcss/cli", "-i", "input.css", "-o", "app.css"]
