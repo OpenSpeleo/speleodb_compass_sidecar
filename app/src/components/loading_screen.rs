@@ -15,25 +15,18 @@ pub fn loading_screen(&LoadingScreenProps { ref loading_state }: &LoadingScreenP
             left: 0;
             right: 0;
             bottom: 0;
-            background-color: rgba(0, 0, 0, 0.6);
             display: flex;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
             z-index: 9999;
             backdrop-filter: blur(2px);
         ">
             <div style="
-                background-color: white;
-                padding: 32px 48px;
-                border-radius: 12px;
-                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
                 width:100%;
                 height: 100%;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                gap: 16px;
             ">
                 <div style="
                     border: 4px solid #e5e7eb;
