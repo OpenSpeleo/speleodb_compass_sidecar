@@ -26,48 +26,57 @@ pub fn loading_screen(&LoadingScreenProps { ref loading_state }: &LoadingScreenP
                 height: 100%;
                 display: flex;
                 flex-direction: column;
+                justify-content: space-between;
                 align-items: center;
             ">
                 <img src="public/speleodb_long.png" class="logo speleodb" alt="SpeleoDB logo"/>
-                <div style="
-                    border: 4px solid #e5e7eb;
-                    border-top-color: #2563eb;
-                    border-radius: 50%;
-                    width: 48px;
-                    height: 48px;
-                    animation: spin 0.8s linear infinite;
-                " />
-                <p style="
-                    color: #1f2937;
-                    font-size: 18px;
-                    font-weight: 500;
-                    margin: 0;
+                <div class="container" style="
+                    width:100%;
+                    height: 100%;
                 ">
-                {
-                    match loading_state {
-                    LoadingState::NotStarted=>
-                        "Initializing...".to_string()
+                <div style="
+                    background-color: coral;
+                    padding: 32px 48px;
+                    border-radius: 12px;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;">
+                    <div class="spinner" />
+                    <p style="
+                        padding-top: 16px;
+                        color: #1f2937;
+                        font-size: 18px;
+                        font-weight: 500;
+                        margin: 0;
+                    ">
+                    {
+                        match loading_state {
+                        LoadingState::NotStarted=>
+                            "Initializing...".to_string()
+                        ,
+                        LoadingState::CheckingForUpdates =>
+                            "Checking for updates...".to_string()
+                        ,
+                        LoadingState::Updating=>
+                            "Updating application...".to_string()
+                        ,
+                        LoadingState::LoadingPrefs =>
+                            "Loading user preferences...".to_string()
                     ,
-                    LoadingState::CheckingForUpdates =>
-                        "Checking for updates...".to_string()
-                    ,
-                    LoadingState::Updating=>
-                        "Updating application...".to_string()
-                    ,
-                    LoadingState::LoadingPrefs =>
-                        "Loading user preferences...".to_string()
-                   ,
-                    LoadingState::Authenticating =>
-                        "Authenticating user...".to_string()
-                    ,
-                    LoadingState::LoadingProjects =>
-                        "Loading projects...".to_string()
-                    ,
-                    LoadingState::Failed(e)=> format!("Error: {}", e),
-                    _=>"Starting application...".to_string()
+                        LoadingState::Authenticating =>
+                            "Authenticating user...".to_string()
+                        ,
+                        LoadingState::LoadingProjects =>
+                            "Loading projects...".to_string()
+                        ,
+                        LoadingState::Failed(e)=> format!("Error: {}", e),
+                        _=>"Starting application...".to_string()
+                        }
                     }
-                }
-                </p>
+                    </p>
+                    </div>
+                </div>
             </div>
             <style>
                 {r#"

@@ -1,103 +1,105 @@
 .logo.yew:hover {
-  filter: drop-shadow(0 0 2em #20a88a);
+    filter: drop-shadow(0 0 2em #20a88a);
 }
 
 :root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
+    font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 400;
 
-  color: #f6f6f6;
-  background-color: rgb(15 23 42);
+    color: #f6f6f6;
+    background-color: rgb(15 23 42);
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
 }
 
 .container {
-  margin: 0 auto;
-  padding-top: 2rem;
-  padding-bottom: 2rem;
-  padding-left: 1rem;
-  padding-right: 1rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: center;
-  text-align: center;
-  max-width: 850px;
-  width: 100%;
+    margin: 0 auto;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    max-width: 850px;
+    width: 100%;
 }
 
 /* Authentication form layout */
 
 .auth-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: center;
-  justify-content: flex-start;
-  margin: 1rem auto;
-  max-width: 640px;
-  width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+    justify-content: flex-start;
+    margin: 1rem auto;
+    max-width: 640px;
+    width: 100%;
 }
 
 .auth-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
 }
 
 .v-sep {
-  display: none;
+    display: none;
 }
 
 .hint {
-  font-size: 0.85em;
-  color: #fff;
-  margin-top: 6px;
-  text-decoration: underline;
+    font-size: 0.85em;
+    color: #fff;
+    margin-top: 6px;
+    text-decoration: underline;
 }
 
 /* Accent bar placed under certain fields */
 .accent-bar {
-  height: 6px;
-  background: linear-gradient(90deg, #396cd8, #24c8db);
-  border-radius: 3px;
-  margin: 6px 0 10px 0;
-  width: 100%;
+    height: 6px;
+    background: linear-gradient(90deg, #396cd8, #24c8db);
+    border-radius: 3px;
+    margin: 6px 0 10px 0;
+    width: 100%;
 }
 
 .actions {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  margin-top: 12px;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 12px;
 }
 
 /* Modal styles */
 .modal {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 1000;
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 1000;
 }
 
 .modal-card {
-  background: rgb(255, 255, 255);
-  color: #313131;
-  padding: 20px;
-  border-radius: 8px;
-  max-width: 520px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    background: rgb(255, 255, 255);
+    color: #313131;
+    padding: 20px;
+    border-radius: 8px;
+    max-width: 520px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
 .spinner {
     border: 4px solid #e5e7eb;
     border-top-color: rgb(15 23 42);
@@ -108,98 +110,98 @@
 }
 
 @media (max-width: 720px) {
-  .auth-form {
-    flex-direction: column;
-    align-items: stretch;
-  }
+    .auth-form {
+        flex-direction: column;
+        align-items: stretch;
+    }
 
-  .v-sep {
-    display: none;
-  }
+    .v-sep {
+        display: none;
+    }
 }
 
 .logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
+    height: 6em;
+    padding: 1.5em;
+    will-change: filter;
+    transition: 0.75s;
 }
 
 .logo.speleodb:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
+    filter: drop-shadow(0 0 2em #24c8db);
 }
 
 .row {
-  display: flex;
-  justify-content: center;
+    display: flex;
+    justify-content: center;
 }
 
 a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+    font-weight: 500;
+    color: #646cff;
+    text-decoration: inherit;
 }
 
 a:hover {
-  color: #24c8db;
+    color: #24c8db;
 }
 
 h1 {
-  text-align: center;
+    text-align: center;
 }
 
 input,
 button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #313131;
-  background-color: rgb(205, 205, 205);
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-  outline: none;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    padding: 0.6em 1.2em;
+    font-size: 1em;
+    font-weight: 500;
+    font-family: inherit;
+    color: #313131;
+    background-color: rgb(205, 205, 205);
+    transition: border-color 0.25s;
+    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+    outline: none;
 }
 
 input.invalid {
-  border: 2px solid #ef4444;
-  background-color: #fee;
+    border: 2px solid #ef4444;
+    background-color: #fee;
 }
 
 input.invalid:focus {
-  border-color: #dc2626;
-  outline: 2px solid #fca5a5;
+    border-color: #dc2626;
+    outline: 2px solid #fca5a5;
 }
 
 .field-error {
-  color: #ef4444;
-  font-size: 0.85em;
-  margin-top: 4px;
-  display: block;
-  text-align: left;
+    color: #ef4444;
+    font-size: 0.85em;
+    margin-top: 4px;
+    display: block;
+    text-align: left;
 }
 
 .error-403 {
-  color: #dc2626;
-  font-weight: bold;
-  margin-bottom: 8px;
+    color: #dc2626;
+    font-weight: bold;
+    margin-bottom: 8px;
 }
 
 button {
-  cursor: pointer;
+    cursor: pointer;
 }
 
 button:hover {
-  border-color: #396cd8;
+    border-color: #396cd8;
 }
 
 button:active {
-  border-color: #396cd8;
-  background-color: #0f0f0f69;
+    border-color: #396cd8;
+    background-color: #0f0f0f69;
 }
 
 #greet-input {
-  margin-right: 5px;
+    margin-right: 5px;
 }
