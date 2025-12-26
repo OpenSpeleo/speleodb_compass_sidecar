@@ -1,4 +1,5 @@
 mod commands;
+mod paths;
 mod project;
 mod state;
 
