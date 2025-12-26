@@ -28,6 +28,8 @@ pub fn loading_screen(&LoadingScreenProps { ref loading_state }: &LoadingScreenP
                 padding: 32px 48px;
                 border-radius: 12px;
                 box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+                width:100%;
+                height: 100%;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
