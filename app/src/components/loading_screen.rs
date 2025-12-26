@@ -28,6 +28,7 @@ pub fn loading_screen(&LoadingScreenProps { ref loading_state }: &LoadingScreenP
                 flex-direction: column;
                 align-items: center;
             ">
+                <img src="public/speleodb_long.png" class="logo speleodb" alt="SpeleoDB logo"/>
                 <div style="
                     border: 4px solid #e5e7eb;
                     border-top-color: #2563eb;
