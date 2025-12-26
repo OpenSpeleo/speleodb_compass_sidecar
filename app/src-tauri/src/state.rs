@@ -1,5 +1,5 @@
 use common::{
-    ApiInfo, Error, UserPrefs,
+    ApiInfo, Error,
     api_types::ProjectInfo,
     ui_state::{LoadingState, UI_STATE_NOTIFICATION_KEY, UiState},
 };
@@ -8,7 +8,7 @@ use std::{collections::HashMap, sync::Mutex};
 use tauri::{AppHandle, Emitter, ipc::private::tracing::info};
 use uuid::Uuid;
 
-use crate::project::ProjectManager;
+use crate::{project_management::ProjectManager, user_prefs::UserPrefs};
 
 pub struct AppState {
     loading_state: Mutex<LoadingState>,
@@ -91,7 +91,7 @@ impl AppState {
         let mut project_lock = self.project_info.lock().unwrap();
         if project_lock.contains_key(&project_info.id) {
             let existing_project = project_lock.get_mut(&project_info.id).unwrap();
-            existing_project.update_project_info(project_info);
+            existing_project.update_project_info(project_info).unwrap();
         } else {
             let new_project = ProjectManager::initialize_from_info(project_info.clone());
             project_lock.insert(project_info.id, new_project);

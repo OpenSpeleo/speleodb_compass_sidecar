@@ -1,8 +1,7 @@
-use crate::state::AppState;
+use crate::{paths::compass_project_working_path, state::AppState, user_prefs::UserPrefs};
 use common::{
-    Error, UserPrefs,
+    Error,
     api_types::{ProjectInfo, ProjectSaveResult},
-    compass_project_working_path,
 };
 use log::{error, info};
 use std::process::Command;

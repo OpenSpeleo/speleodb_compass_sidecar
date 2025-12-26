@@ -1,12 +1,17 @@
-use crate::{SPELEODB_COMPASS_VERSION, project::SPELEODB_COMPASS_PROJECT_FILE};
-use common::{
-    Error, compass_project_index_path, compass_project_working_path,
-    ensure_compass_project_dirs_exist,
+use crate::{
+    SPELEODB_COMPASS_VERSION,
+    paths::{compass_project_index_path, compass_project_working_path},
+    project_management::{SPELEODB_COMPASS_PROJECT_FILE, SpeleoDbProjectRevision},
 };
+use common::Error;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::{
+    io::prelude::*,
+    path::{Path, PathBuf},
+};
 use uuid::Uuid;
+use zip::write::SimpleFileOptions;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct SpeleoDb {
@@ -58,13 +63,21 @@ impl Default for ProjectMap {
     }
 }
 
+/// Represents a local Compass project stored on disk.
+/// The additional path is required to locate the project files, as this can represent a working copy or an index.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct LocalProject {
-    pub speleodb: SpeleoDb,
-    pub map: ProjectMap,
+    project_path: PathBuf,
+    speleodb: SpeleoDb,
+    map: ProjectMap,
 }
 
 impl LocalProject {
+    // Get the SpeleoDb project revision associated with this project, if it exists.
+    pub fn revision(&self) -> Option<SpeleoDbProjectRevision> {
+        SpeleoDbProjectRevision::revision_for_project(self.speleodb.id)
+    }
+
     pub fn import_compass_project(mak_path: &Path, id: Uuid) -> Result<Self, Error> {
         info!("Attempting to import {mak_path:?} to project {id}");
         // Verify that the .mak file exists
@@ -107,8 +120,9 @@ impl LocalProject {
         let mut project_path = compass_project_working_path(id);
 
         std::fs::create_dir_all(&project_path)
-            .map_err(|_| Error::CreateProjectDirectory(project_path.clone()))?;
+            .map_err(|_| Error::CreateDirectory(project_path.clone()))?;
         let new_project = Self {
+            project_path: project_path.clone(),
             speleodb: SpeleoDb {
                 id,
                 version: SPELEODB_COMPASS_VERSION,
@@ -138,9 +152,12 @@ impl LocalProject {
     }
 
     /// Create an empty Compass project with no files.
-    pub fn empty_project(id: Uuid) -> Self {
+    pub fn empty_working_copy(id: Uuid) -> Self {
         info!("Creating empty Compass project for id: {id}");
+        //
+        let project_path = compass_project_working_path(id);
         let new_project = Self {
+            project_path,
             speleodb: SpeleoDb {
                 id,
                 version: SPELEODB_COMPASS_VERSION,
@@ -172,6 +189,56 @@ impl LocalProject {
 
     pub fn is_empty(&self) -> bool {
         self.map.mak_file.is_none()
+    }
+
+    /// Pack the working copy of a Compass project into a zip file and return the path to the zip.
+    pub fn pack_zip(&self) -> Result<PathBuf, String> {
+        let project_id = self.speleodb.id;
+        // Create temp zip file
+        let temp_dir = std::env::temp_dir();
+        let zip_filename = format!("project_{}.zip", project_id);
+        let zip_path = temp_dir.join(&zip_filename);
+        info!("Creating zip file in temp folder: {zip_path:?}");
+        let zip_file = std::fs::File::create(&zip_path)
+            .map_err(|e| format!("Failed to create temp zip file: {}", e))?;
+        let options =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let mut zip_writer = zip::ZipWriter::new(zip_file);
+        zip_writer
+            .start_file(SPELEODB_COMPASS_PROJECT_FILE, options)
+            .map_err(|e| e.to_string())?;
+        let project_toml = toml::to_string_pretty(&self).map_err(|e| e.to_string())?;
+        zip_writer
+            .write_all(project_toml.as_bytes())
+            .map_err(|e| e.to_string())?;
+        let project_dir = compass_project_working_path(project_id);
+
+        if let Some(mak_file_path) = self.map.mak_file.as_ref() {
+            let mak_full_path = project_dir.join(&mak_file_path);
+            zip_writer
+                .start_file(&mak_file_path, options)
+                .map_err(|e| e.to_string())?;
+            let mak_contents = std::fs::read(&mak_full_path)
+                .map_err(|e| format!("Failed to read MAK file: {}", e))?;
+            zip_writer
+                .write_all(&mak_contents)
+                .map_err(|e| e.to_string())?;
+        }
+
+        for dat_path in self.map.dat_files.iter() {
+            let dat_full_path = project_dir.join(dat_path);
+            zip_writer
+                .start_file(&dat_path, options)
+                .map_err(|e| e.to_string())?;
+            let dat_contents = std::fs::read(&dat_full_path)
+                .map_err(|e| format!("Failed to read DAT file: {}", e))?;
+            zip_writer
+                .write_all(&dat_contents)
+                .map_err(|e| e.to_string())?;
+        }
+
+        zip_writer.finish().map_err(|e| e.to_string())?;
+        Ok(zip_path)
     }
 }
 

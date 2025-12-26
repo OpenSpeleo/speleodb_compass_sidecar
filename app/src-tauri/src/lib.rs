@@ -1,7 +1,8 @@
 mod commands;
 mod paths;
-mod project;
+mod project_management;
 mod state;
+mod user_prefs;
 
 use crate::{
     commands::{
@@ -9,9 +10,9 @@ use crate::{
         ensure_initialized, fetch_projects, import_compass_project, open_project,
         release_project_mutex, save_project, set_active_project, sign_out,
     },
+    paths::{compass_home, ensure_app_dir_exists, init_file_logger},
     state::AppState,
 };
-use common::compass_home;
 use semver::Version;
 use tauri::Manager;
 
@@ -20,7 +21,7 @@ const SPELEODB_COMPASS_VERSION: Version = Version::new(0, 0, 1);
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Ensure the hidden application directory exists in the user's home directory.
-    if let Err(e) = common::ensure_app_dir_exists() {
+    if let Err(e) = ensure_app_dir_exists() {
         eprintln!(
             "Failed to create application directory '{:?}': {:#}",
             compass_home(),
@@ -32,7 +33,7 @@ pub fn run() {
     let devtools = tauri_plugin_devtools::init();
 
     // Initialize logging
-    let _ = common::init_file_logger("info");
+    let _ = init_file_logger("info");
 
     if let Ok(path) = std::env::current_dir() {
         log::info!("Current working directory: {}", path.display());

@@ -13,7 +13,7 @@ pub enum Error {
     #[error("Project not found: {0}")]
     ProjectNotFound(PathBuf),
     #[error("Couldn't create storage directory for project")]
-    CreateProjectDirectory(PathBuf),
+    CreateDirectory(PathBuf),
     #[error("Error deserializing data: {0}")]
     Deserialization(String),
     #[error("Error serializing TOML")]
@@ -42,8 +42,12 @@ pub enum Error {
     Api(u16),
     #[error("File read failed: {0}")]
     FileRead(String),
+    #[error("File write failed: {0}")]
+    FileWrite(String),
     #[error("No project data found for : {0}")]
     NoProjectData(Uuid),
     #[error("Project mutex already locked")]
     ProjectMutexLocked(Uuid),
+    #[error("Zip File Error: {0}")]
+    ZipFile(String),
 }

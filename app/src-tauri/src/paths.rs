@@ -14,7 +14,7 @@ const COMPASS_PROJECT_DIR_NAME: &str = "projects";
 /// Lazily-initialized full path to the application directory (home + COMPASS_HOME_DIR_NAME).
 ///
 /// This is a runtime-initialized static because the user's home directory is not known at compile time.
-static COMPASS_HOME_DIR: LazyLock<PathBuf> = LazyLock::new(|| match dirs::home_dir() {
+pub static COMPASS_HOME_DIR: LazyLock<PathBuf> = LazyLock::new(|| match dirs::home_dir() {
     Some(mut p) => {
         p.push(COMPASS_HOME_DIR_NAME);
         p
@@ -74,9 +74,9 @@ pub fn ensure_compass_dir_exists() -> std::io::Result<()> {
 /// Ensure a specific project folder exists in the compass directory.
 pub fn ensure_compass_project_dirs_exist(project_id: Uuid) -> Result<PathBuf, Error> {
     let path = compass_project_index_path(project_id);
-    std::fs::create_dir_all(&path).map_err(|_| Error::CreateProjectDirectory(path.clone()))?;
+    std::fs::create_dir_all(&path).map_err(|_| Error::CreateDirectory(path.clone()))?;
     let path = compass_project_working_path(project_id);
-    std::fs::create_dir_all(&path).map_err(|_| Error::CreateProjectDirectory(path.clone()))?;
+    std::fs::create_dir_all(&path).map_err(|_| Error::CreateDirectory(path.clone()))?;
     Ok(compass_project_path(project_id))
 }
 

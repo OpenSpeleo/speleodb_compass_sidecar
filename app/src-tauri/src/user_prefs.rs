@@ -1,5 +1,4 @@
-use crate::{ApiInfo, COMPASS_HOME_DIR};
-use errors::Error;
+use common::{ApiInfo, Error};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -7,6 +6,8 @@ use std::{
     sync::LazyLock,
 };
 use url::Url;
+
+use crate::paths::COMPASS_HOME_DIR;
 #[cfg(test)]
 const USER_PREFS_FILE_NAME: &str = "user_prefs_test.json";
 #[cfg(not(test))]
