@@ -8,11 +8,15 @@ use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 #[derive(Properties, PartialEq)]
 pub struct ProjectListingItemProps {
     pub project: ProjectStatus,
+    pub user_email: String,
 }
 
 #[function_component(ProjectListingItem)]
 pub fn project_listing_item_layout(
-    ProjectListingItemProps { project }: &ProjectListingItemProps,
+    ProjectListingItemProps {
+        project,
+        user_email,
+    }: &ProjectListingItemProps,
 ) -> Html {
     let project_id = project.id();
     let project_status = project.local_status().clone();
@@ -26,8 +30,15 @@ pub fn project_listing_item_layout(
     });
 
     let is_locked = project.active_mutex().is_some();
+
     let lock_status = if let Some(mutex) = project.active_mutex() {
-        &format!("🔒 {}", mutex.user)
+        if &mutex.user == user_email {
+            //return user locked version
+            "🔒 by me"
+        } else {
+            // locked by other user
+            &format!("🔒 by {}", mutex.user)
+        }
     } else {
         "🔓 editable"
     };

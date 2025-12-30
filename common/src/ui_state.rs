@@ -88,6 +88,7 @@ pub enum Platform {
 pub struct UiState {
     pub loading_state: LoadingState,
     pub platform: Platform,
+    pub user_email: Option<String>,
     pub project_status: Vec<ProjectStatus>,
     pub selected_project: Option<Uuid>,
 }
@@ -95,6 +96,7 @@ pub struct UiState {
 impl UiState {
     pub fn new(
         loading_state: LoadingState,
+        user_email: Option<String>,
         project_status: Vec<ProjectStatus>,
         selected_project: Option<Uuid>,
     ) -> Self {
@@ -108,6 +110,7 @@ impl UiState {
         Self {
             loading_state,
             platform,
+            user_email,
             project_status,
             selected_project,
         }
@@ -116,6 +119,6 @@ impl UiState {
 
 impl Default for UiState {
     fn default() -> Self {
-        Self::new(LoadingState::NotStarted, vec![], None)
+        Self::new(LoadingState::NotStarted, None, vec![], None)
     }
 }

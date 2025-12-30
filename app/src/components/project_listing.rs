@@ -12,6 +12,7 @@ pub struct ProjectListingProps {
 pub fn project_listing(ProjectListingProps { ui_state }: &ProjectListingProps) -> Html {
     let error = use_state(|| None::<String>);
     let show_create_modal = use_state(|| false);
+    let user_email = ui_state.user_email.clone().unwrap();
 
     // Button handlers
     let on_create_new = {
@@ -67,7 +68,7 @@ pub fn project_listing(ProjectListingProps { ui_state }: &ProjectListingProps) -
                     <div class="projects-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
                         { for ui_state.project_status.iter().map(|project| {
                             return html! {
-                                <ProjectListingItem project={project.clone()} />
+                                <ProjectListingItem project={project.clone()} user_email={user_email.clone()} />
                             };
                         })}
                     </div>

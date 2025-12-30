@@ -118,6 +118,7 @@ impl AppState {
             info!("Selecting: {project_id} as active project");
             let project_info =
                 api::project::acquire_project_mutex(&self.api_info(), project_id).await?;
+
             self.update_project_info(&self.api_info(), project_info)
                 .await?;
             self.emit_app_state_change(app_handle);
@@ -160,8 +161,9 @@ impl AppState {
             .values()
             .map(|p| p.project_status())
             .collect();
+        let user_email = self.api_info().email().map(|s| s.to_string());
         let active_project_id = self.get_active_project_id();
-        let ui_state = UiState::new(loading_state, project_info, active_project_id);
+        let ui_state = UiState::new(loading_state, user_email, project_info, active_project_id);
         app_handle
             .emit(UI_STATE_NOTIFICATION_KEY, &ui_state)
             .unwrap();
