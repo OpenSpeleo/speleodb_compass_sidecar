@@ -44,7 +44,8 @@ pub fn loading_screen(&LoadingScreenProps { ref loading_state }: &LoadingScreenP
                     <div class="spinner" />
                     <p style="
                         padding-top: 16px;
-                        color: #1f2937;
+                        color: rgb(255,255,255,0.7);
+                        text-shadow: 2px 2px 2px rgb(0,0,0,0.8);
                         font-size: 18px;
                         font-weight: 500;
                         margin: 0;
