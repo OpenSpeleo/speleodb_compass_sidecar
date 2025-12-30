@@ -29,7 +29,7 @@ pub fn loading_screen(&LoadingScreenProps { ref loading_state }: &LoadingScreenP
                 justify-content: space-between;
                 align-items: center;
             ">
-                <img src="public/speleodb_long.png" class="logo speleodb" alt="SpeleoDB logo"/>
+                <img src="public/speleodb_long.png" class="logo speleodb" alt="SpeleoDB logo" style="width:80%; height:auto;"/>
                 <div class="container" style="
                     width:100%;
                     height: 100%;
