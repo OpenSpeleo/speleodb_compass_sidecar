@@ -1,7 +1,6 @@
 use common::Error;
 use std::{
     path::{Path, PathBuf},
-    process::Command,
     sync::LazyLock,
 };
 use uuid::Uuid;
@@ -103,40 +102,6 @@ pub fn init_file_logger(level: &str) -> Result<(), Box<dyn std::error::Error>> {
         .start()?;
 
     Ok(())
-}
-
-pub fn path_for_project(project_id: Uuid) -> PathBuf {
-    let mut project_dir = COMPASS_HOME_DIR.clone();
-    project_dir.push("projects/");
-    project_dir.push(project_id.to_string());
-    project_dir
-}
-
-pub fn open_with_compass<P: AsRef<Path>>(project_path: P) -> Result<(), String> {
-    open_with_compass_path(project_path.as_ref())
-}
-
-fn open_with_compass_path(path: &Path) -> Result<(), String> {
-    if !path.exists() {
-        Err("Provided path does not exist!".to_string())
-    } else {
-        #[cfg(target_os = "macos")]
-        let cmd = "open";
-        #[cfg(target_os = "windows")]
-        let cmd = "explorer";
-        #[cfg(target_os = "linux")]
-        let cmd = "xdg-open";
-        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-        let cmd = "unknown";
-
-        Command::new(cmd)
-            .arg(path)
-            .spawn()
-            .expect("Expected to launch compass software")
-            .wait()
-            .expect("Compass exit successfully");
-        Ok(())
-    }
 }
 
 #[cfg(test)]
