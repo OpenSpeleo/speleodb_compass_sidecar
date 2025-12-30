@@ -70,59 +70,25 @@ impl ProjectManager {
         server_info: ProjectInfo,
     ) -> Result<ProjectStatus, Error> {
         self.project_info = server_info;
+        // Check local project status, and update if clean and out of date
         let project_status = self.local_project_status();
-        // If the local working copy is dirty, we can't update the index or working copy
-        if let LocalProjectStatus::Dirty | LocalProjectStatus::DirtyAndOutOfDate = project_status {
-            log::warn!(
-                "Local working copy for project {} has unsaved changes, skipping update",
-                self.project_info.name
-            );
-            return Ok(ProjectStatus::new(
-                project_status,
-                self.project_info.clone(),
-            ));
-        }
-
-        if let Some(latest_commit) = self.latest_remote_commit() {
-            if LocalProject::working_copy_exists(self.id()) {
-                let local_revision = self.local_revision();
-                if let Some(local_revision) = &local_revision {
-                    if local_revision.revision != latest_commit.id {
-                        log::info!(
-                            "Local revision ({}) differs from latest server revision ({}), updating index",
-                            local_revision.revision,
-                            latest_commit.id
-                        );
-                        self.update_local_copies(api_info).await?;
-                    } else {
-                        log::info!(
-                            "Local revision matches latest server revision for project {}, no update needed",
-                            self.id()
-                        );
-                    }
-                } else {
-                    log::info!(
-                        "No local revision found for project {}, updating index",
-                        self.id()
-                    );
-                    self.update_local_copies(api_info).await?;
-                }
-            } else {
-                log::info!(
-                    "No working copy found for project {}, updating index",
-                    self.id()
+        match project_status {
+            LocalProjectStatus::Dirty | LocalProjectStatus::DirtyAndOutOfDate => {
+                log::warn!(
+                    "Local working copy for project {} has unsaved changes, skipping update",
+                    self.project_info.name
                 );
-                self.update_local_copies(api_info).await?;
+                return Ok(ProjectStatus::new(
+                    project_status,
+                    self.project_info.clone(),
+                ));
             }
-        };
-        let project_status = self.local_project_status();
-        if let LocalProjectStatus::OutOfDate = project_status {
-            log::info!("Local project {} is out of date, updating index", self.id());
-            let project_id = self.id();
-            tauri::async_runtime::spawn({
+            LocalProjectStatus::OutOfDate => {
+                // Spawn async task to update local copies
+                let project_id = self.id();
                 let api_info = api_info.clone();
                 let manager = self.clone();
-                async move {
+                tauri::async_runtime::spawn(async move {
                     match manager.update_local_copies(&api_info).await {
                         Ok(_) => {
                             log::info!("Successfully updated index for project {}", project_id);
@@ -131,9 +97,11 @@ impl ProjectManager {
                             log::error!("Failed to update index for project {}: {}", project_id, e);
                         }
                     }
-                }
-            });
+                });
+            }
+            _ => {}
         }
+
         info!(
             "Project: {} - status: {:?} ",
             self.project_info.name,
@@ -142,12 +110,29 @@ impl ProjectManager {
         Ok(self.project_status())
     }
 
+    pub async fn make_local(&self, api_info: &ApiInfo) -> Result<(), Error> {
+        let project_status = self.local_project_status();
+        if let LocalProjectStatus::RemoteOnly = project_status {
+            info!(
+                "Making local copy of remote project: {}",
+                self.project_info.name
+            );
+            self.update_local_copies(api_info).await?;
+            Ok(())
+        } else {
+            // Project is already local, nothing to do
+            Ok(())
+        }
+    }
+
     /// Local project status determins the state of the local working copy and index.
     /// Assumes that the latest available server info has already been set into the manager's
     /// `project_info` field.
     fn local_project_status(&self) -> LocalProjectStatus {
         let project_dir = compass_project_path(self.id());
-        if !project_dir.exists() {
+        if self.latest_remote_commit().is_none() && !project_dir.exists() {
+            return LocalProjectStatus::EmptyLocal;
+        } else if !project_dir.exists() {
             return LocalProjectStatus::RemoteOnly;
         } else if LocalProject::working_copy_exists(self.id()) {
             if LocalProject::index_exists(self.id()) {

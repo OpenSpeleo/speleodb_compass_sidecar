@@ -104,6 +104,7 @@ impl AppState {
                 new_project
             }
         };
+        project.make_local(api_info).await?;
         project
             .update_project_with_server_info(api_info, project_info)
             .await
