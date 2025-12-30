@@ -26,8 +26,8 @@ pub fn project_listing_item_layout(
     });
 
     let is_locked = project.active_mutex().is_some();
-    let lock_status = if is_locked {
-        "🔒 editing"
+    let lock_status = if let Some(mutex) = project.active_mutex() {
+        &format!("🔒 {}", mutex.user)
     } else {
         "🔓 editable"
     };

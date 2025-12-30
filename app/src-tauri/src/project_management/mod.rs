@@ -84,8 +84,29 @@ impl ProjectManager {
         }
 
         if let Some(latest_commit) = self.latest_remote_commit() {
-            SpeleoDbProjectRevision::from(latest_commit).save_revision_for_project(self.id())?;
             if LocalProject::working_copy_exists(self.id()) {
+                let local_revision = self.local_revision();
+                if let Some(local_revision) = &local_revision {
+                    if local_revision.revision != latest_commit.id {
+                        log::info!(
+                            "Local revision ({}) differs from latest server revision ({}), updating index",
+                            local_revision.revision,
+                            latest_commit.id
+                        );
+                        self.update_local_copies(api_info).await?;
+                    } else {
+                        log::info!(
+                            "Local revision matches latest server revision for project {}, no update needed",
+                            self.id()
+                        );
+                    }
+                } else {
+                    log::info!(
+                        "No local revision found for project {}, updating index",
+                        self.id()
+                    );
+                    self.update_local_copies(api_info).await?;
+                }
             } else {
                 log::info!(
                     "No working copy found for project {}, updating index",
@@ -156,10 +177,6 @@ impl ProjectManager {
                     }
                     // If there is no local revision, but a non-empty working copy we're out of date *AND* dirty
                     else {
-                        log::info!(
-                            "Latest server revision: {}, local revision: None",
-                            latest_server_revision.revision
-                        );
                         return LocalProjectStatus::DirtyAndOutOfDate;
                     }
                 }
@@ -209,6 +226,8 @@ impl ProjectManager {
                     );
                     Error::FileWrite(e.to_string())
                 })?;
+                SpeleoDbProjectRevision::from(self.project_info.latest_commit.as_ref().unwrap())
+                    .save_revision_for_project(self.id())?;
                 Ok(())
             }
             Err(Error::NoProjectData(_)) => {

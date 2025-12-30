@@ -34,13 +34,16 @@ pub fn main_layout(&MainLayoutProps { ref ui_state }: &MainLayoutProps) -> Html 
     let ui_state = ui_state.clone();
     return html! {
         <main class="container">
-            <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; width:100%;">
-                <h1>{"SpeleoDB - Compass Sidecar"}</h1>
-                <div style="gap:8px;">
-                    <button style="background-color:red; color:white;" onclick={on_disconnect.clone()}>{ "Sign Out" }</button>
+            <header style="display:flex; justify-content:space-between; align-items:center;flex-direction: column; margin-bottom:24px; width:100%;">
+                <div style="display: flex-row">
+                    <div style="gap:8px;">
+                        <button style="background-color:red; color:white;" onclick={on_disconnect.clone()}>{ "Sign Out" }</button>
+                    </div>
                 </div>
+                <h1>{"SpeleoDB - Compass Sidecar"}</h1>
+
             </header>
-            <section style="width:100%;">
+            <section>
                 {
                     if let Some(selected_project) = &ui_state.selected_project {
                         let selected_project = ui_state.project_status.iter().find(|p| (*p).id() == *selected_project).unwrap();
