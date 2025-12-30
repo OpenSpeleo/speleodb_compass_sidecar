@@ -1,6 +1,7 @@
 use common::ui_state::ProjectStatus;
 use wasm_bindgen_futures::spawn_local;
 use yew::{Callback, Html, Properties, function_component, html};
+use yew_icons::{Icon, IconData};
 
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 
@@ -45,33 +46,25 @@ pub fn project_listing_item_layout(
                  box-shadow: 0 2px 4px rgba(0,0,0,0.1); \
                  display: flex; \
                  justify-content: space-between; \
-                 align-items: center;"
+                 "
             }
         >
-            <div style="display: flex; gap: 12px; align-items: center;">
-                <div>
-                {match project_status {
-                    common::ui_state::LocalProjectStatus::UpToDate=>html!{"✅"},
-                    common::ui_state::LocalProjectStatus::Dirty=>html!{"🟡"},
-                    common::ui_state::LocalProjectStatus::RemoteOnly=>html!{<div>{"☁️"}</div>},
-                    common::ui_state::LocalProjectStatus::Unknown => html!{"❔"},
-                    common::ui_state::LocalProjectStatus::EmptyLocal =>html!{"📭"},
-                    common::ui_state::LocalProjectStatus::OutOfDate => html!{"✅"},
-                    common::ui_state::LocalProjectStatus::DirtyAndOutOfDate => html!{"✅"},
-                }}
-                </div>
-                <span style={format!("padding: 4px 8px; border-radius: 4px; background-color: {}; color: white; font-size: 12px; font-weight: bold;", lock_color)}>
-                    { format!("{project_status:?}") }
-                </span>
-                if project_status == common::ui_state::LocalProjectStatus::Dirty {
-                    <span title="This project has unsynced changes." style="font-size: 16px;">{"⚠️"}</span>
-                }
-                if project_status == common::ui_state::LocalProjectStatus::RemoteOnly {
-                    <span title="This project exists only on the remote server." style="font-size: 16px;">{"☁️"}</span>
-                }
+            <div style="display: flex; gap: 12px; align-items: center; color:#2c3e50;">
                 <h3 style="margin: 0; font-size: 18px; color: #2c3e50;">
                     { project.name() }
                 </h3>
+                {match project_status {
+                    common::ui_state::LocalProjectStatus::UpToDate=>html!{<Icon data={IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_CHECK}/>},
+                    common::ui_state::LocalProjectStatus::Dirty=>html!{<Icon data={IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_EXCLAMATION}/>},
+                    common::ui_state::LocalProjectStatus::RemoteOnly=>html!{<Icon data={IconData::FONT_AWESOME_SOLID_FILE_ARROW_DOWN}/>},
+                    common::ui_state::LocalProjectStatus::Unknown => html!{<Icon data={IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_CHECK}/>},
+                    common::ui_state::LocalProjectStatus::EmptyLocal =>html!{<Icon data={IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_PLUS}/>},
+                    common::ui_state::LocalProjectStatus::OutOfDate => html!{<Icon data={IconData::FONT_AWESOME_SOLID_FILE_ARROW_DOWN}/>},
+                    common::ui_state::LocalProjectStatus::DirtyAndOutOfDate => html!{<Icon data={IconData::FONT_AWESOME_SOLID_FACE_SAD_CRY}/>},
+                }}
+                <span style={format!("padding: 4px 8px; border-radius: 4px; background-color: {}; color: white; font-size: 12px; font-weight: bold;", lock_color)}>
+                    { format!("{project_status:?}") }
+                </span>
                 <span style={format!("padding: 4px 8px; border-radius: 4px; background-color: {}; color: white; font-size: 12px; font-weight: bold;",
                 if project.permission() == "ADMIN" { " #ff7f00" } else if project.permission() == "READ_AND_WRITE" { "#228be6" } else { "#868e96" }
                 )}>

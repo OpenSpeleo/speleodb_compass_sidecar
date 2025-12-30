@@ -7,7 +7,7 @@ edition = "2024"
 [dependencies]
 # Local dependencies
 common = { path = "../common" }
-
+yew_icons = {version = "0.9", features = ["font_awesome_regular", "font_awesome_solid"]}
 # Workspace dependencies
 log.workspace = true
 serde.workspace = true
