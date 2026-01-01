@@ -17,68 +17,183 @@ use common::{
 use log::{error, info};
 use std::{
     fs::{File, copy, create_dir_all, read_dir},
-    io::prelude::*,
-    path::{Path, PathBuf},
+    path::Path,
 };
 use uuid::Uuid;
-use zip::{ZipArchive, write::SimpleFileOptions};
+use zip::ZipArchive;
 
 pub const SPELEODB_COMPASS_PROJECT_FILE: &str = "compass.toml";
 const SPELEODB_PROJECT_REVISION_FILE: &str = ".revision.txt";
 
 // Information about the status of a Compass project.
+#[derive(Clone, Debug)]
 pub struct ProjectManager {
-    project_state: LocalProjectStatus,
     project_info: ProjectInfo,
-    index: Option<LocalProject>,
-    index_revision: Option<SpeleoDbProjectRevision>,
-    working_copy: Option<LocalProject>,
-    working_copy_revision: Option<SpeleoDbProjectRevision>,
 }
 
 impl ProjectManager {
+    /// Initialize a `ProjectManager` from `ProjectInfo`.
     pub fn initialize_from_info(project_info: ProjectInfo) -> Self {
-        Self {
-            project_state: LocalProjectStatus::Unknown,
-            project_info,
-            index: None,
-            index_revision: None,
-            working_copy: None,
-            working_copy_revision: None,
-        }
+        Self { project_info }
     }
 
+    /// Get the project ID.
     pub fn id(&self) -> Uuid {
         self.project_info.id
     }
 
-    pub fn latest_commit(&self) -> Option<&CommitInfo> {
+    /// Get the latest commit info, if available.
+    pub fn latest_remote_commit(&self) -> Option<&CommitInfo> {
         self.project_info.latest_commit.as_ref()
     }
 
-    pub fn update_project_info(&mut self, project_info: &ProjectInfo) -> Result<(), Error> {
-        self.project_info = project_info.clone();
-        self.update_project_status()
+    /// Get the latest remote revision as a `SpeleoDbProjectRevision`, if available.
+    pub fn latest_remote_revision(&self) -> Option<SpeleoDbProjectRevision> {
+        self.latest_remote_commit()
+            .map(|commit| SpeleoDbProjectRevision::from(commit))
     }
 
-    pub fn get_ui_status(&self) -> ProjectStatus {
-        ProjectStatus::new(self.project_state, self.project_info.clone())
+    pub fn local_revision(&self) -> Option<SpeleoDbProjectRevision> {
+        SpeleoDbProjectRevision::revision_for_local_project(self.id())
     }
 
-    fn update_project_status(&mut self) -> Result<(), Error> {
+    pub fn project_status(&self) -> ProjectStatus {
+        let local_status = self.local_project_status();
+        ProjectStatus::new(local_status, self.project_info.clone())
+    }
+
+    pub async fn update_project_with_server_info(
+        &mut self,
+        api_info: &ApiInfo,
+        server_info: ProjectInfo,
+    ) -> Result<ProjectStatus, Error> {
+        self.project_info = server_info;
+        let project_status = self.local_project_status();
+        match project_status {
+            LocalProjectStatus::Dirty | LocalProjectStatus::DirtyAndOutOfDate => {
+                log::warn!(
+                    "Local working copy for project {} has unsaved changes, skipping update",
+                    self.id()
+                );
+                return Ok(ProjectStatus::new(
+                    project_status,
+                    self.project_info.clone(),
+                ));
+            }
+            _ => { /* continue to update */ }
+        }
+        if let Some(latest_commit) = self.latest_remote_commit() {
+            SpeleoDbProjectRevision::from(latest_commit).save_revision_for_project(self.id())?;
+        };
+        let current_revision = SpeleoDbProjectRevision::revision_for_local_project(self.id());
+        if let Some(working_copy) = self.working_copy() {
+        } else {
+            log::info!(
+                "No working copy found for project {}, updating index",
+                self.id()
+            );
+            let _updated_project = self.update_index(api_info).await?;
+        }
+        Ok(self.project_status())
+    }
+
+    pub async fn update_project(&mut self, api_info: &ApiInfo) -> Result<ProjectStatus, Error> {
+        let server_info = api::project::fetch_project_info(api_info, self.id()).await?;
+        self.update_project_with_server_info(api_info, server_info)
+            .await
+    }
+
+    fn working_copy(&self) -> Option<LocalProject> {
+        match LocalProject::load_working_project(self.id()) {
+            Ok(project) => Some(project),
+            Err(Error::ProjectNotFound(_)) => None,
+            Err(e) => {
+                log::error!(
+                    "Failed to load working copy for project {}: {}",
+                    self.id(),
+                    e
+                );
+                None
+            }
+        }
+    }
+
+    fn index(&self) -> Option<LocalProject> {
+        match LocalProject::load_index_project(self.id()) {
+            Ok(project) => Some(project),
+            Err(Error::ProjectNotFound(_)) => None,
+            Err(e) => {
+                log::error!("Failed to load index for project {}: {}", self.id(), e);
+                None
+            }
+        }
+    }
+
+    /// Local project status determins the state of the local working copy and index.
+    /// Assumes that the latest available server info has already been set into the manager's
+    /// `project_info` field.
+    fn local_project_status(&self) -> LocalProjectStatus {
         let project_dir = compass_project_path(self.id());
         if !project_dir.exists() {
-            self.project_state = LocalProjectStatus::RemoteOnly;
-            return Ok(());
-        } else if let Some(working_copy) = self.working_copy.as_ref() {
+            return LocalProjectStatus::RemoteOnly;
+        } else if let Some(working_copy) = self.working_copy() {
+            // Check if working copy is empty
             if working_copy.is_empty() {
-                self.project_state = LocalProjectStatus::EmptyLocal;
-                return Ok(());
+                return LocalProjectStatus::EmptyLocal;
             }
-            if let Some(index) = self.index.as_ref() {}
+            // If the working copy isn't empty, then we check for changes
+            else if let Some(index) = self.index() {
+                let index_revision = SpeleoDbProjectRevision::revision_for_local_project(self.id());
+                let latest_server_revision = self.latest_remote_revision();
+                // If we have a revision on the server, we have to compare against it
+                if let Some(latest_server_revision) = &latest_server_revision {
+                    // Compare local index revision to latest server revision
+                    if let Some(index_revision) = index_revision {
+                        // If the index revision exists, compare it to the latest server revision
+                        // and check if working copy is dirty
+                        if index_revision.revision == latest_server_revision.revision {
+                            // Revisions match, now check if working copy is dirty
+                            if working_copy == index {
+                                log::info!("Local working copy is up to date and clean");
+                                return LocalProjectStatus::UpToDate;
+                            } else {
+                                log::info!("Local working copy has unsaved changes");
+                                return LocalProjectStatus::Dirty;
+                            }
+                        } else {
+                            // Revisions do not match, we're out of date
+                            if working_copy == index {
+                                log::info!("Local working copy is out of date but clean");
+                                return LocalProjectStatus::OutOfDate;
+                            } else {
+                                log::info!(
+                                    "Local working copy is out of date and has unsaved changes"
+                                );
+                                return LocalProjectStatus::DirtyAndOutOfDate;
+                            }
+                        }
+                    }
+                    // If there is no local revision, but a non-empty working copy we're out of date *AND* dirty
+                    else {
+                        log::info!(
+                            "Latest server revision: {}, local revision: None",
+                            latest_server_revision.revision
+                        );
+                        return LocalProjectStatus::DirtyAndOutOfDate;
+                    }
+                }
+                // If we don't have a remote revision, but the local working copy isn't empty, we have local changes
+                else {
+                    log::info!("Latest server revision: None");
+                    return LocalProjectStatus::Dirty;
+                }
+            }
+            // If there is no index, then the working copy must be
+            else {
+                return LocalProjectStatus::Dirty;
+            }
         }
-
-        Ok(())
+        LocalProjectStatus::Unknown
     }
 
     /// Update the local index of a Compass project by downloading the latest ZIP from SpeleoDB
@@ -89,7 +204,7 @@ impl ProjectManager {
             Ok(bytes) => {
                 log::info!("Downloaded ZIP ({} bytes)", bytes.len());
                 let project = unpack_project_zip(self.id(), bytes)?;
-                if let Some(latest_commit) = self.latest_commit() {
+                if let Some(latest_commit) = self.latest_remote_commit() {
                     SpeleoDbProjectRevision::from(latest_commit)
                         .save_revision_for_project(self.id())?;
                 };

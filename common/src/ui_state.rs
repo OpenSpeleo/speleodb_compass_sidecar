@@ -6,14 +6,23 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub const UI_STATE_NOTIFICATION_KEY: &str = "event::ui_state";
+
+/// The status of a local project in relation to its remote counterpart.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub enum LocalProjectStatus {
+    /// The status of the local project is unknown.
     Unknown,
+    /// The local project exists only on the remote server.
     RemoteOnly,
+    /// The local project exists only on the local machine, and has no local changes
     EmptyLocal,
+    /// The local project has unsaved changes.
     Dirty,
+    /// The local project is synchronized with the remote server.
     UpToDate,
+    /// The local project is out of date with the remote server.
     OutOfDate,
+    /// The local project has unsaved changes and is out of date with the remote server. Uh Oh...
     DirtyAndOutOfDate,
 }
 

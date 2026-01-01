@@ -13,7 +13,7 @@ pub struct SpeleoDbProjectRevision {
 }
 
 impl SpeleoDbProjectRevision {
-    pub fn revision_for_project(id: Uuid) -> Option<SpeleoDbProjectRevision> {
+    pub fn revision_for_local_project(id: Uuid) -> Option<Self> {
         std::fs::read_to_string(SpeleoDbProjectRevision::path_for_project(id))
             .ok()
             .map(|revision| Self { revision })

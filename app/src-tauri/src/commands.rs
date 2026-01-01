@@ -2,6 +2,7 @@ use crate::{paths::compass_project_working_path, state::AppState, user_prefs::Us
 use common::{
     Error,
     api_types::{ProjectInfo, ProjectSaveResult},
+    ui_state::ProjectStatus,
 };
 use log::{error, info};
 use std::process::Command;
@@ -26,11 +27,12 @@ pub fn sign_out(app_handle: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn fetch_projects(app_handle: AppHandle) -> Result<(), String> {
     let app_state = app_handle.state::<AppState>();
-    let projects = api::project::fetch_projects(&app_state.api_info())
+    let api_info = app_state.api_info();
+    let projects = api::project::fetch_projects(&api_info)
         .await
         .map_err(|e| e.to_string())?;
-    for project_info in &projects {
-        app_state.update_project_info(project_info);
+    for project_info in projects {
+        app_state.update_project_info(&api_info, project_info).await;
     }
     app_state.emit_app_state_change(&app_handle);
     Ok(())
@@ -105,18 +107,13 @@ pub async fn project_working_copy_is_dirty(project_id: Uuid) -> Result<bool, Str
 pub async fn update_project_info(
     app_state: &AppState,
     project_id: Uuid,
-) -> Result<ProjectInfo, String> {
-    match api::project::fetch_project_info(&app_state.api_info(), project_id).await {
-        Ok(revisions) => {
-            app_state.update_project_info(&revisions);
-            Ok(revisions)
-        }
+) -> Result<ProjectStatus, Error> {
+    let api_info = app_state.api_info();
+    match api::project::fetch_project_info(&api_info, project_id).await {
+        Ok(project_info) => app_state.update_project_info(&api_info, project_info).await,
         Err(e) => {
             error!("Failed to get revisions for project {}: {}", project_id, e);
-            return Err(format!(
-                "Failed to get revisions for project {}: {}",
-                project_id, e
-            ));
+            return Err(e);
         }
     }
 }
@@ -329,7 +326,7 @@ pub async fn create_project(
     country: String,
     latitude: Option<String>,
     longitude: Option<String>,
-) -> Result<ProjectInfo, String> {
+) -> Result<ProjectStatus, Error> {
     let app_state = app_handle.state::<AppState>();
     let project_info = api::project::create_project(
         &app_state.api_info(),
@@ -339,9 +336,11 @@ pub async fn create_project(
         latitude,
         longitude,
     )
-    .await
-    .map_err(|e| e.to_string())?;
-    app_state.update_project_info(&project_info);
-    app_state.set_active_project(Some(project_info.id), &app_handle);
-    Ok(project_info)
+    .await?;
+    let id = project_info.id;
+    let status = app_state
+        .update_project_info(&app_state.api_info(), project_info)
+        .await?;
+    app_state.set_active_project(Some(id), &app_handle);
+    Ok(status)
 }

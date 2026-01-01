@@ -1,10 +1,17 @@
+//! Module for managing local Compass projects stored on disk.
+//! This includes loading, saving, importing, and packing projects.
+//! A local project consists of an index copy and a working copy.
+//! The index copy represents the last known state of the project as stored in SpeleoDB,
+//! while the working copy represents the current state of the project on disk.
+
 use crate::{
     SPELEODB_COMPASS_VERSION,
     paths::{compass_project_index_path, compass_project_working_path},
     project_management::{SPELEODB_COMPASS_PROJECT_FILE, SpeleoDbProjectRevision},
 };
 use common::Error;
-use log::{error, info};
+use compass_data::{Loaded, Project};
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
     io::prelude::*,
@@ -74,8 +81,47 @@ pub struct LocalProject {
 
 impl LocalProject {
     // Get the SpeleoDb project revision associated with this project, if it exists.
-    pub fn revision(&self) -> Option<SpeleoDbProjectRevision> {
-        SpeleoDbProjectRevision::revision_for_project(self.speleodb.id)
+    pub fn local_revision(&self) -> Option<SpeleoDbProjectRevision> {
+        SpeleoDbProjectRevision::revision_for_local_project(self.speleodb.id)
+    }
+
+    pub fn working_copy_is_dirty(&self) -> Result<bool, Error> {
+        let index_copy = LocalProject::load_index_project(self.speleodb.id).ok();
+        let working_copy = LocalProject::load_working_project(self.speleodb.id).ok();
+        if let Some(index_copy) = index_copy {
+            if let Some(working_copy) = working_copy {
+                // Both copies exist, compare them
+                if index_copy == working_copy {
+                    // No changes at the map level, now check the files
+                    let index_project = LocalProject::load_index_project_project(self.speleodb.id)?;
+                    let working_project =
+                        LocalProject::load_working_copy_project(self.speleodb.id)?;
+                    if index_project == working_project {
+                        // No changes detected
+                        Ok(false)
+                    } else {
+                        // Changes detected
+                        Ok(true)
+                    }
+                } else {
+                    // Changes detected
+                    Ok(true)
+                }
+            } else {
+                // No working copy, so not dirty
+                error!("Index is populated, but local copy doesn't exist");
+                // TODO: Decide if we should just clone the index to working copy here
+                unreachable!(
+                    "Index populated, but working copy doesn't exist when checking for changes"
+                );
+            }
+        } else if let Some(_) = working_copy {
+            // No index copy, but working copy exists, so dirty
+            Ok(true)
+        } else {
+            // Neither copy exists, so not dirty
+            Ok(false)
+        }
     }
 
     pub fn import_compass_project(mak_path: &Path, id: Uuid) -> Result<Self, Error> {
@@ -239,6 +285,36 @@ impl LocalProject {
 
         zip_writer.finish().map_err(|e| e.to_string())?;
         Ok(zip_path)
+    }
+
+    fn load_compass_project(path: &Path) -> Result<Project<Loaded>, Error> {
+        let compass_project =
+            Project::read(path).map_err(|e| Error::CompassProject(e.to_string()))?;
+        let loaded_compass_project = compass_project
+            .load_survey_files()
+            .map_err(|e| Error::CompassProject(e.to_string()))?;
+        Ok(loaded_compass_project)
+    }
+    fn load_index_project_project(id: Uuid) -> Result<Project<Loaded>, Error> {
+        let local_project = LocalProject::load_index_project(id)?;
+        let mut project_path = compass_project_index_path(id);
+        let mak_file_name = local_project
+            .map
+            .mak_file
+            .ok_or_else(|| Error::NoProjectData(id))?;
+        project_path.push(&mak_file_name);
+        LocalProject::load_compass_project(&project_path)
+    }
+
+    fn load_working_copy_project(id: Uuid) -> Result<Project<Loaded>, Error> {
+        let local_project = LocalProject::load_working_project(id)?;
+        let mut project_path = compass_project_working_path(id);
+        let mak_file_name = local_project
+            .map
+            .mak_file
+            .ok_or_else(|| Error::NoProjectData(id))?;
+        project_path.push(&mak_file_name);
+        LocalProject::load_compass_project(&project_path)
     }
 }
 

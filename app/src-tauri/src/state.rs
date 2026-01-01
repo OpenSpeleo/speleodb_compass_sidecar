@@ -1,14 +1,13 @@
+use crate::{project_management::ProjectManager, user_prefs::UserPrefs};
 use common::{
     ApiInfo, Error,
     api_types::ProjectInfo,
-    ui_state::{LoadingState, UI_STATE_NOTIFICATION_KEY, UiState},
+    ui_state::{LoadingState, ProjectStatus, UI_STATE_NOTIFICATION_KEY, UiState},
 };
 use log::warn;
 use std::{collections::HashMap, sync::Mutex, time::Duration};
 use tauri::{AppHandle, Emitter, ipc::private::tracing::info};
 use uuid::Uuid;
-
-use crate::{project_management::ProjectManager, user_prefs::UserPrefs};
 
 pub struct AppState {
     loading_state: Mutex<LoadingState>,
@@ -87,15 +86,28 @@ impl AppState {
         Ok(())
     }
 
-    pub fn update_project_info(&self, project_info: &ProjectInfo) {
-        let mut project_lock = self.project_info.lock().unwrap();
-        if project_lock.contains_key(&project_info.id) {
-            let existing_project = project_lock.get_mut(&project_info.id).unwrap();
-            existing_project.update_project_info(project_info).unwrap();
-        } else {
-            let new_project = ProjectManager::initialize_from_info(project_info.clone());
-            project_lock.insert(project_info.id, new_project);
-        }
+    pub async fn update_project_info(
+        &self,
+        api_info: &ApiInfo,
+        project_info: ProjectInfo,
+    ) -> Result<ProjectStatus, Error> {
+        let mut project = {
+            let mut project_lock = self.project_info.lock().unwrap();
+            // This clone is necessary to avoid holding the lock across an await point
+            // which would lead to a deadlock.
+            // The project manager simply represents the status on disk, so cloning it is cheap.
+            if let Some(existing_project) = project_lock.get(&project_info.id).cloned() {
+                existing_project
+            } else {
+                let id = project_info.id;
+                let new_project = ProjectManager::initialize_from_info(project_info);
+                project_lock.insert(id, new_project.clone());
+                return Ok(new_project.project_status());
+            }
+        };
+        project
+            .update_project_with_server_info(api_info, project_info)
+            .await
     }
 
     pub fn set_active_project(&self, project_id: Option<Uuid>, app_handle: &AppHandle) {
@@ -114,7 +126,7 @@ impl AppState {
             .lock()
             .unwrap()
             .values()
-            .map(|p| p.get_ui_status())
+            .map(|p| p.project_status())
             .collect();
         let active_project_id = self.get_active_project();
         let ui_state = UiState::new(loading_state, project_info, active_project_id);
@@ -182,11 +194,11 @@ impl AppState {
 
     async fn load_user_projects(&self) -> Result<Vec<ProjectInfo>, Error> {
         info!("Loading user projects");
-        let prefs = self.api_info();
-        match api::project::fetch_projects(&prefs).await {
+        let api_info = self.api_info();
+        match api::project::fetch_projects(&api_info).await {
             Ok(projects) => {
-                for project in &projects {
-                    self.update_project_info(project);
+                for project in projects.clone() {
+                    self.update_project_info(&api_info, project).await?;
                 }
                 Ok(projects)
             }

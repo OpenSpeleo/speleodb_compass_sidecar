@@ -50,4 +50,6 @@ pub enum Error {
     ProjectMutexLocked(Uuid),
     #[error("Zip File Error: {0}")]
     ZipFile(String),
+    #[error("Compass Project Error: {0}")]
+    CompassProject(String),
 }
