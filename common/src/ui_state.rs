@@ -11,12 +11,18 @@ pub const UI_STATE_NOTIFICATION_KEY: &str = "event::ui_state";
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub enum LocalProjectStatus {
     /// The status of the local project is unknown.
+    /// Never seen in UI
     Unknown,
-    /// The local project exists only on the remote server.
+    /// The project exists only on the remote server.
+    /// Depicted in UI bwo cloud icon?
     RemoteOnly,
-    /// The local project exists only on the local machine, and has no local changes
+    /// The project exists only on the local machine, and has no changes
+    /// This is the only status that allows compass project import
+    /// Shows button to upload
     EmptyLocal,
     /// The local project has unsaved changes.
+    /// UI should warn user somehow
+    /// Saved/unsaved indicator?
     Dirty,
     /// The local project is synchronized with the remote server.
     UpToDate,
@@ -39,6 +45,10 @@ impl ProjectStatus {
 
     pub fn id(&self) -> Uuid {
         self.info.id
+    }
+
+    pub fn local_status(&self) -> LocalProjectStatus {
+        self.local_status
     }
 
     pub fn name(&self) -> &str {

@@ -1,4 +1,5 @@
 use crate::components::create_project_modal::CreateProjectModal;
+use crate::components::project_listing_item::ProjectListingItem;
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use common::api_types::ProjectInfo;
 use common::ui_state::UiState;
@@ -114,49 +115,9 @@ pub fn project_listing(ProjectListingProps { ui_state }: &ProjectListingProps) -
                     </div>
                     <div class="projects-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
                         { for ui_state.project_status.iter().map(|project| {
-                            let project_id = project.id();
-                            let on_card_click = Callback::from( move |_| {
-                                spawn_local( async move {
-                                    SPELEO_DB_CONTROLLER.set_active_project(project_id).await.unwrap();
-                                });
-                            });
-
-                            let is_locked = project.active_mutex().is_some();
-                            let lock_status = if is_locked { "🔒 Locked" } else { "🔓 Unlocked" };
-                            let lock_color = if is_locked { "#ff6b6b" } else { "#51cf66" };
-
-                            html! {
-                                <div
-                                    class="project-card"
-                                    onclick={on_card_click}
-                                    style={
-                                        "border: 1px solid #ddd; \
-                                         border-radius: 8px; \
-                                         padding: 16px; \
-                                         cursor: pointer; \
-                                         transition: all 0.2s; \
-                                         background-color: white; \
-                                         box-shadow: 0 2px 4px rgba(0,0,0,0.1); \
-                                         display: flex; \
-                                         justify-content: space-between; \
-                                         align-items: center;"
-                                    }
-                                >
-                                    <h3 style="margin: 0; font-size: 18px; color: #2c3e50;">
-                                        { project.name() }
-                                    </h3>
-                                    <div style="display: flex; gap: 12px; align-items: center;">
-                                        <span style={format!("padding: 4px 8px; border-radius: 4px; background-color: {}; color: white; font-size: 12px; font-weight: bold;",
-                                        if project.permission() == "ADMIN" { " #ff7f00" } else if project.permission() == "READ_AND_WRITE" { "#228be6" } else { "#868e96" }
-                                        )}>
-                                            { project.permission() }
-                                        </span>
-                                        <span style={format!("padding: 4px 8px; border-radius: 4px; background-color: {}; color: white; font-size: 12px; font-weight: bold;", lock_color)}>
-                                            { lock_status }
-                                        </span>
-                                    </div>
-                                </div>
-                            }
+                            return html! {
+                                <ProjectListingItem project={project.clone()} />
+                            };
                         })}
                     </div>
                 </section>

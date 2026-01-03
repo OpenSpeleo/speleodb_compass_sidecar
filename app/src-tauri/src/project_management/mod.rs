@@ -194,7 +194,13 @@ impl ProjectManager {
                 return LocalProjectStatus::Dirty;
             }
         }
-        LocalProjectStatus::Unknown
+        // If there is no working copy, but the project directory exists, it must be empty
+        // If there's a remote version we're  out of date, otherwise it's just a newly created empty local
+        if self.latest_remote_commit().is_some() {
+            LocalProjectStatus::OutOfDate
+        } else {
+            LocalProjectStatus::EmptyLocal
+        }
     }
 
     /// Update the local index of a Compass project by downloading the latest ZIP from SpeleoDB
