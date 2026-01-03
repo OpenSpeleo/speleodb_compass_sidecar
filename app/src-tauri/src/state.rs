@@ -10,6 +10,7 @@ use tauri::{AppHandle, Emitter, ipc::private::tracing::info};
 use uuid::Uuid;
 
 pub struct AppState {
+    initializing: Mutex<bool>,
     loading_state: Mutex<LoadingState>,
     api_info: Mutex<ApiInfo>,
     project_info: Mutex<HashMap<uuid::Uuid, ProjectManager>>,
@@ -19,6 +20,7 @@ pub struct AppState {
 impl AppState {
     pub fn new() -> Self {
         Self {
+            initializing: Mutex::new(false),
             loading_state: Mutex::new(LoadingState::NotStarted),
             api_info: Mutex::new(ApiInfo::default()),
             project_info: Mutex::new(HashMap::new()),
@@ -28,27 +30,22 @@ impl AppState {
 
     /// Asynchronously initialize the application state.
     pub async fn init_app_state(&self, app_handle: &AppHandle) {
-        let mut loading_state = self.loading_state();
-        if let LoadingState::Failed(e) = &loading_state {
-            log::warn!(
-                "Previous initialization failed with error: {}. Retrying initialization.",
-                e
-            );
-            self.set_loading_state(LoadingState::NotStarted, &app_handle);
-            loading_state = LoadingState::NotStarted;
+        if self.initializing() {
+            return;
         }
+        self.set_initializing(true);
+        let mut loading_state = self.loading_state();
         loop {
             match &loading_state {
                 LoadingState::Failed(e) => {
-                    log::warn!(
-                        "Previous initialization failed with error: {}. Retrying initialization.",
-                        e
-                    );
-                    self.set_loading_state(LoadingState::NotStarted, &app_handle);
+                    log::warn!("Previous initialization failed with error: {}.", e);
+                    self.set_initializing(false);
+                    break;
                 }
                 LoadingState::Unauthenticated | LoadingState::Ready => {
                     log::info!("App state already initialized",);
                     self.emit_app_state_change(app_handle);
+                    self.set_initializing(false);
                     break;
                 }
                 _ => loading_state = self.init_internal(&app_handle).await,
@@ -133,6 +130,14 @@ impl AppState {
         app_handle
             .emit(UI_STATE_NOTIFICATION_KEY, &ui_state)
             .unwrap();
+    }
+
+    fn initializing(&self) -> bool {
+        *self.initializing.lock().unwrap()
+    }
+
+    fn set_initializing(&self, initializing: bool) {
+        *self.initializing.lock().unwrap() = initializing;
     }
 
     fn loading_state(&self) -> LoadingState {

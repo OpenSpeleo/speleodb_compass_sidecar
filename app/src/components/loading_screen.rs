@@ -35,7 +35,6 @@ pub fn loading_screen(&LoadingScreenProps { ref loading_state }: &LoadingScreenP
                     height: 100%;
                 ">
                 <div style="
-                    background-color: coral;
                     padding: 32px 48px;
                     border-radius: 12px;
                     display: flex;

@@ -84,16 +84,17 @@ impl ProjectManager {
         }
         if let Some(latest_commit) = self.latest_remote_commit() {
             SpeleoDbProjectRevision::from(latest_commit).save_revision_for_project(self.id())?;
+            let current_revision = SpeleoDbProjectRevision::revision_for_local_project(self.id());
+            if let Some(working_copy) = self.working_copy() {
+            } else {
+                log::info!(
+                    "No working copy found for project {}, updating index",
+                    self.id()
+                );
+                let _updated_project = self.update_index(api_info).await?;
+            }
         };
-        let current_revision = SpeleoDbProjectRevision::revision_for_local_project(self.id());
-        if let Some(working_copy) = self.working_copy() {
-        } else {
-            log::info!(
-                "No working copy found for project {}, updating index",
-                self.id()
-            );
-            let _updated_project = self.update_index(api_info).await?;
-        }
+
         Ok(self.project_status())
     }
 
@@ -197,7 +198,10 @@ impl ProjectManager {
     }
 
     /// Update the local index of a Compass project by downloading the latest ZIP from SpeleoDB
-    async fn update_index(&self, api_info: &ApiInfo) -> Result<LocalProject, Error> {
+    /// and unpacking it into the index directory.
+    /// Returns the updated Ok(Some(`LocalProject`)) if the project has a revision on the server if successful.
+    /// Returns Ok(None) if there is no project data on the server.
+    async fn update_index(&self, api_info: &ApiInfo) -> Result<Option<LocalProject>, Error> {
         ensure_compass_project_dirs_exist(self.id())?;
         log::info!("Downloading project ZIP from");
         match api::project::download_project_zip(api_info, self.id()).await {
@@ -220,7 +224,13 @@ impl ProjectManager {
                     );
                     Error::FileWrite(e.to_string())
                 })?;
-                Ok(project)
+                Ok(Some(project))
+            }
+            Err(Error::NoProjectData(_)) => {
+                log::info!("No project data found on server for project {}", self.id());
+                ensure_compass_project_dirs_exist(self.id())?;
+                let project = LocalProject::load_index_project(self.id())?;
+                Ok(None)
             }
             Err(e) => {
                 log::error!("Failed to download project ZIP: {}", e);

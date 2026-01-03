@@ -205,6 +205,7 @@ pub async fn download_project_zip(
     api_info: &ApiInfo,
     project_id: Uuid,
 ) -> Result<bytes::Bytes, Error> {
+    info!("Downloading project zip for project: {project_id}");
     let base = api_info.instance();
     let oauth = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
     let url = format!(
