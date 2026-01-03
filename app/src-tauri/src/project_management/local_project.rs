@@ -11,7 +11,7 @@ use crate::{
 };
 use common::Error;
 use compass_data::{Loaded, Project};
-use log::{error, info, warn};
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::{
     io::prelude::*,
@@ -71,10 +71,8 @@ impl Default for ProjectMap {
 }
 
 /// Represents a local Compass project stored on disk.
-/// The additional path is required to locate the project files, as this can represent a working copy or an index.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct LocalProject {
-    project_path: PathBuf,
     speleodb: SpeleoDb,
     map: ProjectMap,
 }
@@ -168,7 +166,6 @@ impl LocalProject {
         std::fs::create_dir_all(&project_path)
             .map_err(|_| Error::CreateDirectory(project_path.clone()))?;
         let new_project = Self {
-            project_path: project_path.clone(),
             speleodb: SpeleoDb {
                 id,
                 version: SPELEODB_COMPASS_VERSION,
@@ -195,22 +192,6 @@ impl LocalProject {
                 .map_err(|_| Error::ProjectImport(file_path.to_owned(), target_path.to_owned()))?;
         }
         Ok(new_project)
-    }
-
-    /// Create an empty Compass project with no files.
-    pub fn empty_working_copy(id: Uuid) -> Self {
-        info!("Creating empty Compass project for id: {id}");
-        //
-        let project_path = compass_project_working_path(id);
-        let new_project = Self {
-            project_path,
-            speleodb: SpeleoDb {
-                id,
-                version: SPELEODB_COMPASS_VERSION,
-            },
-            map: ProjectMap::new(),
-        };
-        new_project
     }
 
     pub fn load_working_project(id: Uuid) -> Result<Self, Error> {
@@ -295,6 +276,7 @@ impl LocalProject {
             .map_err(|e| Error::CompassProject(e.to_string()))?;
         Ok(loaded_compass_project)
     }
+
     fn load_index_project_project(id: Uuid) -> Result<Project<Loaded>, Error> {
         let local_project = LocalProject::load_index_project(id)?;
         let mut project_path = compass_project_index_path(id);
