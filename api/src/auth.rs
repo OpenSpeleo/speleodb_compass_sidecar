@@ -7,21 +7,26 @@ use url::Url;
 use crate::get_api_client;
 
 async fn handle_auth_response(
-    instance: &Url,
+    instance: Url,
     response: reqwest::Response,
 ) -> Result<ApiInfo, String> {
     let status = response.status();
     #[derive(Deserialize)]
     struct TokenResponse {
         token: String,
+        user: String,
     }
     if status.is_success() {
-        // Fall back to JSON body parsing
-        let token = response
+        let token_response = response
             .json::<TokenResponse>()
             .await
             .map_err(|e| format!("Unexpected response body: {e}"))?;
-        let api_info = ApiInfo::new(instance.clone(), Some(token.token.clone()));
+
+        let api_info = ApiInfo::new(
+            instance,
+            Some(token_response.user),
+            Some(token_response.token),
+        );
         return Ok(api_info);
     } else {
         error!("Authorization failed with status: {}", status);
@@ -29,7 +34,7 @@ async fn handle_auth_response(
     }
 }
 
-pub async fn authorize_with_token(instance: &Url, oauth: &str) -> Result<ApiInfo, String> {
+pub async fn authorize_with_token(instance: Url, oauth: &str) -> Result<ApiInfo, String> {
     let url = instance.join("api/v1/user/auth-token/").unwrap();
     let client = get_api_client();
     info!(
@@ -46,7 +51,7 @@ pub async fn authorize_with_token(instance: &Url, oauth: &str) -> Result<ApiInfo
 }
 
 pub async fn authorize_with_email(
-    instance: &Url,
+    instance: Url,
     email: &str,
     password: &str,
 ) -> Result<ApiInfo, String> {
@@ -112,6 +117,6 @@ mod tests {
         let instance = Url::parse(&std::env::var("TEST_SPELEODB_INSTANCE").unwrap()).unwrap();
         let oauth = std::env::var("TEST_SPELEODB_OAUTH").unwrap();
 
-        authorize_with_token(&instance, &oauth).await.unwrap();
+        authorize_with_token(instance, &oauth).await.unwrap();
     }
 }

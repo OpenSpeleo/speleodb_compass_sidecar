@@ -17,7 +17,7 @@ pub enum Error {
     #[error("Error deserializing data: {0}")]
     Deserialization(String),
     #[error("Error serializing TOML")]
-    Serialization,
+    Serialization(String),
     #[error("No user preferences found")]
     NoUserPreferences,
     #[error("Error reading user preferece file")]

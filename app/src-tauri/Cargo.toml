@@ -34,7 +34,7 @@ url.workspace = true
 uuid.workspace = true
 
 # Cargo dependencies
-compass_data = "0.0.5"
+compass_data = "0.0.6"
 semver = { version = "1", features = ["serde"] }
 sentry = "0.46"
 tauri = { version = "2", features = [] }

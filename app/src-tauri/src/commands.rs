@@ -30,11 +30,11 @@ pub async fn auth_request(
 ) -> Result<(), String> {
     info!("Starting auth request");
     let api_info = if let Some(oauth_token) = oauth {
-        api::auth::authorize_with_token(&instance, &oauth_token).await?
+        api::auth::authorize_with_token(instance, &oauth_token).await?
     } else {
         let email = email.ok_or("Email is required for email/password authentication")?;
         let password = password.ok_or("Password is required for email/password authentication")?;
-        api::auth::authorize_with_email(&instance, &email, &password).await?
+        api::auth::authorize_with_email(instance, &email, &password).await?
     };
     info!("Auth request successful, updating user preferences");
     let prefs = UserPrefs::new(api_info);
@@ -202,7 +202,7 @@ pub async fn create_project(
     country: String,
     latitude: Option<String>,
     longitude: Option<String>,
-) -> Result<ProjectStatus, Error> {
+) -> Result<(), Error> {
     let app_state = app_handle.state::<AppState>();
     let project_info = api::project::create_project(
         &app_state.api_info(),
@@ -214,9 +214,6 @@ pub async fn create_project(
     )
     .await?;
     let id = project_info.id;
-    let status = app_state
-        .update_project_info(&app_state.api_info(), project_info)
-        .await?;
-    app_state.set_active_project(Some(id), &app_handle);
-    Ok(status)
+    app_state.set_active_project(Some(id), &app_handle).await?;
+    Ok(())
 }

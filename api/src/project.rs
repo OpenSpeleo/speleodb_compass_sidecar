@@ -3,41 +3,14 @@ use std::path::Path;
 use common::{
     ApiInfo,
     api_types::{ProjectInfo, ProjectSaveResult, ProjectType},
+    ui_state::ProjectStatus,
 };
 use errors::Error;
-use log::{error, info};
+use log::{error, info, warn};
 use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::get_api_client;
-
-pub async fn acquire_project_mutex(api_info: &ApiInfo, project_id: Uuid) -> Result<(), Error> {
-    log::info!("Acquiring project mutex for project: {}", project_id);
-    let base = api_info.instance();
-    let oauth = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
-    let route = format!("api/v1/projects/{}/acquire/", project_id);
-    let url = base.join(&route).unwrap();
-    let client = get_api_client();
-
-    let resp = client
-        .post(url)
-        .header("Authorization", format!("Token {}", oauth))
-        .send()
-        .await
-        .map_err(|e| Error::NetworkRequest(e.to_string()))?;
-
-    let status = resp.status();
-
-    if status.is_success() {
-        // Successfully acquired the mutex
-        Ok(())
-    } else if status.as_u16() == 409 || status.as_u16() == 423 {
-        // 409 Conflict or 423 Locked - mutex is already held by another user
-        Err(Error::ProjectMutexLocked(project_id))
-    } else {
-        Err(Error::Api(status.as_u16()))
-    }
-}
 
 pub async fn create_project(
     api_info: &ApiInfo,
@@ -102,7 +75,57 @@ pub async fn create_project(
     }
 }
 
-pub async fn release_project_mutex(api_info: &ApiInfo, project_id: Uuid) -> Result<(), Error> {
+#[derive(Debug, Deserialize)]
+struct MutexResponse {
+    pub data: ProjectInfo,
+    // Ignore extra fields like timestamp and url
+}
+
+pub async fn acquire_project_mutex(
+    api_info: &ApiInfo,
+    project_id: Uuid,
+) -> Result<ProjectInfo, Error> {
+    log::info!("Acquiring project mutex for project: {}", project_id);
+    let base = api_info.instance();
+    let oauth = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
+    let route = format!("api/v1/projects/{}/acquire/", project_id);
+    let url = base.join(&route).unwrap();
+    let client = get_api_client();
+
+    let resp = client
+        .post(url)
+        .header("Authorization", format!("Token {}", oauth))
+        .send()
+        .await
+        .map_err(|e| Error::NetworkRequest(e.to_string()))?;
+
+    let status = resp.status();
+
+    if status.is_success() {
+        let json = resp.json::<MutexResponse>().await.map_err(|e| {
+            error!("Failed to deserialize mutex acquire response: {e:?}");
+            Error::Deserialization(e.to_string())
+        })?;
+        info!("{json:?}");
+        // Successfully acquired the mutex
+        Ok(json.data)
+    } else if status.as_u16() == 409 || status.as_u16() == 423 {
+        warn!("Mutex already locked by another user");
+        // 409 Conflict or 423 Locked - mutex is already held by another user
+        Err(Error::ProjectMutexLocked(project_id))
+    } else {
+        error!(
+            "Failed to acquire mutex, server returned status code: {}",
+            status.as_u16()
+        );
+        Err(Error::Api(status.as_u16()))
+    }
+}
+
+pub async fn release_project_mutex(
+    api_info: &ApiInfo,
+    project_id: Uuid,
+) -> Result<ProjectInfo, Error> {
     info!("Releasing project mutex for project: {}", project_id);
     let base = api_info.instance();
     let oauth = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
@@ -119,8 +142,12 @@ pub async fn release_project_mutex(api_info: &ApiInfo, project_id: Uuid) -> Resu
 
     let status = resp.status();
     if status.is_success() {
+        let json = resp.json::<MutexResponse>().await.map_err(|e| {
+            error!("Failed to deserialize mutex acquire response: {e:?}");
+            Error::Deserialization(e.to_string())
+        })?;
         log::info!("Successfully released mutex for project: {}", project_id);
-        Ok(())
+        Ok(json.data)
     } else {
         log::warn!("Mutex release returned status {}: {}", status.as_u16(), url);
         Err(Error::Api(status.as_u16()))

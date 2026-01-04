@@ -115,21 +115,28 @@ impl AppState {
         app_handle: &AppHandle,
     ) -> Result<(), Error> {
         if let Some(project_id) = project_id {
-            api::project::acquire_project_mutex(&self.api_info(), project_id).await?;
+            info!("Selecting: {project_id} as active project");
+            let project_info =
+                api::project::acquire_project_mutex(&self.api_info(), project_id).await?;
+            self.update_project_info(&self.api_info(), project_info)
+                .await?;
+            self.emit_app_state_change(app_handle);
         } else {
             if let Some(active_project) = self.get_active_project_status() {
                 if let LocalProjectStatus::Dirty = active_project.local_status() {
                     warn!("Refusing to release project mutex for dirty project");
                 } else {
                     info!("Releasing mutex for clean active project");
-                    api::project::release_project_mutex(&self.api_info(), active_project.id())
+                    let project_info =
+                        api::project::release_project_mutex(&self.api_info(), active_project.id())
+                            .await?;
+                    self.update_project_info(&self.api_info(), project_info)
                         .await?;
                 }
             }
         };
         *self.active_project.lock().unwrap() = project_id;
-        self.set_loading_state(LoadingState::LoadingProjects, app_handle);
-        self.init_internal(app_handle).await;
+        self.emit_app_state_change(app_handle);
         Ok(())
     }
 
@@ -209,7 +216,7 @@ impl AppState {
             log::warn!("No OAuth token found in user preferences");
             return Err("No OAuth token found".to_string());
         };
-        match api::auth::authorize_with_token(api_info.instance(), &token).await {
+        match api::auth::authorize_with_token(api_info.instance().clone(), &token).await {
             Ok(api_info) => {
                 log::info!("User authenticated successfully");
                 let prefs = UserPrefs::new(api_info);

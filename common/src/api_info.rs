@@ -15,6 +15,7 @@ impl AsRef<str> for OauthToken {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ApiInfo {
     instance: Url,
+    email: Option<String>,
     oauth_token: Option<String>,
 }
 
@@ -22,21 +23,27 @@ impl Default for ApiInfo {
     fn default() -> Self {
         Self {
             instance: API_BASE_URL.parse().unwrap(),
+            email: None,
             oauth_token: None,
         }
     }
 }
 
 impl ApiInfo {
-    pub fn new(instance: Url, oauth_token: Option<String>) -> Self {
+    pub fn new(instance: Url, email: Option<String>, oauth_token: Option<String>) -> Self {
         Self {
             instance,
+            email,
             oauth_token,
         }
     }
 
     pub fn instance(&self) -> &Url {
         &self.instance
+    }
+
+    pub fn email(&self) -> Option<&str> {
+        self.email.as_deref()
     }
 
     pub fn oauth_token(&self) -> Option<&str> {

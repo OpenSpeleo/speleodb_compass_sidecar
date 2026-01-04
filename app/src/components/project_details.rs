@@ -206,50 +206,6 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
         })
     };
 
-    // Reload Project Handler
-    let on_confirm_reload = {
-        let downloading = downloading.clone();
-        let download_complete = download_complete.clone();
-        let error_message = error_message.clone();
-        let project_file_path = project_file_path.clone();
-        let project_id = project.id();
-        let show_empty_project_modal = show_empty_project_modal.clone();
-        let show_reload_confirm = show_reload_confirm.clone();
-        Callback::from(move |_: ()| {
-            let downloading = downloading.clone();
-            let download_complete = download_complete.clone();
-            let show_reload_confirm = show_reload_confirm.clone();
-            let error_message = error_message.clone();
-            let show_empty_project_modal = show_empty_project_modal.clone();
-            let project_file_path = project_file_path.clone();
-            show_reload_confirm.set(false);
-            downloading.set(true);
-            error_message.set(None);
-
-            spawn_local(async move {
-                // Step 2: Update project index
-                match SPELEO_DB_CONTROLLER.update_project(project_id).await {
-                    Ok(updated_project) => {
-                        /*
-                        info!("Successfully updated compass project data{updated_project:?}!");
-                        downloading.set(false);
-                        let mak_path = updated_project.map.mak_file.clone();
-                        project_file_path.set(mak_path);
-                        if updated_project.is_empty() {
-                            show_empty_project_modal.set(true);
-                        } else {
-                            download_complete.set(true);
-                        }
-                        */
-                    }
-                    Err(error) => {
-                        error!("Error updating compass project data: {error:?}!");
-                    }
-                }
-            });
-        })
-    };
-
     // Load from Disk Handler
     let on_import_from_disk = {
         let selected_zip = selected_zip.clone();
@@ -518,27 +474,6 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
                                     show_success_modal.set(false);
                                 })
                             }
-                        />
-                    }
-                } else {
-                    html! {}
-                }
-            }
-
-            // Reload Confirmation Modal
-            {
-                if *show_reload_confirm {
-                    html! {
-                        <Modal
-                            title="Reload Project?"
-                            message="Are you sure you want to reload this project? \n\n\
-                                WARNING: This will overwrite any local changes you have made. \
-                                This action cannot be undone."
-                            modal_type={ModalType::Warning}
-                            show_close_button={true}
-                            primary_button_text={Some("Yes, Reload".to_string())}
-                            on_close={move |_| show_reload_confirm.set(false)}
-                            on_primary_action={on_confirm_reload}
                         />
                     }
                 } else {

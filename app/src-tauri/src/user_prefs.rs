@@ -48,15 +48,17 @@ impl UserPrefs {
     pub fn load() -> Result<Self, Error> {
         // Try to get credentials from environment variables first (for testing)
         let instance = std::env::var("TEST_SPELEODB_INSTANCE").ok();
+        let email = std::env::var("TEST_SPELEODB_EMAIL").ok();
         let oauth = std::env::var("TEST_SPELEODB_OAUTH").ok();
         if let Some(instance) = instance
-            && let Some(oauth_token) = oauth
+            && email.is_some()
+            && oauth.is_some()
         {
             info!("User preferences loaded from environment variables");
             let instance = Url::parse(&instance).map_err(|e| {
                 Error::Deserialization(format!("Invalid URL in TEST_SPELEODB_INSTANCE: {}", e))
             })?;
-            return Ok(UserPrefs::new(ApiInfo::new(instance, Some(oauth_token))));
+            return Ok(UserPrefs::new(ApiInfo::new(instance, email, oauth)));
         }
         if user_prefs_file_path().exists() {
             let user_preferences_string = std::fs::read_to_string(user_prefs_file_path())
@@ -77,7 +79,7 @@ impl UserPrefs {
 
     /// Save a user preferences object to disk in TOML format.
     pub fn save(&self) -> Result<(), Error> {
-        let s = toml::to_string_pretty(self).map_err(|_| Error::Serialization)?;
+        let s = toml::to_string_pretty(self).map_err(|e| Error::Serialization(e.to_string()))?;
         std::fs::write(user_prefs_file_path(), s)
             .map_err(|_| Error::ApiInfoWrite(user_prefs_file_path().to_path_buf()))?;
 
@@ -124,11 +126,13 @@ mod tests {
         ensure_app_dir_exists().expect("App dir created successfully");
         UserPrefs::forget().expect("Successfully delete user prefs file");
         const INSTANCE_URL: &str = "https://test.example.com";
+        const TEST_EMAIL: &str = "not_real@email.com";
         const OAUTH_TOKEN: &str = "0123456789abcdef0123456789abcdef01234567";
         let instance_url = Url::parse(INSTANCE_URL).unwrap();
         // Create test preferences
         let prefs = UserPrefs::new(ApiInfo::new(
             instance_url.clone(),
+            Some(TEST_EMAIL.to_string()),
             Some(OAUTH_TOKEN.to_string()),
         ));
 

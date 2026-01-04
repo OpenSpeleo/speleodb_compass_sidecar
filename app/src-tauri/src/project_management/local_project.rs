@@ -71,34 +71,36 @@ impl Default for ProjectMap {
 }
 
 /// Represents a local Compass project stored on disk.
+/// Note that this struct does not contain the actual survey data files,
+/// but rather metadata about the project and references to the data files.
+/// This struct is only ever serialized/deserialized to/from the SPELEODB_COMPASS_PROJECT_FILE file, and
+/// not created or accessed anywhere outside of this file.
+/// Instead, associated functions provide access to the work with the data on disk
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct LocalProject {
+pub(crate) struct LocalProject {
     speleodb: SpeleoDb,
     #[serde(rename = "project")]
-    map: ProjectMap,
+    project_map: ProjectMap,
 }
 
 impl LocalProject {
-    // Get the SpeleoDb project revision associated with this project, if it exists.
-    pub fn local_revision(&self) -> Option<SpeleoDbProjectRevision> {
-        SpeleoDbProjectRevision::revision_for_local_project(self.speleodb.id)
-    }
-
-    pub fn working_copy_is_dirty(&self) -> Result<bool, Error> {
-        let index_copy = LocalProject::load_index_project(self.speleodb.id).ok();
-        let working_copy = LocalProject::load_working_project(self.speleodb.id).ok();
+    pub fn working_copy_is_dirty(id: Uuid) -> Result<bool, Error> {
+        let index_copy = LocalProject::load_index_project(id).ok();
+        let working_copy = LocalProject::load_working_project(id).ok();
         if let Some(index_copy) = index_copy {
             if let Some(working_copy) = working_copy {
                 // Both copies exist, compare them
                 if index_copy == working_copy {
                     // No changes at the map level, now check the files
-                    let index_project = LocalProject::load_index_project_project(self.speleodb.id)?;
-                    let working_project =
-                        LocalProject::load_working_copy_project(self.speleodb.id)?;
+                    let index_project = LocalProject::load_index_compass_project(id)?;
+                    let working_project = LocalProject::load_working_copy_compass_project(id)?;
                     if index_project == working_project {
                         // No changes detected
                         Ok(false)
                     } else {
+                        info!("Detected changes between loaded compass projects for: {id}");
+                        info!("Index project: {:#?}", index_project);
+                        info!("Working project: {:#?}", working_project);
                         // Changes detected
                         Ok(true)
                     }
@@ -123,7 +125,8 @@ impl LocalProject {
         }
     }
 
-    pub fn import_compass_project(mak_path: &Path, id: Uuid) -> Result<Self, Error> {
+    /// Import a Compass project from a .mak file into the local working copy.
+    pub fn import_compass_project(id: Uuid, mak_path: &Path) -> Result<(), Error> {
         info!("Attempting to import {mak_path:?} to project {id}");
         // Verify that the .mak file exists
         let mak_path = std::path::PathBuf::from(mak_path);
@@ -171,14 +174,14 @@ impl LocalProject {
                 id,
                 version: SPELEODB_COMPASS_VERSION,
             },
-            map: ProjectMap::import(
+            project_map: ProjectMap::import(
                 mak_path.file_name().unwrap().to_string_lossy().to_string(),
                 project_files.clone(),
             ),
         };
         project_path.push(SPELEODB_COMPASS_PROJECT_FILE);
-        let serialized_project =
-            toml::to_string_pretty(&new_project).map_err(|_| Error::Serialization)?;
+        let serialized_project = toml::to_string_pretty(&new_project)
+            .map_err(|e| Error::Serialization(e.to_string()))?;
         std::fs::write(&project_path, &serialized_project)
             .map_err(|_| Error::ProjectWrite(project_path.clone()))?;
         // Copy the .mak file and all referenced survey files into the new project directory
@@ -192,10 +195,10 @@ impl LocalProject {
             std::fs::copy(file_path, &target_path)
                 .map_err(|_| Error::ProjectImport(file_path.to_owned(), target_path.to_owned()))?;
         }
-        Ok(new_project)
+        Ok(())
     }
 
-    pub fn load_working_project(id: Uuid) -> Result<Self, Error> {
+    fn load_working_project(id: Uuid) -> Result<Self, Error> {
         let mut project_path = compass_project_working_path(id);
         project_path.push(SPELEODB_COMPASS_PROJECT_FILE);
         let project_data = std::fs::read_to_string(&project_path)
@@ -205,7 +208,7 @@ impl LocalProject {
         Ok(project)
     }
 
-    pub fn load_index_project(id: Uuid) -> Result<Self, Error> {
+    fn load_index_project(id: Uuid) -> Result<Self, Error> {
         let mut project_path = compass_project_index_path(id);
         project_path.push(SPELEODB_COMPASS_PROJECT_FILE);
         let project_data = std::fs::read_to_string(&project_path)
@@ -215,57 +218,84 @@ impl LocalProject {
         Ok(project)
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.map.mak_file.is_none()
+    pub fn working_copy_exists(id: Uuid) -> bool {
+        match LocalProject::load_working_project(id) {
+            Ok(working_copy) => {
+                if working_copy.project_map.mak_file.is_none() {
+                    false
+                } else {
+                    true
+                }
+            }
+            Err(Error::ProjectNotFound(_)) => false,
+            Err(e) => panic!("Error checking working copy existence: {}", e),
+        }
+    }
+
+    pub fn index_exists(id: Uuid) -> bool {
+        match LocalProject::load_index_project(id) {
+            Ok(index) => {
+                if index.project_map.mak_file.is_none() {
+                    false
+                } else {
+                    true
+                }
+            }
+            Err(Error::ProjectNotFound(_)) => false,
+            Err(e) => panic!("Error checking index existence: {}", e),
+        }
     }
 
     /// Pack the working copy of a Compass project into a zip file and return the path to the zip.
-    pub fn pack_zip(&self) -> Result<PathBuf, String> {
-        let project_id = self.speleodb.id;
+    pub fn pack_zip(id: Uuid) -> Result<PathBuf, Error> {
+        let working_copy = LocalProject::load_working_project(id)?;
         // Create temp zip file
         let temp_dir = std::env::temp_dir();
-        let zip_filename = format!("project_{}.zip", project_id);
+        let zip_filename = format!("project_{}.zip", id);
         let zip_path = temp_dir.join(&zip_filename);
         info!("Creating zip file in temp folder: {zip_path:?}");
-        let zip_file = std::fs::File::create(&zip_path)
-            .map_err(|e| format!("Failed to create temp zip file: {}", e))?;
+        let zip_file =
+            std::fs::File::create(&zip_path).map_err(|e| Error::ProjectWrite(zip_path.clone()))?;
         let options =
             SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         let mut zip_writer = zip::ZipWriter::new(zip_file);
         zip_writer
             .start_file(SPELEODB_COMPASS_PROJECT_FILE, options)
-            .map_err(|e| e.to_string())?;
-        let project_toml = toml::to_string_pretty(&self).map_err(|e| e.to_string())?;
+            .map_err(|e| Error::ZipFile(e.to_string()))?;
+        let project_toml = toml::to_string_pretty(&working_copy)
+            .map_err(|e| Error::Serialization(e.to_string()))?;
         zip_writer
             .write_all(project_toml.as_bytes())
-            .map_err(|e| e.to_string())?;
-        let project_dir = compass_project_working_path(project_id);
+            .map_err(|e| Error::ZipFile(e.to_string()))?;
+        let project_dir = compass_project_working_path(id);
 
-        if let Some(mak_file_path) = self.map.mak_file.as_ref() {
+        if let Some(mak_file_path) = working_copy.project_map.mak_file.as_ref() {
             let mak_full_path = project_dir.join(&mak_file_path);
             zip_writer
                 .start_file(&mak_file_path, options)
-                .map_err(|e| e.to_string())?;
-            let mak_contents = std::fs::read(&mak_full_path)
-                .map_err(|e| format!("Failed to read MAK file: {}", e))?;
+                .map_err(|e| Error::ZipFile(e.to_string()))?;
+            let mak_contents =
+                std::fs::read(&mak_full_path).map_err(|e| Error::FileRead(e.to_string()))?;
             zip_writer
                 .write_all(&mak_contents)
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| Error::ZipFile(e.to_string()))?;
         }
 
-        for dat_path in self.map.dat_files.iter() {
+        for dat_path in working_copy.project_map.dat_files.iter() {
             let dat_full_path = project_dir.join(dat_path);
             zip_writer
                 .start_file(&dat_path, options)
-                .map_err(|e| e.to_string())?;
-            let dat_contents = std::fs::read(&dat_full_path)
-                .map_err(|e| format!("Failed to read DAT file: {}", e))?;
+                .map_err(|e| Error::ZipFile(e.to_string()))?;
+            let dat_contents =
+                std::fs::read(&dat_full_path).map_err(|e| Error::FileRead(e.to_string()))?;
             zip_writer
                 .write_all(&dat_contents)
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| Error::ZipFile(e.to_string()))?;
         }
 
-        zip_writer.finish().map_err(|e| e.to_string())?;
+        zip_writer
+            .finish()
+            .map_err(|e| Error::ZipFile(e.to_string()))?;
         Ok(zip_path)
     }
 
@@ -278,22 +308,22 @@ impl LocalProject {
         Ok(loaded_compass_project)
     }
 
-    fn load_index_project_project(id: Uuid) -> Result<Project<Loaded>, Error> {
+    fn load_index_compass_project(id: Uuid) -> Result<Project<Loaded>, Error> {
         let local_project = LocalProject::load_index_project(id)?;
         let mut project_path = compass_project_index_path(id);
         let mak_file_name = local_project
-            .map
+            .project_map
             .mak_file
             .ok_or_else(|| Error::NoProjectData(id))?;
         project_path.push(&mak_file_name);
         LocalProject::load_compass_project(&project_path)
     }
 
-    fn load_working_copy_project(id: Uuid) -> Result<Project<Loaded>, Error> {
+    fn load_working_copy_compass_project(id: Uuid) -> Result<Project<Loaded>, Error> {
         let local_project = LocalProject::load_working_project(id)?;
         let mut project_path = compass_project_working_path(id);
         let mak_file_name = local_project
-            .map
+            .project_map
             .mak_file
             .ok_or_else(|| Error::NoProjectData(id))?;
         project_path.push(&mak_file_name);
@@ -312,8 +342,8 @@ mod test {
     fn test_project_import() {
         let id = Uuid::new_v4();
         let project = LocalProject::import_compass_project(
-            &PathBuf::from_str("assets/test_data/Fulfords.mak").unwrap(),
             id,
+            &PathBuf::from_str("assets/test_data/Fulfords.mak").unwrap(),
         )
         .unwrap();
         let serialized_project =

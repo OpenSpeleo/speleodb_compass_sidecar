@@ -1,12 +1,14 @@
 mod local_project;
 mod revision;
 
-pub use local_project::LocalProject;
 pub use revision::SpeleoDbProjectRevision;
 
-use crate::paths::{
-    compass_project_index_path, compass_project_path, compass_project_working_path,
-    ensure_compass_project_dirs_exist,
+use crate::{
+    paths::{
+        compass_project_index_path, compass_project_path, compass_project_working_path,
+        ensure_compass_project_dirs_exist,
+    },
+    project_management::local_project::LocalProject,
 };
 use bytes::Bytes;
 use common::{
@@ -69,11 +71,11 @@ impl ProjectManager {
     ) -> Result<ProjectStatus, Error> {
         self.project_info = server_info;
         let project_status = self.local_project_status();
-
+        // If the local working copy is dirty, we can't update the index or working copy
         if let LocalProjectStatus::Dirty | LocalProjectStatus::DirtyAndOutOfDate = project_status {
             log::warn!(
                 "Local working copy for project {} has unsaved changes, skipping update",
-                self.id()
+                self.project_info.name
             );
             return Ok(ProjectStatus::new(
                 project_status,
@@ -83,14 +85,13 @@ impl ProjectManager {
 
         if let Some(latest_commit) = self.latest_remote_commit() {
             SpeleoDbProjectRevision::from(latest_commit).save_revision_for_project(self.id())?;
-            let current_revision = SpeleoDbProjectRevision::revision_for_local_project(self.id());
-            if let Some(working_copy) = self.working_copy() {
+            if LocalProject::working_copy_exists(self.id()) {
             } else {
                 log::info!(
                     "No working copy found for project {}, updating index",
                     self.id()
                 );
-                let _updated_project = self.update_index(api_info).await?;
+                self.update_local_copies(api_info).await?;
             }
         };
         let project_status = self.local_project_status();
@@ -101,7 +102,7 @@ impl ProjectManager {
                 let api_info = api_info.clone();
                 let manager = self.clone();
                 async move {
-                    match manager.update_index(&api_info).await {
+                    match manager.update_local_copies(&api_info).await {
                         Ok(_) => {
                             log::info!("Successfully updated index for project {}", project_id);
                         }
@@ -120,38 +121,6 @@ impl ProjectManager {
         Ok(self.project_status())
     }
 
-    pub async fn update_project(&mut self, api_info: &ApiInfo) -> Result<ProjectStatus, Error> {
-        let server_info = api::project::fetch_project_info(api_info, self.id()).await?;
-        self.update_project_with_server_info(api_info, server_info)
-            .await
-    }
-
-    fn working_copy(&self) -> Option<LocalProject> {
-        match LocalProject::load_working_project(self.id()) {
-            Ok(project) => Some(project),
-            Err(Error::ProjectNotFound(_)) => None,
-            Err(e) => {
-                log::error!(
-                    "Failed to load working copy for project {}: {}",
-                    self.id(),
-                    e
-                );
-                None
-            }
-        }
-    }
-
-    fn index(&self) -> Option<LocalProject> {
-        match LocalProject::load_index_project(self.id()) {
-            Ok(project) => Some(project),
-            Err(Error::ProjectNotFound(_)) => None,
-            Err(e) => {
-                log::error!("Failed to load index for project {}: {}", self.id(), e);
-                None
-            }
-        }
-    }
-
     /// Local project status determins the state of the local working copy and index.
     /// Assumes that the latest available server info has already been set into the manager's
     /// `project_info` field.
@@ -159,14 +128,9 @@ impl ProjectManager {
         let project_dir = compass_project_path(self.id());
         if !project_dir.exists() {
             return LocalProjectStatus::RemoteOnly;
-        } else if let Some(working_copy) = self.working_copy() {
-            // Check if working copy is empty
-            if working_copy.is_empty() {
-                return LocalProjectStatus::EmptyLocal;
-            }
-            // If the working copy isn't empty, then we check for changes
-            else if let Some(index) = self.index() {
-                let index_revision = SpeleoDbProjectRevision::revision_for_local_project(self.id());
+        } else if LocalProject::working_copy_exists(self.id()) {
+            if LocalProject::index_exists(self.id()) {
+                let index_revision = self.local_revision();
                 let latest_server_revision = self.latest_remote_revision();
                 // If we have a revision on the server, we have to compare against it
                 if let Some(latest_server_revision) = &latest_server_revision {
@@ -176,23 +140,17 @@ impl ProjectManager {
                         // and check if working copy is dirty
                         if index_revision.revision == latest_server_revision.revision {
                             // Revisions match, now check if working copy is dirty
-                            if working_copy == index {
-                                log::info!("Local working copy is up to date and clean");
-                                return LocalProjectStatus::UpToDate;
-                            } else {
-                                log::info!("Local working copy has unsaved changes");
+                            if LocalProject::working_copy_is_dirty(self.id()).unwrap() {
                                 return LocalProjectStatus::Dirty;
+                            } else {
+                                return LocalProjectStatus::UpToDate;
                             }
                         } else {
                             // Revisions do not match, we're out of date
-                            if working_copy == index {
-                                log::info!("Local working copy is out of date but clean");
-                                return LocalProjectStatus::OutOfDate;
-                            } else {
-                                log::info!(
-                                    "Local working copy is out of date and has unsaved changes"
-                                );
+                            if LocalProject::working_copy_is_dirty(self.id()).unwrap() {
                                 return LocalProjectStatus::DirtyAndOutOfDate;
+                            } else {
+                                return LocalProjectStatus::OutOfDate;
                             }
                         }
                     }
@@ -207,7 +165,6 @@ impl ProjectManager {
                 }
                 // If we don't have a remote revision, but the local working copy isn't empty, we have local changes
                 else {
-                    log::info!("Latest server revision: None");
                     return LocalProjectStatus::Dirty;
                 }
             }
@@ -225,17 +182,17 @@ impl ProjectManager {
         }
     }
 
-    /// Update the local index of a Compass project by downloading the latest ZIP from SpeleoDB
-    /// and unpacking it into the index directory.
+    /// Update the local copy of a Compass project by downloading the latest ZIP from SpeleoDB
+    /// and unpacking it into both the index directory and working copy.
     /// Returns the updated Ok(Some(`LocalProject`)) if the project has a revision on the server if successful.
     /// Returns Ok(None) if there is no project data on the server.
-    async fn update_index(&self, api_info: &ApiInfo) -> Result<Option<LocalProject>, Error> {
+    async fn update_local_copies(&self, api_info: &ApiInfo) -> Result<(), Error> {
         ensure_compass_project_dirs_exist(self.id())?;
         log::info!("Downloading project ZIP from");
         match api::project::download_project_zip(api_info, self.id()).await {
             Ok(bytes) => {
                 log::info!("Downloaded ZIP ({} bytes)", bytes.len());
-                let project = unpack_project_zip(self.id(), bytes)?;
+                unpack_project_zip(self.id(), bytes)?;
                 if let Some(latest_commit) = self.latest_remote_commit() {
                     SpeleoDbProjectRevision::from(latest_commit)
                         .save_revision_for_project(self.id())?;
@@ -252,13 +209,12 @@ impl ProjectManager {
                     );
                     Error::FileWrite(e.to_string())
                 })?;
-                Ok(Some(project))
+                Ok(())
             }
             Err(Error::NoProjectData(_)) => {
                 log::info!("No project data found on server for project {}", self.id());
                 ensure_compass_project_dirs_exist(self.id())?;
-                let project = LocalProject::load_index_project(self.id())?;
-                Ok(None)
+                Ok(())
             }
             Err(e) => {
                 log::error!("Failed to download project ZIP: {}", e);
@@ -269,7 +225,7 @@ impl ProjectManager {
 }
 
 // Unpack a project zip directly into the index and return the resulting `CompassProject`.
-fn unpack_project_zip(project_id: Uuid, zip_bytes: Bytes) -> Result<LocalProject, Error> {
+fn unpack_project_zip(project_id: Uuid, zip_bytes: Bytes) -> Result<(), Error> {
     // Create temp zip file
     let temp_dir = std::env::temp_dir();
     let zip_filename = format!("project_{}.zip", project_id);
@@ -309,8 +265,7 @@ fn unpack_project_zip(project_id: Uuid, zip_bytes: Bytes) -> Result<LocalProject
     cleanup_temp_zip(&zip_path);
 
     log::info!("Successfully unzipped project to: {}", index_path.display());
-    let project = LocalProject::load_index_project(project_id)?;
-    Ok(project)
+    Ok(())
 }
 
 fn cleanup_temp_zip(zip_path: &Path) {
