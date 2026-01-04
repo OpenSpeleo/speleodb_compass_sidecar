@@ -2,7 +2,9 @@ use crate::{project_management::ProjectManager, user_prefs::UserPrefs};
 use common::{
     ApiInfo, Error,
     api_types::ProjectInfo,
-    ui_state::{LoadingState, ProjectStatus, UI_STATE_NOTIFICATION_KEY, UiState},
+    ui_state::{
+        LoadingState, LocalProjectStatus, ProjectStatus, UI_STATE_NOTIFICATION_KEY, UiState,
+    },
 };
 use log::warn;
 use std::{collections::HashMap, sync::Mutex, time::Duration};
@@ -107,13 +109,39 @@ impl AppState {
             .await
     }
 
-    pub fn set_active_project(&self, project_id: Option<Uuid>, app_handle: &AppHandle) {
+    pub async fn set_active_project(
+        &self,
+        project_id: Option<Uuid>,
+        app_handle: &AppHandle,
+    ) -> Result<(), Error> {
+        if let Some(project_id) = project_id {
+            api::project::acquire_project_mutex(&self.api_info(), project_id).await?;
+        } else {
+            if let Some(active_project) = self.get_active_project_status() {
+                if let LocalProjectStatus::Dirty = active_project.local_status() {
+                    warn!("Refusing to release project mutex for dirty project");
+                } else {
+                    info!("Releasing mutex for clean active project");
+                    api::project::release_project_mutex(&self.api_info(), active_project.id())
+                        .await?;
+                }
+            }
+        };
         *self.active_project.lock().unwrap() = project_id;
-        self.emit_app_state_change(app_handle);
+        self.set_loading_state(LoadingState::LoadingProjects, app_handle);
+        self.init_internal(app_handle).await;
+        Ok(())
     }
 
-    pub fn get_active_project(&self) -> Option<uuid::Uuid> {
+    pub fn get_active_project_id(&self) -> Option<uuid::Uuid> {
         *self.active_project.lock().unwrap()
+    }
+
+    pub fn get_active_project_status(&self) -> Option<ProjectStatus> {
+        let active_project_id = self.get_active_project_id()?;
+        let project_lock = self.project_info.lock().unwrap();
+        let project_manager = project_lock.get(&active_project_id)?;
+        Some(project_manager.project_status())
     }
 
     pub fn emit_app_state_change(&self, app_handle: &AppHandle) {
@@ -125,7 +153,7 @@ impl AppState {
             .values()
             .map(|p| p.project_status())
             .collect();
-        let active_project_id = self.get_active_project();
+        let active_project_id = self.get_active_project_id();
         let ui_state = UiState::new(loading_state, project_info, active_project_id);
         app_handle
             .emit(UI_STATE_NOTIFICATION_KEY, &ui_state)

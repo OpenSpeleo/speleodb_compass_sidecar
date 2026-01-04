@@ -6,9 +6,9 @@ mod user_prefs;
 
 use crate::{
     commands::{
-        acquire_project_mutex, auth_request, clear_active_project, create_project,
-        ensure_initialized, import_compass_project, open_project, release_project_mutex,
-        save_project, set_active_project, sign_out,
+        auth_request, clear_active_project, create_project, ensure_initialized,
+        import_compass_project, open_project, release_project_mutex, save_project,
+        set_active_project, sign_out,
     },
     paths::{compass_home, ensure_app_dir_exists, init_file_logger},
     state::AppState,
@@ -47,7 +47,6 @@ pub fn run() {
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            acquire_project_mutex,
             auth_request,
             clear_active_project,
             create_project,
@@ -77,7 +76,7 @@ pub fn run() {
             }
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 let app_state = app_handle.state::<AppState>();
-                if let Some(project_id) = app_state.get_active_project() {
+                if let Some(project_id) = app_state.get_active_project_id() {
                     log::info!(
                         "App exit requested, releasing mutex for project: {}",
                         project_id

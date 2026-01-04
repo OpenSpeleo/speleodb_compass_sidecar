@@ -47,16 +47,6 @@ pub async fn auth_request(
 }
 
 #[tauri::command]
-pub async fn acquire_project_mutex(
-    app_state: State<'_, AppState>,
-    project_id: Uuid,
-) -> Result<(), String> {
-    api::project::acquire_project_mutex(&app_state.api_info(), project_id)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 pub fn open_project(project_id: Uuid) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     let mut project_dir = compass_project_working_path(project_id);
@@ -177,19 +167,19 @@ pub async fn import_compass_project(app: tauri::AppHandle, project_id: Uuid) -> 
 }
 
 #[tauri::command]
-pub fn set_active_project(app_handle: AppHandle, project_id: Uuid) -> Result<(), String> {
+pub async fn set_active_project(app_handle: AppHandle, project_id: Uuid) -> Result<(), Error> {
     info!("Setting active project: {project_id}");
     let app_state = app_handle.state::<AppState>();
-    app_state.set_active_project(Some(project_id), &app_handle);
-    Ok(())
+    app_state
+        .set_active_project(Some(project_id), &app_handle)
+        .await
 }
 
 #[tauri::command]
-pub fn clear_active_project(app_handle: AppHandle) -> Result<(), String> {
+pub async fn clear_active_project(app_handle: AppHandle) -> Result<(), Error> {
     info!("Clearing active project");
     let app_state = app_handle.state::<AppState>();
-    app_state.set_active_project(None, &app_handle);
-    Ok(())
+    app_state.set_active_project(None, &app_handle).await
 }
 
 #[tauri::command]

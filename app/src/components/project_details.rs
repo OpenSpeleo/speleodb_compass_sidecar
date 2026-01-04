@@ -87,27 +87,6 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
                         return;
                     }
                 }
-
-                // Step 4: Update project from SpeleoDB server
-                match SPELEO_DB_CONTROLLER.update_project(project_id).await {
-                    Ok(updated_project) => {
-                        /*
-                        info!("Successfully updated compass project data{updated_project:?}!");
-                        downloading.set(false);
-                        let mak_path = updated_project.map.mak_file.clone();
-                        project_file_path.set(mak_path);
-                        if updated_project.is_empty() {
-                            show_empty_project_modal_effect.set(true);
-                        } else {
-                            download_complete.set(true);
-                        }
-                        */
-                    }
-                    Err(error) => {
-                        downloading.set(false);
-                        error!("Error updating compass project data: {error:?}!");
-                    }
-                }
             });
 
             // Cleanup: Clear active project when component unmounts

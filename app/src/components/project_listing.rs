@@ -1,8 +1,6 @@
 use crate::components::create_project_modal::CreateProjectModal;
 use crate::components::project_listing_item::ProjectListingItem;
-use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use common::ui_state::UiState;
-use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq, Clone)]
@@ -12,14 +10,8 @@ pub struct ProjectListingProps {
 
 #[function_component(ProjectListing)]
 pub fn project_listing(ProjectListingProps { ui_state }: &ProjectListingProps) -> Html {
-    let refreshed_on_load = use_state(|| false);
-    let loading = use_state(|| true);
     let error = use_state(|| None::<String>);
     let show_create_modal = use_state(|| false);
-
-    let refreshed_on_load_clone = refreshed_on_load.clone();
-    let error_clone = error.clone();
-    let loading_clone = loading.clone();
 
     // Button handlers
     let on_create_new = {
