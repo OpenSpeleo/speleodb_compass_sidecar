@@ -62,11 +62,7 @@ pub fn compass_project_working_path(project_id: Uuid) -> PathBuf {
 
 /// Ensure the application directory exists, creating it if necessary.
 pub fn ensure_app_dir_exists() -> std::io::Result<()> {
-    std::fs::create_dir_all(compass_home())
-}
-
-/// Ensure the compass folder exists, creating it if necessary.
-pub fn ensure_compass_dir_exists() -> std::io::Result<()> {
+    std::fs::create_dir_all(compass_home())?;
     let p = COMPASS_PROJECT_DIR.as_path();
     std::fs::create_dir_all(p)
 }

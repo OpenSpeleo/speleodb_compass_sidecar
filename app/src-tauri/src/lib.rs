@@ -7,8 +7,8 @@ mod user_prefs;
 use crate::{
     commands::{
         acquire_project_mutex, auth_request, clear_active_project, create_project,
-        ensure_initialized, fetch_projects, import_compass_project, open_project,
-        release_project_mutex, save_project, set_active_project, sign_out,
+        ensure_initialized, import_compass_project, open_project, release_project_mutex,
+        save_project, set_active_project, sign_out,
     },
     paths::{compass_home, ensure_app_dir_exists, init_file_logger},
     state::AppState,
@@ -52,7 +52,6 @@ pub fn run() {
             clear_active_project,
             create_project,
             ensure_initialized,
-            fetch_projects,
             sign_out,
             import_compass_project,
             open_project,

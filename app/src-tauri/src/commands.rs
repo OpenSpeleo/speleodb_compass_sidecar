@@ -1,9 +1,5 @@
 use crate::{paths::compass_project_working_path, state::AppState, user_prefs::UserPrefs};
-use common::{
-    Error,
-    api_types::{ProjectInfo, ProjectSaveResult},
-    ui_state::ProjectStatus,
-};
+use common::{Error, api_types::ProjectSaveResult, ui_state::ProjectStatus};
 use log::{error, info};
 use std::process::Command;
 use tauri::{AppHandle, Manager, State, Url};
@@ -21,20 +17,6 @@ pub async fn ensure_initialized(app_handle: AppHandle) {
 pub fn sign_out(app_handle: AppHandle) -> Result<(), String> {
     let app_state = app_handle.state::<AppState>();
     app_state.sign_out(&app_handle).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn fetch_projects(app_handle: AppHandle) -> Result<(), String> {
-    let app_state = app_handle.state::<AppState>();
-    let api_info = app_state.api_info();
-    let projects = api::project::fetch_projects(&api_info)
-        .await
-        .map_err(|e| e.to_string())?;
-    for project_info in projects {
-        app_state.update_project_info(&api_info, project_info).await;
-    }
-    app_state.emit_app_state_change(&app_handle);
     Ok(())
 }
 
@@ -73,102 +55,6 @@ pub async fn acquire_project_mutex(
         .await
         .map_err(|e| e.to_string())
 }
-
-/*
-#[tauri::command]
-pub async fn project_working_copy_is_dirty(project_id: Uuid) -> Result<bool, String> {
-    info!("Checking if working copy is dirty");
-    // If there is no working copy, it's not dirty
-    if !compass_project_working_path(project_id).exists() {
-        return Ok(false);
-    }
-    // If there is no index, it's not dirty
-    else if !compass_project_index_path(project_id).exists() {
-        return Ok(false);
-    }
-    let index_project = match LocalProject::load_index_project(project_id) {
-        Ok(p) => p.map,
-        Err(_) => return Ok(false),
-    };
-    let working_project = match LocalProject::load_working_project(project_id) {
-        Ok(p) => p.map,
-        Err(_) => return Ok(false),
-    };
-    if index_project != working_project {
-        info!("Working copy is dirty");
-        Ok(true)
-    } else {
-        info!("Working copy is clean");
-        Ok(false)
-    }
-}
-*/
-
-pub async fn update_project_info(
-    app_state: &AppState,
-    project_id: Uuid,
-) -> Result<ProjectStatus, Error> {
-    let api_info = app_state.api_info();
-    match api::project::fetch_project_info(&api_info, project_id).await {
-        Ok(project_info) => app_state.update_project_info(&api_info, project_info).await,
-        Err(e) => {
-            error!("Failed to get revisions for project {}: {}", project_id, e);
-            return Err(e);
-        }
-    }
-}
-
-/*
-#[tauri::command]
-pub async fn project_revision_is_current(
-    app_state: State<'_, AppState>,
-    project_id: Uuid,
-) -> Result<bool, String> {
-    // Get the index revision for the project, if none, we're not up to date
-    let Some(index_revision) = SpeleoDbProjectRevision::revision_for_project(project_id) else {
-        info!("No index revision found for project {}", project_id);
-        return Ok(false);
-    };
-    match update_project_info(&app_state, project_id).await {
-        Ok(project_info) => {
-            app_state.update_project_info(&project_info);
-            let latest_revision = match project_info.latest_commit.as_ref() {
-                Some(latest) => {
-                    info!(
-                        "Latest revision for project {} is {}",
-                        project_id, latest.id
-                    );
-                    SpeleoDbProjectRevision::from(latest)
-                }
-                None => {
-                    info!("No revisions found for project {}", project_id);
-                    return Ok(true);
-                }
-            };
-            if latest_revision == index_revision {
-                info!(
-                    "Project {} index is up to date (revision {})",
-                    project_id, index_revision.revision
-                );
-                Ok(true)
-            } else {
-                info!(
-                    "Project {} index is out of date (index: {:?}, latest: {:?})",
-                    project_id, index_revision, latest_revision
-                );
-                Ok(false)
-            }
-        }
-        Err(e) => {
-            error!("Failed to get revisions for project {}: {}", project_id, e);
-            return Err(format!(
-                "Failed to get revisions for project {}: {}",
-                project_id, e
-            ));
-        }
-    }
-}
-*/
 
 #[tauri::command]
 pub fn open_project(project_id: Uuid) -> Result<(), String> {

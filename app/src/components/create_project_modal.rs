@@ -11,7 +11,6 @@ use yew::prelude::*;
 #[derive(Properties, PartialEq, Clone)]
 pub struct CreateProjectModalProps {
     pub on_close: Callback<()>,
-    pub on_success: Callback<ProjectInfo>,
 }
 
 #[function_component(CreateProjectModal)]

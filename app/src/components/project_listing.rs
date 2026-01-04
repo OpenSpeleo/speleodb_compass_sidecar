@@ -52,36 +52,6 @@ pub fn project_listing(ProjectListingProps { ui_state }: &ProjectListingProps) -
         })
     };
 
-    let on_create_success = {
-        let show_create_modal = show_create_modal.clone();
-        let loading = loading.clone();
-        let error = error.clone();
-
-        Callback::from(move |new_project: ProjectInfo| {
-            show_create_modal.set(false);
-
-            // Refresh the project list
-            let loading = loading.clone();
-            let error = error.clone();
-            let new_project = new_project.clone();
-
-            loading.set(true);
-            error.set(None);
-
-            spawn_local(async move {
-                match SPELEO_DB_CONTROLLER.fetch_projects().await {
-                    Ok(project_list) => {
-                        loading.set(false);
-                    }
-                    Err(e) => {
-                        error.set(Some(e));
-                        loading.set(false);
-                    }
-                }
-            });
-        })
-    };
-
     // Render the UI
     if let Some(err_msg) = &*error {
         html! {
@@ -98,7 +68,7 @@ pub fn project_listing(ProjectListingProps { ui_state }: &ProjectListingProps) -
                 </section>
                 {
                     if *show_create_modal {
-                        html! { <CreateProjectModal on_close={on_close_modal} on_success={on_create_success} /> }
+                        html! { <CreateProjectModal on_close={on_close_modal}  /> }
                     } else {
                         html! {}
                     }
@@ -127,7 +97,6 @@ pub fn project_listing(ProjectListingProps { ui_state }: &ProjectListingProps) -
                         html! {
                             <CreateProjectModal
                                 on_close={on_close_modal}
-                                on_success={on_create_success}
                             />
                         }
                     } else {

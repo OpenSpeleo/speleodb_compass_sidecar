@@ -216,7 +216,7 @@ impl AppState {
 
     pub async fn init_internal(&self, app_handle: &AppHandle) -> LoadingState {
         let loading_state = self.loading_state();
-        let sec_delay = 0;
+        let sec_delay = 2;
         match loading_state {
             LoadingState::NotStarted => {
                 self.set_loading_state(LoadingState::CheckingForUpdates, app_handle)

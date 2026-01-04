@@ -15,10 +15,10 @@
       {
         "title": "SpeleoDB Compass Sidecar",
         "fullscreen": false,
-        "resizable": true,
+        "resizable": false,
         "decorations": true,
         "transparent": false,
-        "width": 1000,
+        "width": 600,
         "height": 900
       }
     ],
