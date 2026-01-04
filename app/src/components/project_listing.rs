@@ -1,7 +1,6 @@
 use crate::components::create_project_modal::CreateProjectModal;
 use crate::components::project_listing_item::ProjectListingItem;
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
-use common::api_types::ProjectInfo;
 use common::ui_state::UiState;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
@@ -21,20 +20,6 @@ pub fn project_listing(ProjectListingProps { ui_state }: &ProjectListingProps) -
     let refreshed_on_load_clone = refreshed_on_load.clone();
     let error_clone = error.clone();
     let loading_clone = loading.clone();
-    use_effect(move || {
-        if !*refreshed_on_load_clone {
-            refreshed_on_load_clone.set(true);
-            spawn_local(async move {
-                match SPELEO_DB_CONTROLLER.fetch_projects().await {
-                    Ok(()) => (),
-                    Err(e) => {
-                        error_clone.set(Some(e));
-                        loading_clone.set(false);
-                    }
-                }
-            });
-        }
-    });
 
     // Button handlers
     let on_create_new = {

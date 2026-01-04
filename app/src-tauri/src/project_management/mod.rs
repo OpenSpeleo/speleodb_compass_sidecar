@@ -69,19 +69,18 @@ impl ProjectManager {
     ) -> Result<ProjectStatus, Error> {
         self.project_info = server_info;
         let project_status = self.local_project_status();
-        match project_status {
-            LocalProjectStatus::Dirty | LocalProjectStatus::DirtyAndOutOfDate => {
-                log::warn!(
-                    "Local working copy for project {} has unsaved changes, skipping update",
-                    self.id()
-                );
-                return Ok(ProjectStatus::new(
-                    project_status,
-                    self.project_info.clone(),
-                ));
-            }
-            _ => { /* continue to update */ }
+
+        if let LocalProjectStatus::Dirty | LocalProjectStatus::DirtyAndOutOfDate = project_status {
+            log::warn!(
+                "Local working copy for project {} has unsaved changes, skipping update",
+                self.id()
+            );
+            return Ok(ProjectStatus::new(
+                project_status,
+                self.project_info.clone(),
+            ));
         }
+
         if let Some(latest_commit) = self.latest_remote_commit() {
             SpeleoDbProjectRevision::from(latest_commit).save_revision_for_project(self.id())?;
             let current_revision = SpeleoDbProjectRevision::revision_for_local_project(self.id());
@@ -94,7 +93,30 @@ impl ProjectManager {
                 let _updated_project = self.update_index(api_info).await?;
             }
         };
-
+        let project_status = self.local_project_status();
+        if let LocalProjectStatus::OutOfDate = project_status {
+            log::info!("Local project {} is out of date, updating index", self.id());
+            let project_id = self.id();
+            tauri::async_runtime::spawn({
+                let api_info = api_info.clone();
+                let manager = self.clone();
+                async move {
+                    match manager.update_index(&api_info).await {
+                        Ok(_) => {
+                            log::info!("Successfully updated index for project {}", project_id);
+                        }
+                        Err(e) => {
+                            log::error!("Failed to update index for project {}: {}", project_id, e);
+                        }
+                    }
+                }
+            });
+        }
+        info!(
+            "Project: {} - status: {:?} ",
+            self.project_info.name,
+            self.local_project_status()
+        );
         Ok(self.project_status())
     }
 

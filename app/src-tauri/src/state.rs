@@ -97,9 +97,9 @@ impl AppState {
                 existing_project
             } else {
                 let id = project_info.id;
-                let new_project = ProjectManager::initialize_from_info(project_info);
+                let new_project = ProjectManager::initialize_from_info(project_info.clone());
                 project_lock.insert(id, new_project.clone());
-                return Ok(new_project.project_status());
+                new_project
             }
         };
         project
@@ -216,7 +216,7 @@ impl AppState {
 
     pub async fn init_internal(&self, app_handle: &AppHandle) -> LoadingState {
         let loading_state = self.loading_state();
-        let sec_delay = 2;
+        let sec_delay = 1;
         match loading_state {
             LoadingState::NotStarted => {
                 self.set_loading_state(LoadingState::CheckingForUpdates, app_handle)

@@ -74,6 +74,7 @@ impl Default for ProjectMap {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct LocalProject {
     speleodb: SpeleoDb,
+    #[serde(rename = "project")]
     map: ProjectMap,
 }
 

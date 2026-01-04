@@ -37,11 +37,8 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
         let project_id = project.id();
         let downloading = downloading.clone();
         let show_readonly_modal = show_readonly_modal.clone();
-        let show_empty_project_modal_effect = show_empty_project_modal.clone();
-        let project_file_path = project_file_path.clone();
         let is_dirty = is_dirty.clone();
         let is_readonly = is_readonly.clone();
-        let download_complete = download_complete.clone();
 
         use_effect_with((), move |_| {
             spawn_local(async move {

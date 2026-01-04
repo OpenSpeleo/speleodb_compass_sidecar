@@ -38,19 +38,6 @@ impl SpeleoDBController {
         let _: () = invoke("ensure_initialized", &args).await.unwrap();
     }
 
-    pub async fn fetch_projects(&self) -> Result<(), String> {
-        // Call the Tauri backend to fetch projects
-        let args = UnitArgs::new();
-
-        match invoke("fetch_projects", &args).await {
-            Ok(()) => Ok(()),
-            Err(e) => {
-                error!("Failed to fetch projects: {}", e);
-                Err(e.to_string())
-            }
-        }
-    }
-
     pub async fn authenticate(
         &self,
         email: Option<&str>,

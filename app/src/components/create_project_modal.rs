@@ -1,5 +1,4 @@
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
-use common::api_types::ProjectInfo;
 use log::{error, info};
 use std::collections::BTreeMap;
 use wasm_bindgen::JsCast;
