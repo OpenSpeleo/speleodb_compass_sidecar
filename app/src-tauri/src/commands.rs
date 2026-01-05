@@ -1,5 +1,8 @@
-use crate::{paths::compass_project_working_path, state::AppState, user_prefs::UserPrefs};
-use common::{Error, api_types::ProjectSaveResult, ui_state::ProjectStatus};
+use crate::{
+    paths::compass_project_working_path, project_management::LocalProject, state::AppState,
+    user_prefs::UserPrefs,
+};
+use common::{Error, api_types::ProjectSaveResult};
 use log::{error, info};
 use std::process::Command;
 use tauri::{AppHandle, Manager, State, Url};
@@ -49,7 +52,7 @@ pub async fn auth_request(
 #[tauri::command]
 pub fn open_project(project_id: Uuid) -> Result<(), String> {
     #[cfg(target_os = "windows")]
-    let mut project_dir = compass_project_working_path(project_id);
+    let project_dir = compass_project_working_path(project_id);
     #[cfg(not(target_os = "windows"))]
     let project_dir = compass_project_working_path(project_id);
     if !project_dir.exists() {
@@ -71,27 +74,17 @@ pub fn open_project(project_id: Uuid) -> Result<(), String> {
     // On Windows, actually try to open the project with Compass if possible
     #[cfg(target_os = "windows")]
     {
-        let compass_project = LocalProject::load_working_project(project_id)
-            .map_err(|e| e.to_string())?
-            .project
-            .mak_file;
+        let compass_project = LocalProject::mak_file_path(project_id).map_err(|e| e.to_string())?;
         info!("{compass_project:?}");
-        if let Some(project_path) = compass_project {
-            project_dir.push(project_path);
-            info!("Attempting to open project with Compass Software");
-            Command::new("explorer")
-                .arg(project_dir)
-                .spawn()
-                .map_err(|e| e.to_string())?
-                .wait()
-                .map_err(|e| e.to_string())?;
-            info!("Compass Closed Successfully");
-        } else {
-            std::process::Command::new("explorer")
-                .arg(&project_dir)
-                .spawn()
-                .map_err(|e| e.to_string())?;
-        }
+
+        info!("Attempting to open project with Compass Software");
+        Command::new("explorer")
+            .arg(project_dir)
+            .spawn()
+            .map_err(|e| e.to_string())?
+            .wait()
+            .map_err(|e| e.to_string())?;
+        info!("Compass Closed Successfully");
     }
     Ok(())
 }

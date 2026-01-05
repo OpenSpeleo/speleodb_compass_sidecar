@@ -7,7 +7,7 @@
 use crate::{
     SPELEODB_COMPASS_VERSION,
     paths::{compass_project_index_path, compass_project_working_path},
-    project_management::{SPELEODB_COMPASS_PROJECT_FILE, SpeleoDbProjectRevision},
+    project_management::SPELEODB_COMPASS_PROJECT_FILE,
 };
 use common::Error;
 use compass_data::{Loaded, Project};
@@ -77,7 +77,7 @@ impl Default for ProjectMap {
 /// not created or accessed anywhere outside of this file.
 /// Instead, associated functions provide access to the work with the data on disk
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub(crate) struct LocalProject {
+pub struct LocalProject {
     speleodb: SpeleoDb,
     #[serde(rename = "project")]
     project_map: ProjectMap,
@@ -196,6 +196,17 @@ impl LocalProject {
                 .map_err(|_| Error::ProjectImport(file_path.to_owned(), target_path.to_owned()))?;
         }
         Ok(())
+    }
+
+    pub fn mak_file_path(id: Uuid) -> Result<PathBuf, Error> {
+        let local_project = LocalProject::load_working_project(id)?;
+        let mak_file_name = local_project
+            .project_map
+            .mak_file
+            .ok_or_else(|| Error::NoProjectData(id))?;
+        let mut mak_path = compass_project_working_path(id);
+        mak_path.push(&mak_file_name);
+        Ok(mak_path)
     }
 
     fn load_working_project(id: Uuid) -> Result<Self, Error> {

@@ -58,7 +58,17 @@ pub fn run() {
             set_active_project,
             save_project,
         ])
-        .manage(AppState::new());
+        .manage(AppState::new())
+        .setup(|app| {
+            app.on_menu_event(move |app_handle, event| {
+                let app_state = app_handle.state::<AppState>();
+                if event.id().0.as_str() == "sign_out" {
+                    log::info!("Sign out menu item clicked");
+                    app_state.sign_out(app_handle).ok();
+                }
+            });
+            Ok(())
+        });
     #[cfg(debug_assertions)]
     {
         builder = builder.plugin(devtools);

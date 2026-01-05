@@ -8,7 +8,11 @@ use common::{
 };
 use log::warn;
 use std::{collections::HashMap, sync::Mutex, time::Duration};
-use tauri::{AppHandle, Emitter, ipc::private::tracing::info};
+use tauri::{
+    AppHandle, Emitter, Manager,
+    ipc::private::tracing::info,
+    menu::{MenuBuilder, MenuItem},
+};
 use uuid::Uuid;
 
 pub struct AppState {
@@ -59,10 +63,31 @@ impl AppState {
         self.api_info.lock().unwrap().clone()
     }
 
-    pub fn update_user_prefs(&self, prefs: UserPrefs, app_handle: &AppHandle) -> Result<(), Error> {
+    pub fn update_user_prefs(&self, prefs: UserPrefs, app: &AppHandle) -> Result<(), Error> {
         prefs.save()?;
         *self.api_info.lock().unwrap() = prefs.api_info().clone();
-        self.emit_app_state_change(app_handle);
+        let app_handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let menu = if prefs.api_info().oauth_token().is_none() {
+                MenuBuilder::new(&app_handle).build().unwrap()
+            } else {
+                let sign_out = MenuItem::with_id(
+                    &app_handle,
+                    "sign_out",
+                    &"Sign Out".to_string(),
+                    true,
+                    Some(""),
+                )
+                .unwrap();
+                MenuBuilder::new(&app_handle)
+                    .item(&sign_out)
+                    .build()
+                    .unwrap()
+            };
+            app_handle.set_menu(menu).unwrap();
+        });
+        self.emit_app_state_change(app);
+
         Ok(())
     }
 
@@ -82,6 +107,13 @@ impl AppState {
             *self.api_info.lock().unwrap() = user_prefs;
         }
         self.set_loading_state(LoadingState::NotStarted, app_handle);
+        tauri::async_runtime::spawn({
+            let app_handle = app_handle.clone();
+            async move {
+                let app_state = app_handle.state::<AppState>();
+                app_state.init_app_state(&app_handle).await;
+            }
+        });
         Ok(())
     }
 
@@ -119,11 +151,14 @@ impl AppState {
             info!("Selecting: {project_id} as active project");
             let project_info =
                 api::project::acquire_project_mutex(&self.api_info(), project_id).await?;
-
+            *self.active_project.lock().unwrap() = Some(project_id);
+            self.emit_app_state_change(app_handle);
             self.update_project_info(&self.api_info(), project_info)
                 .await?;
             self.emit_app_state_change(app_handle);
         } else {
+            *self.active_project.lock().unwrap() = None;
+            self.emit_app_state_change(app_handle);
             if let Some(active_project) = self.get_active_project_status() {
                 if let LocalProjectStatus::Dirty = active_project.local_status() {
                     warn!("Refusing to release project mutex for dirty project");
@@ -134,11 +169,10 @@ impl AppState {
                             .await?;
                     self.update_project_info(&self.api_info(), project_info)
                         .await?;
+                    self.emit_app_state_change(app_handle);
                 }
             }
         };
-        *self.active_project.lock().unwrap() = project_id;
-        self.emit_app_state_change(app_handle);
         Ok(())
     }
 

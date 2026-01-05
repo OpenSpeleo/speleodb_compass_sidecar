@@ -3,7 +3,6 @@ use std::path::Path;
 use common::{
     ApiInfo,
     api_types::{ProjectInfo, ProjectSaveResult, ProjectType},
-    ui_state::ProjectStatus,
 };
 use errors::Error;
 use log::{error, info, warn};

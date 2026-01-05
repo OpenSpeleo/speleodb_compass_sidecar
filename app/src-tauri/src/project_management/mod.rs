@@ -1,14 +1,11 @@
 mod local_project;
 mod revision;
 
-pub use revision::SpeleoDbProjectRevision;
+pub use {local_project::LocalProject, revision::SpeleoDbProjectRevision};
 
-use crate::{
-    paths::{
-        compass_project_index_path, compass_project_path, compass_project_working_path,
-        ensure_compass_project_dirs_exist,
-    },
-    project_management::local_project::LocalProject,
+use crate::paths::{
+    compass_project_index_path, compass_project_path, compass_project_working_path,
+    ensure_compass_project_dirs_exist,
 };
 use bytes::Bytes;
 use common::{
