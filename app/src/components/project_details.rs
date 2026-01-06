@@ -8,11 +8,17 @@ use yew::prelude::*;
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct ProjectDetailsProps {
+    pub user_email: String,
     pub project: ProjectStatus,
 }
 
 #[function_component(ProjectDetails)]
-pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) -> Html {
+pub fn project_details(
+    ProjectDetailsProps {
+        user_email,
+        project,
+    }: &ProjectDetailsProps,
+) -> Html {
     let downloading = use_state(|| false);
     let uploading = use_state(|| false);
     let show_readonly_modal = use_state(|| false);
@@ -41,54 +47,6 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
         let is_readonly = is_readonly.clone();
 
         use_effect_with((), move |_| {
-            spawn_local(async move {
-                downloading.set(true);
-                // Step 1: Try to acquire project mutex
-                match SPELEO_DB_CONTROLLER.acquire_project_mutex(project_id).await {
-                    Ok(()) => {
-                        // Mutex acquired! Set active project for shutdown hook
-                        let _ = SPELEO_DB_CONTROLLER.set_active_project(project_id).await;
-                    }
-                    Err(_e) => {
-                        // Mutex acquisition had an error, but we continue anyway
-                        is_readonly.set(true);
-                        show_readonly_modal.set(true);
-                    }
-                }
-
-                // Step 2: Check if the project is dirty
-                match SPELEO_DB_CONTROLLER.project_is_dirty(project_id).await {
-                    Ok(dirty) => {
-                        is_dirty.set(dirty);
-                    }
-                    Err(error) => {
-                        error!("Error checking if project is dirty: {error:?}!");
-                    }
-                }
-
-                // Step 3: Check project revision
-                // If local revision != server revision, we need to update the index if the project isn't dirty
-                // If dirty, we skip update and warn user
-                match SPELEO_DB_CONTROLLER
-                    .project_index_revision_is_current(project_id)
-                    .await
-                {
-                    Ok(current) => {
-                        if !current && !*is_dirty {
-                            info!("Local project revision is outdated, updating index...");
-                        } else if !current && *is_dirty {
-                            info!(
-                                "Local project revision is outdated, but project is dirty; skipping update."
-                            );
-                        }
-                    }
-                    Err(error) => {
-                        error!("Error checking project revision: {error:?}!");
-                        return;
-                    }
-                }
-            });
-
             // Cleanup: Clear active project when component unmounts
             move || {
                 spawn_local(async move {
@@ -273,11 +231,9 @@ pub fn project_details(ProjectDetailsProps { project }: &ProjectDetailsProps) ->
 
     // Back button handler - release mutex before navigating back
     let on_back_click = {
-        let project_id = project.id();
         Callback::from(move |_| {
             spawn_local(async move {
                 // Release mutex and clear active project first
-                let _ = SPELEO_DB_CONTROLLER.release_mutex(project_id).await;
                 let _ = SPELEO_DB_CONTROLLER.clear_active_project().await;
             });
         })

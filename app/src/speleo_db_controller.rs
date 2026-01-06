@@ -84,47 +84,6 @@ impl SpeleoDBController {
         }
     }
 
-    pub async fn acquire_project_mutex(&self, project_id: Uuid) -> Result<(), String> {
-        info!("Acquiring mutex for project: {}", project_id);
-        let args = ProjectIdArgs::new(project_id);
-        let _: () = invoke("acquire_project_mutex", &args)
-            .await
-            .map_err(|e| e.to_string())?;
-        info!("Mutex acquired for project: {}", project_id);
-        Ok(())
-    }
-
-    pub async fn project_is_dirty(&self, project_id: Uuid) -> Result<bool, String> {
-        let args = ProjectIdArgs::new(project_id);
-        let is_dirty: bool = invoke("project_working_copy_is_dirty", &args)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        Ok(is_dirty)
-    }
-
-    pub async fn project_index_revision_is_current(
-        &self,
-        project_id: Uuid,
-    ) -> Result<bool, String> {
-        let args = ProjectIdArgs::new(project_id);
-
-        let is_current: bool = invoke("project_revision_is_current", &args)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        Ok(is_current)
-    }
-
-    pub async fn update_project(&self, project_id: Uuid) -> Result<(), String> {
-        let args = ProjectIdArgs::new(project_id);
-        let _: () = invoke("update_index", &args)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        Ok(())
-    }
-
     pub async fn open_project(&self, project_id: Uuid) -> Result<(), String> {
         let args = ProjectIdArgs::new(project_id);
         let _: () = invoke("open_project", &args)
@@ -154,12 +113,6 @@ impl SpeleoDBController {
             .await
             .map_err(|e| e.to_string())?;
         Ok(result)
-    }
-
-    pub async fn release_mutex(&self, project_id: Uuid) -> Result<(), String> {
-        let args = ProjectIdArgs::new(project_id);
-        let _json: serde_json::Value = invoke("release_project_mutex", &args).await.unwrap();
-        Ok(())
     }
 
     pub async fn import_compass_project(&self, id: Uuid) -> Result<(), Error> {

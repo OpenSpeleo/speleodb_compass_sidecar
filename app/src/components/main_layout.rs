@@ -4,7 +4,10 @@ use wasm_bindgen_futures::spawn_local;
 use yew::{Callback, Html, Properties, function_component, html};
 
 use crate::{
-    components::{project_details::ProjectDetails, project_listing::ProjectListing},
+    components::{
+        project_details::ProjectDetails, project_listing::ProjectListing,
+        project_listing_item::_ProjectListingItemProps::user_email,
+    },
     speleo_db_controller::SPELEO_DB_CONTROLLER,
 };
 
@@ -46,8 +49,9 @@ pub fn main_layout(&MainLayoutProps { ref ui_state }: &MainLayoutProps) -> Html 
             <section>
                 {
                     if let Some(selected_project) = &ui_state.selected_project {
+                        let email:String = ui_state.user_email.unwrap_or_default().to_string();
                         let selected_project = ui_state.project_status.iter().find(|p| (*p).id() == *selected_project).unwrap();
-                        html!{ <ProjectDetails project={selected_project.clone()} /> }
+                        html!{ <ProjectDetails  user_email={email} project={selected_project.clone()} /> }
                     } else {
                         html!{ <ProjectListing  ui_state={ui_state}/> }
                     }
