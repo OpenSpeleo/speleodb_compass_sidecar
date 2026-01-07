@@ -2,7 +2,6 @@ use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use common::api_types::ProjectSaveResult;
 use common::ui_state::{LocalProjectStatus, ProjectStatus};
-use log::{error, info};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
@@ -25,7 +24,6 @@ pub fn project_details(
     let show_readonly_modal = use_state(|| false);
     let show_success_modal = use_state(|| false);
     let show_reload_confirm = use_state(|| false);
-    let show_load_confirm = use_state(|| false);
     let show_upload_success = use_state(|| false);
     let show_no_changes_modal = use_state(|| false);
     let show_empty_project_modal = use_state(|| false);
@@ -36,7 +34,6 @@ pub fn project_details(
     let download_complete = use_state(|| false);
     let commit_message = use_state(String::new);
     let commit_message_error = use_state(|| false);
-    let selected_zip: UseStateHandle<Option<String>> = use_state(|| None);
 
     // On mount: Check if we need to show any modals based on project status
     if !*initialized {
@@ -161,61 +158,25 @@ pub fn project_details(
 
     // Load from Disk Handler
     let on_import_from_disk = {
+        let show_empty_project_modal = show_empty_project_modal.clone();
         let error_message = error_message.clone();
         let project_id = project.id();
-        let show_load_confirm = show_load_confirm.clone();
         Callback::from(move |_: ()| {
+            let show_empty_project_modal = show_empty_project_modal.clone();
             let error_message = error_message.clone();
-            let show_load_confirm = show_load_confirm.clone();
             spawn_local(async move {
                 match SPELEO_DB_CONTROLLER
                     .import_compass_project(project_id)
                     .await
                 {
-                    Ok(imported_project) => {
-                        //selected_zip.set(imported_project.map.mak_file);
-                        show_load_confirm.set(true);
+                    Ok(()) => {
+                        show_empty_project_modal.set(false);
                     }
                     Err(e) => {
+                        show_empty_project_modal.set(false);
                         error_message.set(Some(format!("Failed to select file: {}", e)));
                     }
                 }
-            });
-        })
-    };
-
-    // Confirm Load from Disk (Upload)
-    let on_confirm_load = {
-        let project_id = project.id();
-        let uploading = uploading.clone();
-        let show_load_confirm = show_load_confirm.clone();
-        let show_upload_success = show_upload_success.clone();
-        let show_no_changes_modal = show_no_changes_modal.clone();
-        let upload_error = upload_error.clone();
-
-        Callback::from(move |_: ()| {
-            let uploading = uploading.clone();
-            let show_load_confirm = show_load_confirm.clone();
-            let show_upload_success = show_upload_success.clone();
-            let show_no_changes_modal = show_no_changes_modal.clone();
-            let upload_error = upload_error.clone();
-
-            show_load_confirm.set(false);
-            uploading.set(true);
-            upload_error.set(None);
-
-            spawn_local(async move {
-                match SPELEO_DB_CONTROLLER
-                    .save_project(project_id, "Imported from disk")
-                    .await
-                {
-                    Ok(save_result) => match save_result {
-                        ProjectSaveResult::NoChanges => show_no_changes_modal.set(true),
-                        ProjectSaveResult::Saved => show_upload_success.set(true),
-                    },
-                    Err(e) => upload_error.set(Some(format!("Upload failed: {}", e))),
-                }
-                uploading.set(false);
             });
         })
     };
@@ -422,29 +383,6 @@ pub fn project_details(
                                     show_success_modal.set(false);
                                 })
                             }
-                        />
-                    }
-                } else {
-                    html! {}
-                }
-            }
-
-            // Load from Disk Confirmation Modal
-            {
-                if *show_load_confirm {
-                    html! {
-                        <Modal
-                            title="Import Project from Disk?"
-                            message={format!(
-                                "Are you sure you want to import '{}'? \n\n\
-                                This will upload the selected file as the new version of this project.",
-                                selected_zip.as_deref().unwrap_or("selected file")
-                            )}
-                            modal_type={ModalType::Warning}
-                            show_close_button={true}
-                            primary_button_text={Some("Yes, Import".to_string())}
-                            on_close={move |_| show_load_confirm.set(false)}
-                            on_primary_action={on_confirm_load}
                         />
                     }
                 } else {

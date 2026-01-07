@@ -94,68 +94,29 @@ pub async fn save_project(
     app_handle: AppHandle,
     project_id: Uuid,
     commit_message: String,
-) -> Result<ProjectSaveResult, String> {
-    /*
-    log::info!("Zipping project folder for project: {}", project_id);
-    let zipped_project_path = pack_project_working_copy(project_id)?;
+) -> Result<ProjectSaveResult, Error> {
     info!("Project zipped successfully, uploading project ZIP to SpeleoDB");
     let app_state = app_handle.state::<AppState>();
-    let result = api::project::upload_project_zip(
-        &app_state.api_info(),
-        project_id,
-        commit_message,
-        &zipped_project_path,
-    )
-    .await;
-    // Clean up temp zip file regardless of success or failure
-    cleanup_temp_zip(&zipped_project_path);
-
-    let cloned_handle = app_handle.clone();
-    tauri::async_runtime::spawn(async move {
-        let app_state = cloned_handle.state::<AppState>();
-        match update_project_info(&app_state, project_id).await {
-            Ok(project_info) => {
-                info!(
-                    "Updated project revision info after save: {:?}",
-                    project_info
-                );
-                if let Some(latest_commit) = project_info.latest_commit.as_ref() {
-                    let latest_rev = SpeleoDbProjectRevision::from(latest_commit);
-                    if let Err(e) = latest_rev.save_revision_for_project(project_id) {
-                        error!(
-                            "Failed to save latest revision for project {}: {}",
-                            project_id, e
-                        );
-                    }
-                }
-            }
-            Err(e) => error!("Failed to update project revision info after save: {}", e),
-        }
-    });
-    Ok(result.map_err(|e| format!("Failed to upload project ZIP: {}", e))?)
-    */
-    Err("Saving projects is not yet implemented".to_string())
+    app_state.save_active_project(commit_message).await
 }
 
 #[tauri::command]
-pub async fn import_compass_project(app: tauri::AppHandle, project_id: Uuid) -> Result<(), Error> {
-    tauri::async_runtime::spawn(async move {
-        let Some(FilePath::Path(file_path)) = app
-            .dialog()
-            .file()
-            .add_filter("MAK", &["mak"])
-            .blocking_pick_file()
-        else {
-            return Err(Error::NoProjectSelected);
-        };
-        info!("Selected MAK file: {}", file_path.display());
-        info!("Importing into Compass project: {:?}", project_id);
-        LocalProject::import_compass_project(project_id, &file_path)?;
-        info!("Successfully imported Compass project from : {file_path:?}");
-        Ok(())
-    })
-    .await
-    .unwrap()
+pub async fn import_compass_project(app_handle: AppHandle, project_id: Uuid) -> Result<(), Error> {
+    let Some(FilePath::Path(file_path)) = app_handle
+        .dialog()
+        .file()
+        .add_filter("MAK", &["mak"])
+        .blocking_pick_file()
+    else {
+        return Err(Error::NoProjectSelected);
+    };
+    info!("Selected MAK file: {}", file_path.display());
+    info!("Importing into Compass project: {:?}", project_id);
+    LocalProject::import_compass_project(project_id, &file_path)?;
+    info!("Successfully imported Compass project from : {file_path:?}");
+    save_project(app_handle, project_id, "Imported local project".to_string()).await?;
+
+    Ok(())
 }
 
 #[tauri::command]

@@ -11,7 +11,7 @@ use bytes::Bytes;
 use common::{
     ApiInfo, Error,
     api_types::{CommitInfo, ProjectInfo},
-    ui_state::{LocalProjectStatus, ProjectStatus},
+    ui_state::{LocalProjectStatus, ProjectSaveResult, ProjectStatus},
 };
 use log::{error, info};
 use std::{
@@ -111,6 +111,25 @@ impl ProjectManager {
             // Project is already local, nothing to do
             Ok(())
         }
+    }
+
+    pub async fn save_local_changes(
+        &self,
+        api_info: &ApiInfo,
+        commit_message: String,
+    ) -> Result<ProjectSaveResult, Error> {
+        log::info!(
+            "Zipping project folder for project: {}",
+            self.project_info.name
+        );
+        let zip_file = LocalProject::pack_zip(self.id())?;
+        let save_result =
+            api::project::upload_project_zip(api_info, self.id(), commit_message, &zip_file)
+                .await?;
+        // Clean up temp zip file regardless of success or failure
+        std::fs::remove_file(&zip_file).ok();
+        self.update_local_copies(api_info).await?;
+        Ok(save_result)
     }
 
     /// Local project status determins the state of the local working copy and index.
@@ -251,7 +270,7 @@ fn unpack_project_zip(project_id: Uuid, zip_bytes: Bytes) -> Result<(), Error> {
         } else {
             // Create parent directories if they don't exist
             if let Some(p) = file_path.parent() {
-                std::fs::create_dir_all(p).map_err(|e| Error::CreateDirectory(p.to_path_buf()))?;
+                std::fs::create_dir_all(p).map_err(|_| Error::CreateDirectory(p.to_path_buf()))?;
             }
             let mut out_file =
                 File::create(&file_path).map_err(|e| Error::FileWrite(e.to_string()))?;

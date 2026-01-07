@@ -275,10 +275,7 @@ pub async fn upload_project_zip(
     log::info!("Uploading project ZIP for project: {}", project_id);
     let base = api_info.instance();
     let oauth = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
-    let url = format!(
-        "{}/api/v1/projects/{}/upload/compass_zip/",
-        base, project_id
-    );
+    let url = format!("{}api/v1/projects/{}/upload/compass_zip/", base, project_id);
     let client = get_api_client();
     // Read ZIP file
     let zip_bytes = std::fs::read(&zip_path).map_err(|e| Error::FileRead(e.to_string()))?;

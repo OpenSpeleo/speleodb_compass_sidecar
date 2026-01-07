@@ -3,10 +3,11 @@ use common::{
     ApiInfo, Error,
     api_types::ProjectInfo,
     ui_state::{
-        LoadingState, LocalProjectStatus, ProjectStatus, UI_STATE_NOTIFICATION_KEY, UiState,
+        LoadingState, LocalProjectStatus, ProjectSaveResult, ProjectStatus,
+        UI_STATE_NOTIFICATION_KEY, UiState,
     },
 };
-use log::warn;
+use log::{error, warn};
 use std::{collections::HashMap, sync::Mutex, time::Duration};
 use tauri::{
     AppHandle, Emitter, Manager,
@@ -117,7 +118,17 @@ impl AppState {
         Ok(())
     }
 
-    pub async fn update_project_info(
+    pub async fn update_project_info_from_server(
+        &self,
+        project_id: Uuid,
+    ) -> Result<ProjectStatus, Error> {
+        let api_info = self.api_info();
+        let project_info = api::project::fetch_project_info(&api_info, project_id).await?;
+        self.update_local_project_info(&api_info, project_info)
+            .await
+    }
+
+    pub async fn update_local_project_info(
         &self,
         api_info: &ApiInfo,
         project_info: ProjectInfo,
@@ -156,7 +167,7 @@ impl AppState {
                 api::project::acquire_project_mutex(&self.api_info(), project_id).await?;
             *self.active_project.lock().unwrap() = Some(project_id);
             self.emit_app_state_change(app_handle);
-            self.update_project_info(&self.api_info(), project_info)
+            self.update_local_project_info(&self.api_info(), project_info)
                 .await?;
             self.emit_app_state_change(app_handle);
         } else {
@@ -187,6 +198,29 @@ impl AppState {
         let project_lock = self.project_info.lock().unwrap();
         let project_manager = project_lock.get(&active_project_id)?;
         Some(project_manager.project_status())
+    }
+
+    pub async fn save_active_project(
+        &self,
+        commit_message: String,
+    ) -> Result<ProjectSaveResult, Error> {
+        let Some(project_id) = self.get_active_project_id() else {
+            error!("No active project to save");
+            return Err(Error::NoProjectSelected);
+        };
+        let project_manager = self
+            .project_info
+            .lock()
+            .unwrap()
+            .get(&project_id)
+            .ok_or(Error::NoProjectSelected)?
+            .clone();
+        let api_info = self.api_info();
+
+        let result = project_manager
+            .save_local_changes(&api_info, commit_message)
+            .await?;
+        Ok(result)
     }
 
     pub fn emit_app_state_change(&self, app_handle: &AppHandle) {
@@ -277,7 +311,7 @@ impl AppState {
         match api::project::fetch_projects(&api_info).await {
             Ok(projects) => {
                 for project in projects.clone() {
-                    self.update_project_info(&api_info, project).await?;
+                    self.update_local_project_info(&api_info, project).await?;
                 }
                 Ok(projects)
             }
