@@ -4,10 +4,7 @@ use wasm_bindgen_futures::spawn_local;
 use yew::{Callback, Html, Properties, function_component, html};
 
 use crate::{
-    components::{
-        project_details::ProjectDetails, project_listing::ProjectListing,
-        project_listing_item::_ProjectListingItemProps::user_email,
-    },
+    components::{project_details::ProjectDetails, project_listing::ProjectListing},
     speleo_db_controller::SPELEO_DB_CONTROLLER,
 };
 

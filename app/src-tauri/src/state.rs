@@ -127,8 +127,9 @@ impl AppState {
             // This clone is necessary to avoid holding the lock across an await point
             // which would lead to a deadlock.
             // The project manager simply represents the status on disk, so cloning it is cheap.
-            if let Some(existing_project) = project_lock.get(&project_info.id).cloned() {
-                existing_project
+            if let Some(existing_project) = project_lock.get_mut(&project_info.id) {
+                existing_project.update_project_info(project_info);
+                existing_project.clone()
             } else {
                 let id = project_info.id;
                 let new_project = ProjectManager::initialize_from_info(project_info.clone());
@@ -137,9 +138,11 @@ impl AppState {
             }
         };
         project.make_local(api_info).await?;
-        project
-            .update_project_with_server_info(api_info, project_info)
-            .await
+        let project_status = project.update_project().await?;
+        if let LocalProjectStatus::OutOfDate = project_status.local_status() {
+            project.update_local_copies(api_info).await?;
+        }
+        Ok(project_status)
     }
 
     pub async fn set_active_project(
@@ -157,9 +160,10 @@ impl AppState {
                 .await?;
             self.emit_app_state_change(app_handle);
         } else {
-            *self.active_project.lock().unwrap() = None;
-            self.emit_app_state_change(app_handle);
             if let Some(active_project) = self.get_active_project_status() {
+                *self.active_project.lock().unwrap() = None;
+                self.set_loading_state(LoadingState::LoadingProjects, app_handle);
+                self.emit_app_state_change(app_handle);
                 if let LocalProjectStatus::Dirty = active_project.local_status() {
                     warn!("Refusing to release project mutex for dirty project");
                 } else {
@@ -167,10 +171,8 @@ impl AppState {
                     let project_info =
                         api::project::release_project_mutex(&self.api_info(), active_project.id())
                             .await?;
-                    self.update_project_info(&self.api_info(), project_info)
-                        .await?;
-                    self.emit_app_state_change(app_handle);
                 }
+                self.init_internal(app_handle).await;
             }
         };
         Ok(())
@@ -288,7 +290,7 @@ impl AppState {
 
     pub async fn init_internal(&self, app_handle: &AppHandle) -> LoadingState {
         let loading_state = self.loading_state();
-        let sec_delay = 1;
+        let sec_delay = 0;
         match loading_state {
             LoadingState::NotStarted => {
                 self.set_loading_state(LoadingState::CheckingForUpdates, app_handle)

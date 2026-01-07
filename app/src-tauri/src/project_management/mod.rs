@@ -36,6 +36,10 @@ impl ProjectManager {
         Self { project_info }
     }
 
+    pub fn update_project_info(&mut self, project_info: ProjectInfo) {
+        self.project_info = project_info;
+    }
+
     /// Get the project ID.
     pub fn id(&self) -> Uuid {
         self.project_info.id
@@ -61,12 +65,7 @@ impl ProjectManager {
         ProjectStatus::new(local_status, self.project_info.clone())
     }
 
-    pub async fn update_project_with_server_info(
-        &mut self,
-        api_info: &ApiInfo,
-        server_info: ProjectInfo,
-    ) -> Result<ProjectStatus, Error> {
-        self.project_info = server_info;
+    pub async fn update_project(&mut self) -> Result<ProjectStatus, Error> {
         // Check local project status, and update if clean and out of date
         let project_status = self.local_project_status();
         match project_status {
@@ -81,28 +80,20 @@ impl ProjectManager {
                 ));
             }
             LocalProjectStatus::OutOfDate => {
-                // Spawn async task to update local copies
-                let project_id = self.id();
-                let api_info = api_info.clone();
-                let manager = self.clone();
-                tauri::async_runtime::spawn(async move {
-                    match manager.update_local_copies(&api_info).await {
-                        Ok(_) => {
-                            log::info!("Successfully updated index for project {}", project_id);
-                        }
-                        Err(e) => {
-                            log::error!("Failed to update index for project {}: {}", project_id, e);
-                        }
-                    }
-                });
+                log::info!(
+                    "Local working copy for project {} is out of date, updating local copy",
+                    self.project_info.name
+                );
+                self.update_local_copies(&ApiInfo::default()).await?;
             }
             _ => {}
         }
 
         info!(
-            "Project: {} - status: {:?} ",
+            "Project: {} - status: {:?} - locked: {}",
             self.project_info.name,
-            self.local_project_status()
+            self.local_project_status(),
+            self.project_info.active_mutex.is_some()
         );
         Ok(self.project_status())
     }
@@ -183,9 +174,12 @@ impl ProjectManager {
 
     /// Update the local copy of a Compass project by downloading the latest ZIP from SpeleoDB
     /// and unpacking it into both the index directory and working copy.
-    /// Returns the updated Ok(Some(`LocalProject`)) if the project has a revision on the server if successful.
-    /// Returns Ok(None) if there is no project data on the server.
-    async fn update_local_copies(&self, api_info: &ApiInfo) -> Result<(), Error> {
+    /// Returns the updated local project status Ok(LocalProjectStatus::UpToDate) if successful.
+    /// Returns Ok(LocalProjectStatus::EmptyLocal) if there is no project data on the server.
+    pub async fn update_local_copies(
+        &self,
+        api_info: &ApiInfo,
+    ) -> Result<LocalProjectStatus, Error> {
         ensure_compass_project_dirs_exist(self.id())?;
         log::info!("Downloading project ZIP from");
         match api::project::download_project_zip(api_info, self.id()).await {
@@ -210,12 +204,15 @@ impl ProjectManager {
                 })?;
                 SpeleoDbProjectRevision::from(self.project_info.latest_commit.as_ref().unwrap())
                     .save_revision_for_project(self.id())?;
-                Ok(())
+                Ok(LocalProjectStatus::UpToDate)
             }
             Err(Error::NoProjectData(_)) => {
-                log::info!("No project data found on server for project {}", self.id());
+                log::error!(
+                    "Attempt to update project with no project data found on server for project {}",
+                    self.id()
+                );
                 ensure_compass_project_dirs_exist(self.id())?;
-                Ok(())
+                Ok(LocalProjectStatus::EmptyLocal)
             }
             Err(e) => {
                 log::error!("Failed to download project ZIP: {}", e);

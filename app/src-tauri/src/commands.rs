@@ -150,9 +150,8 @@ pub async fn import_compass_project(app: tauri::AppHandle, project_id: Uuid) -> 
         };
         info!("Selected MAK file: {}", file_path.display());
         info!("Importing into Compass project: {:?}", project_id);
-        //let project = LocalProject::import_compass_project(&file_path, project_id)?;
-        error!("Importing Compass projects is not yet implemented");
-        //info!("Successfully imported Compass project: {project:?}");
+        LocalProject::import_compass_project(project_id, &file_path)?;
+        info!("Successfully imported Compass project from : {file_path:?}");
         Ok(())
     })
     .await

@@ -1,7 +1,7 @@
 use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use common::api_types::ProjectSaveResult;
-use common::ui_state::ProjectStatus;
+use common::ui_state::{LocalProjectStatus, ProjectStatus};
 use log::{error, info};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
@@ -19,6 +19,7 @@ pub fn project_details(
         project,
     }: &ProjectDetailsProps,
 ) -> Html {
+    let initialized = use_state(|| false);
     let downloading = use_state(|| false);
     let uploading = use_state(|| false);
     let show_readonly_modal = use_state(|| false);
@@ -30,7 +31,6 @@ pub fn project_details(
     let show_empty_project_modal = use_state(|| false);
     let error_message: UseStateHandle<Option<String>> = use_state(|| None);
     let upload_error: UseStateHandle<Option<String>> = use_state(|| None);
-    let project_file_path: UseStateHandle<Option<String>> = use_state(|| None);
     let is_readonly = use_state(|| false);
     let is_dirty = use_state(|| false);
     let download_complete = use_state(|| false);
@@ -38,23 +38,18 @@ pub fn project_details(
     let commit_message_error = use_state(|| false);
     let selected_zip: UseStateHandle<Option<String>> = use_state(|| None);
 
-    // Run the download workflow automatically on mount
-    {
-        let project_id = project.id();
-        let downloading = downloading.clone();
-        let show_readonly_modal = show_readonly_modal.clone();
-        let is_dirty = is_dirty.clone();
-        let is_readonly = is_readonly.clone();
-
-        use_effect_with((), move |_| {
-            // Cleanup: Clear active project when component unmounts
-            move || {
-                spawn_local(async move {
-                    // Only clear active project; mutex already released via back button
-                    let _ = SPELEO_DB_CONTROLLER.clear_active_project().await;
-                });
-            }
-        });
+    // On mount: Check if we need to show any modals based on project status
+    if !*initialized {
+        // On mount, check if the project is read-only
+        if project.active_mutex().is_some()
+            && project.active_mutex().as_ref().unwrap().user != *user_email
+        {
+            is_readonly.set(true);
+            show_readonly_modal.set(true);
+        } else if let LocalProjectStatus::EmptyLocal = project.local_status() {
+            show_empty_project_modal.set(true);
+        }
+        initialized.set(true);
     }
 
     // Close readonly modal and show success modal if download is complete
@@ -166,16 +161,12 @@ pub fn project_details(
 
     // Load from Disk Handler
     let on_import_from_disk = {
-        let selected_zip = selected_zip.clone();
-        let show_load_confirm = show_load_confirm.clone();
         let error_message = error_message.clone();
         let project_id = project.id();
-
-        Callback::from(move |_| {
-            let selected_zip = selected_zip.clone();
-            let show_load_confirm = show_load_confirm.clone();
+        let show_load_confirm = show_load_confirm.clone();
+        Callback::from(move |_: ()| {
             let error_message = error_message.clone();
-
+            let show_load_confirm = show_load_confirm.clone();
             spawn_local(async move {
                 match SPELEO_DB_CONTROLLER
                     .import_compass_project(project_id)
@@ -361,14 +352,6 @@ pub fn project_details(
                                     {"Reload Project"}
                                 </button>
                             </div>
-                            <div style="display: flex; justify-content: center; margin-top: 12px;">
-                                <button
-                                    onclick={on_import_from_disk}
-                                    style="background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
-                                >
-                                    {"Import from Disk"}
-                                </button>
-                            </div>
                             {
                                 if let Some(err) = &*upload_error {
                                     html! {
@@ -385,30 +368,39 @@ pub fn project_details(
 
                 }
             }
-
-            // Read-only warning modal
             {
-                if *show_readonly_modal {
-                    html! {
-                        <Modal
-                            title="Read-Only Access"
-                            message={format!(
-                                "The project '{}' was opened in READ-ONLY mode.\n\n\
-                                Modifications to this project cannot be saved because one of the following:\n\n\
-                                - the project is currently locked by another user\n\
-                                - you do not have edit permissions to the project\n\n\
-                                Contact a Project Administrator if you believe this is a mistake.",
-                                project.name()
-                            )}
-                            modal_type={ModalType::Warning}
-                            show_close_button={true}
-                            on_close={close_readonly_modal}
-                        />
-                    }
-                } else {
-                    html! {}
+            if *show_readonly_modal {
+                return html! {
+                    <Modal
+                        title="Read-Only Access"
+                        message={format!(
+                            "The project '{}' was opened in READ-ONLY mode.\n\n\
+                            Modifications to this project cannot be saved because one of the following:\n\n\
+                            - the project is currently locked by another user\n\
+                            - you do not have edit permissions to the project\n\n\
+                            Contact a Project Administrator if you believe this is a mistake.",
+                            project.name()
+                        )}
+                        modal_type={ModalType::Warning}
+                        show_close_button={true}
+                        on_close={close_readonly_modal}
+                    />
+                };
+            } else if *show_empty_project_modal {
+                let on_import_from_disk = on_import_from_disk.clone();
+                html! {
+                    <Modal
+                        title="Empty Project"
+                        message="This project contains no Compass data yet.\n\nTo initialize the project, use the 'Import from Disk' button to upload your local project files."
+                        modal_type={ModalType::Info}
+                        primary_button_text="Import Compass Project From Disk"
+                        on_primary_action={on_import_from_disk}
+                    />
                 }
+            } else {
+                html! {}
             }
+                    }
 
             // Success modal (Download)
             {
@@ -494,25 +486,6 @@ pub fn project_details(
                 }
             }
 
-            // Empty Project Modal (422)
-            {
-                {
-                    let show_empty_project_modal_clone = show_empty_project_modal.clone();
-                    if *show_empty_project_modal {
-                        html! {
-                            <Modal
-                                title="Empty Project"
-                                message="This project contains no Compass data yet.\n\nTo initialize the project, use the 'Import from Disk' button to upload your local project files."
-                                modal_type={ModalType::Info}
-                                show_close_button={true}
-                                on_close={move |_| show_empty_project_modal_clone.set(false)}
-                            />
-                        }
-                    } else {
-                        html! {}
-                    }
-                }
-            }
 
             // Add CSS for spinner animation
             <style>
