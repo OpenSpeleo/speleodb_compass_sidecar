@@ -1,6 +1,6 @@
 use common::ui_state::ProjectStatus;
 use wasm_bindgen_futures::spawn_local;
-use yew::{Callback, Html, Properties, function_component, html};
+use yew::{Callback, Html, Properties, classes, function_component, html};
 use yew_icons::{Icon, IconData};
 
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
@@ -29,54 +29,66 @@ pub fn project_listing_item_layout(
         });
     });
 
-    let is_locked = project.active_mutex().is_some();
-
+    let lock_color;
     let lock_status = if let Some(mutex) = project.active_mutex() {
         if &mutex.user == user_email {
+            lock_color = "#ff7f00";
             //return user locked version
             "🔒 by me"
         } else {
+            lock_color = "#ff6b6b";
             // locked by other user
             &format!("🔒 by {}", mutex.user)
         }
     } else {
+        lock_color = "#51cf66";
         "🔓 editable"
     };
-    let lock_color = if is_locked { "#ff6b6b" } else { "#51cf66" };
+    // let lock_color = if is_locked { "#ff6b6b" } else { "#51cf66" };
+    fn truncate_str_by_chars(s: &str, max_chars: usize) -> &str {
+        match s.char_indices().nth(max_chars) {
+            None => s,                   // The string is shorter than the max length
+            Some((idx, _)) => &s[..idx], // Truncate at the byte index of the Nth char
+        }
+    }
+    let truncated_name = truncate_str_by_chars(project.name(), 30).to_string();
+    let icon_data = match project_status {
+        common::ui_state::LocalProjectStatus::UpToDate => {
+            IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_CHECK
+        }
+        common::ui_state::LocalProjectStatus::Dirty => {
+            IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_EXCLAMATION
+        }
+        common::ui_state::LocalProjectStatus::RemoteOnly => {
+            IconData::FONT_AWESOME_SOLID_FILE_ARROW_DOWN
+        }
+        common::ui_state::LocalProjectStatus::Unknown => {
+            IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_CHECK
+        }
+        common::ui_state::LocalProjectStatus::EmptyLocal => {
+            IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_PLUS
+        }
+        common::ui_state::LocalProjectStatus::OutOfDate => {
+            IconData::FONT_AWESOME_SOLID_FILE_ARROW_DOWN
+        }
+        common::ui_state::LocalProjectStatus::DirtyAndOutOfDate => {
+            IconData::FONT_AWESOME_SOLID_FACE_SAD_CRY
+        }
+    };
     return html! {
-        <div
-            class="project-card"
-            onclick={on_card_click}
-            style={
-                "border: 1px solid #ddd; \
-                 border-radius: 8px; \
-                 padding: 16px; \
-                 cursor: pointer; \
-                 transition: all 0.2s; \
-                 background-color: white; \
-                 box-shadow: 0 2px 4px rgba(0,0,0,0.1); \
-                 display: flex; \
-                 justify-content: space-between; \
-                 "
-            }
-        >
-            <div style="display: flex; gap: 12px; align-items: center; color:#2c3e50;">
-                <h3 style="margin: 0; font-size: 18px; color: #2c3e50;">
-                    { project.name() }
+        <div class={classes!("project-card")} onclick={on_card_click}>
+            <span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display:flex; background-color; blue; color: #2c3e50">
+                <h3 style="margin: 0; font-size: 18px; padding: 0;">
+                    { truncated_name }
                 </h3>
-                {match project_status {
-                    common::ui_state::LocalProjectStatus::UpToDate=>html!{<Icon data={IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_CHECK}/>},
-                    common::ui_state::LocalProjectStatus::Dirty=>html!{<Icon data={IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_EXCLAMATION}/>},
-                    common::ui_state::LocalProjectStatus::RemoteOnly=>html!{<Icon data={IconData::FONT_AWESOME_SOLID_FILE_ARROW_DOWN}/>},
-                    common::ui_state::LocalProjectStatus::Unknown => html!{<Icon data={IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_CHECK}/>},
-                    common::ui_state::LocalProjectStatus::EmptyLocal =>html!{<Icon data={IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_PLUS}/>},
-                    common::ui_state::LocalProjectStatus::OutOfDate => html!{<Icon data={IconData::FONT_AWESOME_SOLID_FILE_ARROW_DOWN}/>},
-                    common::ui_state::LocalProjectStatus::DirtyAndOutOfDate => html!{<Icon data={IconData::FONT_AWESOME_SOLID_FACE_SAD_CRY}/>},
-                }}
-                <span style={format!("padding: 4px 8px; border-radius: 4px; background-color: {}; color: white; font-size: 12px; font-weight: bold;", lock_color)}>
+                <Icon data={icon_data} style="margin:0 8px;"></Icon>
+
+            </span>
+            <div>
+                <span style="padding: 4px 8px; border-radius: 4px; color: white; font-size: 12px; font-weight: bold;">
                     { format!("{project_status:?}") }
                 </span>
-                <span style={format!("padding: 4px 8px; border-radius: 4px; background-color: {}; color: white; font-size: 12px; font-weight: bold;",
+                <span style={format!("padding: 4px 8px; border-radius: 4px; background-color: {}; color: white; font-size: 12px; font-weight: bold; margin: 0 8px;",
                 if project.permission() == "ADMIN" { " #ff7f00" } else if project.permission() == "READ_AND_WRITE" { "#228be6" } else { "#868e96" }
                 )}>
                     { project.permission() }

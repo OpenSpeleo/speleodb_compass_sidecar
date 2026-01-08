@@ -56,7 +56,7 @@ pub fn project_listing(ProjectListingProps { ui_state }: &ProjectListingProps) -
     } else {
         html! {
             <>
-                <section style="max-width: 100vw">
+            <section style="min-width: 100%;">
                 <div style="display:flex; justify-content:space-between;align-items:center;">
                     <div style="display: flex; justify-content: center; gap: 12px; margin-bottom: 16px;">
                         <h2>{"Project Listing"}</h2>
@@ -65,14 +65,14 @@ pub fn project_listing(ProjectListingProps { ui_state }: &ProjectListingProps) -
                         <button onclick={on_create_new.clone()}>{"Create New Project"}</button>
                     </div>
                 </div>
-                    <div class="projects-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
-                        { for project_list.iter().map(|project| {
-                            return html! {
-                                <ProjectListingItem project={project.clone()} user_email={user_email.clone()} />
-                            };
-                        })}
-                    </div>
-                </section>
+                <div class="projects-list" style="width:100%; display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
+                    { for ui_state.project_status.iter().map(|project| {
+                        return html! {
+                            <ProjectListingItem project={project.clone()} user_email={user_email.clone()} />
+                        };
+                    })}
+                </div>
+            </section>
 
                 {
                     if *show_create_modal {
