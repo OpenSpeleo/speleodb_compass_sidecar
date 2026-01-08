@@ -114,7 +114,7 @@ impl ProjectManager {
     }
 
     pub async fn save_local_changes(
-        &self,
+        &mut self,
         api_info: &ApiInfo,
         commit_message: String,
     ) -> Result<ProjectSaveResult, Error> {
@@ -126,6 +126,7 @@ impl ProjectManager {
         let save_result =
             api::project::upload_project_zip(api_info, self.id(), commit_message, &zip_file)
                 .await?;
+        self.update_project().await?;
         // Clean up temp zip file regardless of success or failure
         std::fs::remove_file(&zip_file).ok();
         self.update_local_copies(api_info).await?;

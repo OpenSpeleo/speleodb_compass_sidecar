@@ -22,6 +22,7 @@ pub struct AppState {
     api_info: Mutex<ApiInfo>,
     project_info: Mutex<HashMap<uuid::Uuid, ProjectManager>>,
     active_project: Mutex<Option<uuid::Uuid>>,
+    compass_open: Mutex<bool>,
 }
 
 impl AppState {
@@ -32,6 +33,7 @@ impl AppState {
             api_info: Mutex::new(ApiInfo::default()),
             project_info: Mutex::new(HashMap::new()),
             active_project: Mutex::new(None),
+            compass_open: Mutex::new(false),
         }
     }
 
@@ -208,7 +210,7 @@ impl AppState {
             error!("No active project to save");
             return Err(Error::NoProjectSelected);
         };
-        let project_manager = self
+        let mut project_manager = self
             .project_info
             .lock()
             .unwrap()
@@ -216,11 +218,20 @@ impl AppState {
             .ok_or(Error::NoProjectSelected)?
             .clone();
         let api_info = self.api_info();
-
         let result = project_manager
             .save_local_changes(&api_info, commit_message)
             .await?;
+        project_manager.update_local_copies(&api_info).await?;
         Ok(result)
+    }
+
+    pub fn compass_is_open(&self) -> bool {
+        *self.compass_open.lock().unwrap()
+    }
+
+    pub fn set_compass_open(&self, is_open: bool, app_handle: &AppHandle) {
+        *self.compass_open.lock().unwrap() = is_open;
+        self.emit_app_state_change(app_handle);
     }
 
     pub fn emit_app_state_change(&self, app_handle: &AppHandle) {
@@ -234,7 +245,8 @@ impl AppState {
             .collect();
         let user_email = self.api_info().email().map(|s| s.to_string());
         let active_project_id = self.get_active_project_id();
-        let ui_state = UiState::new(loading_state, user_email, project_info, active_project_id);
+        let compass_is_open = self.compass_is_open();
+        let ui_state = UiState::new(loading_state, user_email, project_info, active_project_id,compass_is_open);
         app_handle
             .emit(UI_STATE_NOTIFICATION_KEY, &ui_state)
             .unwrap();

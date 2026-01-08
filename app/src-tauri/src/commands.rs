@@ -92,7 +92,6 @@ pub fn open_project(project_id: Uuid) -> Result<(), String> {
 #[tauri::command]
 pub async fn save_project(
     app_handle: AppHandle,
-    project_id: Uuid,
     commit_message: String,
 ) -> Result<ProjectSaveResult, Error> {
     info!("Project zipped successfully, uploading project ZIP to SpeleoDB");
@@ -114,7 +113,7 @@ pub async fn import_compass_project(app_handle: AppHandle, project_id: Uuid) -> 
     info!("Importing into Compass project: {:?}", project_id);
     LocalProject::import_compass_project(project_id, &file_path)?;
     info!("Successfully imported Compass project from : {file_path:?}");
-    save_project(app_handle, project_id, "Imported local project".to_string()).await?;
+    save_project(app_handle, "Imported local project".to_string()).await?;
 
     Ok(())
 }

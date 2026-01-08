@@ -91,6 +91,7 @@ pub struct UiState {
     pub user_email: Option<String>,
     pub project_status: Vec<ProjectStatus>,
     pub selected_project: Option<Uuid>,
+    pub compass_open: bool
 }
 
 impl UiState {
@@ -99,6 +100,7 @@ impl UiState {
         user_email: Option<String>,
         project_status: Vec<ProjectStatus>,
         selected_project: Option<Uuid>,
+        compass_open: bool,
     ) -> Self {
         let platform = if cfg!(target_os = "windows") {
             Platform::Windows
@@ -113,12 +115,13 @@ impl UiState {
             user_email,
             project_status,
             selected_project,
+            compass_open,
         }
     }
 }
 
 impl Default for UiState {
     fn default() -> Self {
-        Self::new(LoadingState::NotStarted, None, vec![], None)
+        Self::new(LoadingState::NotStarted, None, vec![], None,false)
     }
 }

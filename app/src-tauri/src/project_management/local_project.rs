@@ -11,7 +11,7 @@ use crate::{
 };
 use common::Error;
 use compass_data::{Loaded, Project};
-use log::{error, info};
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
     io::prelude::*,
@@ -51,23 +51,6 @@ impl ProjectMap {
             plt_files,
         }
     }
-
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl Default for ProjectMap {
-    fn default() -> Self {
-        let mak_file = None;
-        let dat_files = vec![];
-        let plt_files = vec![];
-        Self {
-            mak_file,
-            dat_files,
-            plt_files,
-        }
-    }
 }
 
 /// Represents a local Compass project stored on disk.
@@ -95,10 +78,14 @@ impl LocalProject {
                     let index_project = LocalProject::load_index_compass_project(id)?;
                     let working_project = LocalProject::load_working_copy_compass_project(id)?;
                     if index_project == working_project {
+                        info!(
+                            "No changes detected between: {:?} and {:?}",
+                            index_project.file_path, working_project.file_path
+                        );
                         // No changes detected
                         Ok(false)
                     } else {
-                        info!("Detected changes between loaded compass projects for: {id}");
+                        warn!("Detected changes between loaded compass projects for: {id}");
                         info!("Index project: {:#?}", index_project);
                         info!("Working project: {:#?}", working_project);
                         // Changes detected

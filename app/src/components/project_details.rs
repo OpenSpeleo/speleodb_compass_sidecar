@@ -1,3 +1,13 @@
+//! The project details component displays information about a specific project,
+//! allows users to open the project in compass(Or just the folder on non-windows platforms),
+//!  commit changes with a message, and jump back to the project list.
+//! TODO:
+//! [ ] Only enable back button if up-to-date or in read-only mode
+//! [ ] Show status indicating local changes
+//! [ ] Only show commit section if user has write access and local changes are present
+//! [ ] Investigate making files read-only when in read-only mode
+//! [ ] Show whether Compass is being tracked open on Windows
+
 use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use common::api_types::ProjectSaveResult;
@@ -136,6 +146,7 @@ pub fn project_details(
 
             spawn_local(async move {
                 // 1. ZIP project
+                uploading.set(true);
                 match SPELEO_DB_CONTROLLER.save_project(project_id, &msg).await {
                     Ok(upload_result) => match upload_result {
                         ProjectSaveResult::NoChanges => {
