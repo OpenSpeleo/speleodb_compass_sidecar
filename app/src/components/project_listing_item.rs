@@ -28,7 +28,13 @@ pub fn project_listing_item_layout(
                 .unwrap();
         });
     });
-
+    let permission_color = if project.permission() == "ADMIN" {
+        "#ff7f00"
+    } else if project.permission() == "READ_AND_WRITE" {
+        "#228be6"
+    } else {
+        "#868e96"
+    };
     let lock_color;
     let lock_status = if let Some(mutex) = project.active_mutex() {
         if &mutex.user == user_email {
@@ -51,7 +57,7 @@ pub fn project_listing_item_layout(
             Some((idx, _)) => &s[..idx], // Truncate at the byte index of the Nth char
         }
     }
-    let truncated_name = truncate_str_by_chars(project.name(), 30).to_string();
+    let truncated_name = truncate_str_by_chars(project.name(), 25).to_string();
     let icon_data = match project_status {
         common::ui_state::LocalProjectStatus::UpToDate => {
             IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_CHECK
@@ -77,19 +83,15 @@ pub fn project_listing_item_layout(
     };
     return html! {
         <div class={classes!("project-card")} onclick={on_card_click}>
-            <span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display:flex; background-color; blue; color: #2c3e50">
-                <h3 style="margin: 0; font-size: 18px; padding: 0;">
+            <span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; display:flex; background-color; blue; color: #2c3e50; gap: 12px">
+                <Icon data={icon_data} style="font-size: 12px;"></Icon>
+                <h3 class={classes!("vertically-centered-text")} style="margin: 0; font-size: 16px; ">
                     { truncated_name }
                 </h3>
-                <Icon data={icon_data} style="margin:0 8px;"></Icon>
-
             </span>
-            <div>
-                <span style="padding: 4px 8px; border-radius: 4px; color: white; font-size: 12px; font-weight: bold;">
-                    { format!("{project_status:?}") }
-                </span>
-                <span style={format!("padding: 4px 8px; border-radius: 4px; background-color: {}; color: white; font-size: 12px; font-weight: bold; margin: 0 8px;",
-                if project.permission() == "ADMIN" { " #ff7f00" } else if project.permission() == "READ_AND_WRITE" { "#228be6" } else { "#868e96" }
+            <div style="display: flex; gap: 12px">
+                <span style={format!("padding: 4px 8px; border-radius: 4px; background-color: {}; color: white; font-size: 12px; font-weight: bold;",
+                    permission_color
                 )}>
                     { project.permission() }
                 </span>

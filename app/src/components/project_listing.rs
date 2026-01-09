@@ -35,7 +35,7 @@ pub fn project_listing(ProjectListingProps { ui_state }: &ProjectListingProps) -
         html! {
             <>
                 <section style="width:100%;">
-                    <h2>{"Project Listing"}</h2>
+                    <h2>{"Projects"}</h2>
                     <div style="display: flex; justify-content: center; gap: 12px; margin-bottom: 16px;">
                         <button onclick={on_create_new.clone()}>{"Create New Project"}</button>
                     </div>
@@ -56,16 +56,16 @@ pub fn project_listing(ProjectListingProps { ui_state }: &ProjectListingProps) -
     } else {
         html! {
             <>
-            <section style="min-width: 100%;">
+            <section style="min-width: 96vw;">
                 <div style="display:flex; justify-content:space-between;align-items:center;">
                     <div style="display: flex; justify-content: center; gap: 12px; margin-bottom: 16px;">
-                        <h2>{"Project Listing"}</h2>
+                        <h2 class={classes!("vertically-centered-text")} >{"Projects"}</h2>
                     </div>
                     <div style="display: flex; justify-content: center; gap: 12px; margin-bottom: 16px;">
                         <button onclick={on_create_new.clone()}>{"Create New Project"}</button>
                     </div>
                 </div>
-                <div class="projects-list" style="width:100%; display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
+                <div class="projects-list" style=" display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
                     { for ui_state.project_status.iter().map(|project| {
                         return html! {
                             <ProjectListingItem project={project.clone()} user_email={user_email.clone()} />

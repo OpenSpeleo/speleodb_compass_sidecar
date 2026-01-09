@@ -1,7 +1,7 @@
 use common::ui_state::UiState;
 use log::{error, info};
 use wasm_bindgen_futures::spawn_local;
-use yew::{Callback, Html, Properties, function_component, html};
+use yew::{Callback, Html, Properties, classes, function_component, html};
 
 use crate::{
     components::{project_details::ProjectDetails, project_listing::ProjectListing},
@@ -34,14 +34,17 @@ pub fn main_layout(&MainLayoutProps { ref ui_state }: &MainLayoutProps) -> Html 
     let ui_state = ui_state.clone();
     return html! {
         <main class="container">
-            <header style="display:flex; justify-content:space-between; align-items:center;flex-direction: column; margin-bottom:24px; width:100%;">
-                <div style="display: flex-row">
-                    <div style="gap:8px;">
-                        <button style="background-color:red; color:white;" onclick={on_disconnect.clone()}>{ "Sign Out" }</button>
-                    </div>
+            <header style="display:flex;
+                justify-content:space-between;
+                align-items:center;flex-direction: row;
+                margin-bottom:24px;
+                width:100%;
+            ">
+                <h1 class={classes!("vertically-centered-text")} >{"SpeleoDB Compass Sidecar"}</h1>
+                <div style="gap:8px;align-self: flex-end; margin: 0 12px;">
+                    <button style="background-color:red; color:white;" onclick={on_disconnect.clone()}>{ "Sign Out" }</button>
                 </div>
-                <h1>{"SpeleoDB - Compass Sidecar"}</h1>
-
+                //
             </header>
             <section>
                 {
