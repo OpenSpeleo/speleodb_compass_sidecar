@@ -13,7 +13,6 @@ pub fn project_listing(ProjectListingProps { ui_state }: &ProjectListingProps) -
     let error = use_state(|| None::<String>);
     let show_create_modal = use_state(|| false);
     let user_email = ui_state.user_email.clone().unwrap();
-    let project_list = ui_state.project_status.clone();
     // Button handlers
     let on_create_new = {
         let show_create_modal = show_create_modal.clone();
