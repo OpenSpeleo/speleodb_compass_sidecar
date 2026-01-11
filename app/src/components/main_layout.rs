@@ -40,11 +40,12 @@ pub fn main_layout(&MainLayoutProps { ref ui_state }: &MainLayoutProps) -> Html 
                 margin-bottom:24px;
                 width:96vw;
             ">
-                <h1 class={classes!("vertically-centered-text")} >{"SpeleoDB Compass Sidecar"}</h1>
-                <div style="gap:8px;align-self: flex-end; ">
+                <div>
+                    <h1 class={classes!("vertically-centered-text")} >{"SpeleoDB Compass Sidecar"}</h1>
+                </div>
+                <div>
                     <button style="background-color:red; color:white;" onclick={on_disconnect.clone()}>{ "Sign Out" }</button>
                 </div>
-                //
             </header>
             <section>
                 {
