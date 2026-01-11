@@ -90,8 +90,8 @@ pub struct UiState {
     pub platform: Platform,
     pub user_email: Option<String>,
     pub project_status: Vec<ProjectStatus>,
-    pub selected_project: Option<Uuid>,
-    pub compass_open: bool
+    pub selected_project_id: Option<Uuid>,
+    pub compass_open: bool,
 }
 
 impl UiState {
@@ -114,7 +114,7 @@ impl UiState {
             platform,
             user_email,
             project_status,
-            selected_project,
+            selected_project_id: selected_project,
             compass_open,
         }
     }
@@ -122,6 +122,6 @@ impl UiState {
 
 impl Default for UiState {
     fn default() -> Self {
-        Self::new(LoadingState::NotStarted, None, vec![], None,false)
+        Self::new(LoadingState::NotStarted, None, vec![], None, false)
     }
 }

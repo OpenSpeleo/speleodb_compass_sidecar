@@ -49,10 +49,10 @@ pub fn main_layout(&MainLayoutProps { ref ui_state }: &MainLayoutProps) -> Html 
             </header>
             <section>
                 {
-                    if let Some(selected_project) = &ui_state.selected_project {
-                        let email:String = ui_state.user_email.unwrap_or_default().to_string();
-                        let selected_project = ui_state.project_status.iter().find(|p| (*p).id() == *selected_project).unwrap();
-                        html!{ <ProjectDetails  user_email={email} project={selected_project.clone()} /> }
+                    if let Some(_selected_project_id) = &ui_state.selected_project_id {
+                        // let email:String = ui_state.user_email.unwrap_or_default().to_string();
+                        // let selected_project = ui_state.project_status.iter().find(|p| (*p).id() == *selected_project_id).unwrap();
+                        html!{ <ProjectDetails ui_state={ui_state} /> }
                     } else {
                         html!{ <ProjectListing  ui_state={ui_state}/> }
                     }

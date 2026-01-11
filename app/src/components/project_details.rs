@@ -3,7 +3,7 @@
 //!  commit changes with a message, and jump back to the project list.
 //! TODO:
 //! [ ] Only enable back button if up-to-date or in read-only mode
-//! [ ] Show status indicating local changes
+//! [ ] Show project_status indicating local changes
 //! [ ] Only show commit section if user has write access and local changes are present
 //! [ ] Investigate making files read-only when in read-only mode
 //! [ ] Show whether Compass is being tracked open on Windows
@@ -11,23 +11,18 @@
 use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use common::api_types::ProjectSaveResult;
-use common::ui_state::{LocalProjectStatus, ProjectStatus};
+use common::ui_state::{LocalProjectStatus, UiState};
+use uuid::Uuid;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct ProjectDetailsProps {
-    pub user_email: String,
-    pub project: ProjectStatus,
+    pub ui_state: UiState,
 }
 
 #[function_component(ProjectDetails)]
-pub fn project_details(
-    ProjectDetailsProps {
-        user_email,
-        project,
-    }: &ProjectDetailsProps,
-) -> Html {
+pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsProps) -> Html {
     let initialized = use_state(|| false);
     let downloading = use_state(|| false);
     let uploading = use_state(|| false);
@@ -44,16 +39,24 @@ pub fn project_details(
     let download_complete = use_state(|| false);
     let commit_message = use_state(String::new);
     let commit_message_error = use_state(|| false);
+    let selected_project_id = ui_state.selected_project_id.unwrap();
+    let selected_project = ui_state
+        .project_status
+        .iter()
+        .find(|p| (*p).id() == selected_project_id)
+        .unwrap();
 
     // On mount: Check if we need to show any modals based on project status
     if !*initialized {
         // On mount, check if the project is read-only
-        if project.active_mutex().is_some()
-            && project.active_mutex().as_ref().unwrap().user != *user_email
+        if selected_project.active_mutex().is_some()
+            && &selected_project.active_mutex().as_ref().unwrap().user
+                != ui_state.user_email.as_ref().unwrap()
+            || selected_project.permission() == "READ_ONLY"
         {
             is_readonly.set(true);
             show_readonly_modal.set(true);
-        } else if let LocalProjectStatus::EmptyLocal = project.local_status() {
+        } else if let LocalProjectStatus::EmptyLocal = selected_project.local_status() {
             show_empty_project_modal.set(true);
         }
         initialized.set(true);
@@ -97,7 +100,7 @@ pub fn project_details(
 
     // Open folder handler
     let on_open_project = {
-        let project_id = project.id();
+        let project_id = selected_project.id();
         Callback::from(move |_: ()| {
             spawn_local(async move {
                 let _ = SPELEO_DB_CONTROLLER.open_project(project_id).await;
@@ -120,7 +123,7 @@ pub fn project_details(
 
     // Save Project Handler
     let on_save = {
-        let project_id = project.id();
+        let project_id = selected_project.id();
         let commit_message = commit_message.clone();
         let commit_message_error = commit_message_error.clone();
         let uploading = uploading.clone();
@@ -171,7 +174,7 @@ pub fn project_details(
     let on_import_from_disk = {
         let show_empty_project_modal = show_empty_project_modal.clone();
         let error_message = error_message.clone();
-        let project_id = project.id();
+        let project_id = selected_project.id();
         Callback::from(move |_: ()| {
             let show_empty_project_modal = show_empty_project_modal.clone();
             let error_message = error_message.clone();
@@ -215,8 +218,8 @@ pub fn project_details(
             </div>
 
             <h2>{"Project Details"}</h2>
-            <p><strong>{"Project: "}</strong>{&project.name()}</p>
-            <p style="color: #6b7280; font-size: 14px;">{format!("ID: {}", project.id())}</p>
+            <p><strong>{"Project: "}</strong>{&selected_project.name()}</p>
+            <p style="color: #6b7280; font-size: 14px;">{format!("ID: {}", selected_project.id())}</p>
 
             {
                 if *downloading {
@@ -351,7 +354,7 @@ pub fn project_details(
                             - the project is currently locked by another user\n\
                             - you do not have edit permissions to the project\n\n\
                             Contact a Project Administrator if you believe this is a mistake.",
-                            project.name()
+                            selected_project.name()
                         )}
                         modal_type={ModalType::Warning}
                         show_close_button={true}
