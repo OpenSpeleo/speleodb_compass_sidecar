@@ -28,12 +28,11 @@ pub fn project_listing_item_layout(
                 .unwrap();
         });
     });
-    let permission_color = if project.permission() == "ADMIN" {
-        "#ff7f00"
-    } else if project.permission() == "READ_AND_WRITE" {
-        "#228be6"
-    } else {
-        "#868e96"
+    let project_permission = project.permission();
+    let permission_color = match project_permission {
+        "ADMIN" => "#ff7f00",
+        "READ_AND_WRITE" => "#228be6",
+        _ => "#868e96",
     };
     let lock_color;
     let lock_status = if let Some(mutex) = project.active_mutex() {
@@ -93,7 +92,7 @@ pub fn project_listing_item_layout(
                 <span style={format!("padding: 4px 8px; border-radius: 4px; background-color: {}; color: white; font-size: 12px; font-weight: bold;",
                     permission_color
                 )}>
-                    { project.permission() }
+                    { project_permission }
                 </span>
                 <span style={format!("padding: 4px 8px; border-radius: 4px; background-color: {}; color: white; font-size: 12px; font-weight: bold;", lock_color)}>
                     { lock_status }
