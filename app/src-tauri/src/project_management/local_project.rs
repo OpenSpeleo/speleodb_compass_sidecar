@@ -253,7 +253,7 @@ impl LocalProject {
         let zip_path = temp_dir.join(&zip_filename);
         info!("Creating zip file in temp folder: {zip_path:?}");
         let zip_file =
-            std::fs::File::create(&zip_path).map_err(|e| Error::ProjectWrite(zip_path.clone()))?;
+            std::fs::File::create(&zip_path).map_err(|_| Error::ProjectWrite(zip_path.clone()))?;
         let options =
             SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         let mut zip_writer = zip::ZipWriter::new(zip_file);

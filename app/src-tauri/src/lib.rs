@@ -28,12 +28,9 @@ pub fn run() {
             e
         );
     }
-    // This should be called as early in the execution of the app as possible
-    #[cfg(debug_assertions)] // only enable instrumentation in development builds
-    let devtools = tauri_plugin_devtools::init();
 
     // Initialize logging
-    let _ = init_file_logger("info");
+    let _ = init_file_logger("debug");
 
     if let Ok(path) = std::env::current_dir() {
         log::info!("Current working directory: {}", path.display());
@@ -44,7 +41,7 @@ pub fn run() {
         log::info!("Application starting. Logging to: {:?}", compass_home());
     }
 
-    let mut builder = tauri::Builder::default()
+    tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             auth_request,
@@ -68,12 +65,7 @@ pub fn run() {
                 }
             });
             Ok(())
-        });
-    #[cfg(debug_assertions)]
-    {
-        builder = builder.plugin(devtools);
-    }
-    builder
+        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {

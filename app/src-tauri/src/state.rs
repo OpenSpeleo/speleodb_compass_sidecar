@@ -7,11 +7,10 @@ use common::{
         UI_STATE_NOTIFICATION_KEY, UiState,
     },
 };
-use log::{error, warn};
+use log::{error, info, warn};
 use std::{collections::HashMap, sync::Mutex, time::Duration};
 use tauri::{
     AppHandle, Emitter, Manager,
-    ipc::private::tracing::info,
     menu::{MenuBuilder, MenuItem},
 };
 use uuid::Uuid;
@@ -39,6 +38,7 @@ impl AppState {
 
     /// Asynchronously initialize the application state.
     pub async fn init_app_state(&self, app_handle: &AppHandle) {
+        info!("Initializing app state");
         if self.initializing() {
             return;
         }
@@ -66,9 +66,14 @@ impl AppState {
         self.api_info.lock().unwrap().clone()
     }
 
+    fn set_api_info(&self, api_info: ApiInfo) {
+        *self.api_info.lock().unwrap() = api_info;
+    }
+
     pub fn update_user_prefs(&self, prefs: UserPrefs, app: &AppHandle) -> Result<(), Error> {
+        info!("Updating user preferences");
         prefs.save()?;
-        *self.api_info.lock().unwrap() = prefs.api_info().clone();
+        self.set_api_info(prefs.api_info().clone());
         let app_handle = app.clone();
         tauri::async_runtime::spawn(async move {
             let menu = if prefs.api_info().oauth_token().is_none() {
@@ -334,7 +339,7 @@ impl AppState {
         }
     }
 
-    pub async fn init_internal(&self, app_handle: &AppHandle) -> LoadingState {
+    async fn init_internal(&self, app_handle: &AppHandle) -> LoadingState {
         let loading_state = self.loading_state();
         let sec_delay = 0;
         match loading_state {
