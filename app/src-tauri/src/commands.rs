@@ -3,7 +3,7 @@ use crate::{
     user_prefs::UserPrefs,
 };
 use common::{Error, api_types::ProjectSaveResult};
-use log::{error, info};
+use log::info;
 use std::process::Command;
 use tauri::{AppHandle, Manager, State, Url};
 use tauri_plugin_dialog::{DialogExt, FilePath};
@@ -50,13 +50,10 @@ pub async fn auth_request(
 }
 
 #[tauri::command]
-pub fn open_project(project_id: Uuid) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    let project_dir = compass_project_working_path(project_id);
-    #[cfg(not(target_os = "windows"))]
+pub fn open_project(app_state: State<'_, AppState>, project_id: Uuid) -> Result<(), Error> {
     let project_dir = compass_project_working_path(project_id);
     if !project_dir.exists() {
-        return Err("Project folder does not exist".to_string());
+        return Err(Error::ProjectNotFound(project_dir));
     }
 
     // Just open the folder in system file explorer
@@ -74,19 +71,38 @@ pub fn open_project(project_id: Uuid) -> Result<(), String> {
     // On Windows, actually try to open the project with Compass if possible
     #[cfg(target_os = "windows")]
     {
-        let compass_project = LocalProject::mak_file_path(project_id).map_err(|e| e.to_string())?;
-        info!("{compass_project:?}");
+        const COMPASS_EXE: &str = r"C:\Fountainware\Compass\wcomp32\comp32.exe";
 
-        info!("Attempting to open project with Compass Software");
-        Command::new("explorer")
-            .arg(project_dir)
+        // Check if Compass is installed
+        let compass_path = std::path::Path::new(COMPASS_EXE);
+        if !compass_path.exists() {
+            // If compass isn't found, open the folder in explorer, but return an error so the UI can notify the user
+            return Err(Error::CompassNotFound);
+        }
+        let project_path = LocalProject::mak_file_path(project_id)?;
+
+        log::info!(
+            "Opening {} with Compass: {}",
+            project_path.display(),
+            COMPASS_EXE
+        );
+
+        // Open the .MAK file with Compass
+        let child_process = match std::process::Command::new(COMPASS_EXE)
+            .arg(&project_path)
             .spawn()
-            .map_err(|e| e.to_string())?
-            .wait()
-            .map_err(|e| e.to_string())?;
-        info!("Compass Closed Successfully");
+        {
+            Ok(child) => {
+                log::info!("Compass launched with PID: {}", child.id());
+                Ok(child)
+            }
+            Err(e) => {
+                log::error!("Failed to open project with Compass: {}", e);
+                Err(Error::CompassExecutable(e.to_string()))
+            }
+        }?;
+        Ok(())
     }
-    Ok(())
 }
 
 #[tauri::command]
