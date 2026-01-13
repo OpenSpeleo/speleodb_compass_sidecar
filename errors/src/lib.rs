@@ -50,6 +50,8 @@ pub enum Error {
     ProjectMutexLocked(Uuid),
     #[error("Zip File Error: {0}")]
     ZipFile(String),
+    #[error("Os Command Error: {0}")]
+    OsCommand(String),
     #[error("Compass Not Found")]
     CompassNotFound,
     #[error("Compass Executable Error: {0}")]

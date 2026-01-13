@@ -50,7 +50,7 @@ pub async fn auth_request(
 }
 
 #[tauri::command]
-pub fn open_project(app_state: State<'_, AppState>, project_id: Uuid) -> Result<(), Error> {
+pub fn open_project(_app_state: State<'_, AppState>, project_id: Uuid) -> Result<(), Error> {
     let project_dir = compass_project_working_path(project_id);
     if !project_dir.exists() {
         return Err(Error::ProjectNotFound(project_dir));
@@ -58,15 +58,21 @@ pub fn open_project(app_state: State<'_, AppState>, project_id: Uuid) -> Result<
 
     // Just open the folder in system file explorer
     #[cfg(target_os = "macos")]
-    Command::new("open")
-        .arg(&project_dir)
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    {
+        Command::new("open")
+            .arg(&project_dir)
+            .spawn()
+            .map_err(|e| Error::OsCommand(e.to_string()))?;
+        Ok(())
+    }
     #[cfg(target_os = "linux")]
-    Command::new("xdg-open")
-        .arg(&project_dir)
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    {
+        Command::new("xdg-open")
+            .arg(&project_dir)
+            .spawn()
+            .map_err(|e| Error::OsCommand(e.to_string()))?;
+        Ok(())
+    }
 
     // On Windows, actually try to open the project with Compass if possible
     #[cfg(target_os = "windows")]
