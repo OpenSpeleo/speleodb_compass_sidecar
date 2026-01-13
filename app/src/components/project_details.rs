@@ -12,7 +12,7 @@ use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use common::api_types::ProjectSaveResult;
 use common::ui_state::{LocalProjectStatus, UiState};
-use uuid::Uuid;
+use log::info;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
@@ -35,7 +35,6 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
     let error_message: UseStateHandle<Option<String>> = use_state(|| None);
     let upload_error: UseStateHandle<Option<String>> = use_state(|| None);
     let is_readonly = use_state(|| false);
-    let is_dirty = use_state(|| false);
     let download_complete = use_state(|| false);
     let commit_message = use_state(String::new);
     let commit_message_error = use_state(|| false);
@@ -45,6 +44,7 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
         .iter()
         .find(|p| (*p).id() == selected_project_id)
         .unwrap();
+    let is_dirty = use_state(|| selected_project.is_dirty());
 
     // On mount: Check if we need to show any modals based on project status
     if !*initialized {
@@ -132,6 +132,11 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
         let upload_error = upload_error.clone();
 
         Callback::from(move |_| {
+            info!(
+                "Saving project {} with commit message: {}",
+                project_id,
+                (*commit_message).clone()
+            );
             let msg = (*commit_message).clone();
 
             if msg.trim().is_empty() {
@@ -312,7 +317,7 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
                             <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
                                 <button
                                     onclick={on_save}
-                                    disabled={*uploading || !*is_dirty}
+                                    disabled={ !*is_dirty}
                                     style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: disabled ? 0.5 : 1;"
                                 >
                                     {if *uploading { "Saving..." } else { "Save Project" }}

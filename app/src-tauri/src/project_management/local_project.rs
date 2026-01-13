@@ -11,7 +11,7 @@ use crate::{
 };
 use common::Error;
 use compass_data::{Loaded, Project};
-use log::{error, info, warn};
+use log::{error, info, trace, warn};
 use serde::{Deserialize, Serialize};
 use std::{
     io::prelude::*,
@@ -78,9 +78,9 @@ impl LocalProject {
                     let index_project = LocalProject::load_index_compass_project(id)?;
                     let working_project = LocalProject::load_working_copy_compass_project(id)?;
                     if index_project == working_project {
-                        info!(
+                        trace!(
                             "No changes detected between: {:?} and {:?}",
-                            index_project.file_path, working_project.file_path
+                            index_project, working_project
                         );
                         // No changes detected
                         Ok(false)

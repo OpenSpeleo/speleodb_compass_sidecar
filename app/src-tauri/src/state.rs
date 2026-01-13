@@ -1,4 +1,5 @@
 use crate::{project_management::ProjectManager, user_prefs::UserPrefs};
+use chrono::{DateTime, Utc};
 use common::{
     ApiInfo, Error,
     api_types::ProjectInfo,
@@ -7,13 +8,17 @@ use common::{
         UI_STATE_NOTIFICATION_KEY, UiState,
     },
 };
-use log::{error, info, warn};
+use log::{error, info, trace, warn};
 use std::{collections::HashMap, sync::Mutex, time::Duration};
 use tauri::{
     AppHandle, Emitter, Manager,
+    async_runtime::JoinHandle,
     menu::{MenuBuilder, MenuItem},
 };
 use uuid::Uuid;
+
+const PROJECT_INFO_UPDATE_INTERVAL: Duration = Duration::from_secs(120); //  update the list of projects status every 2 minutes
+const LOCAL_STATUS_CHECK_INTERVAL: Duration = Duration::from_secs(1); // check local project status and compass state every second
 
 pub struct AppState {
     initializing: Mutex<bool>,
@@ -22,6 +27,9 @@ pub struct AppState {
     project_info: Mutex<HashMap<uuid::Uuid, ProjectInfo>>,
     active_project: Mutex<Option<uuid::Uuid>>,
     compass_pid: Mutex<Option<u32>>,
+    background_task_handle: Mutex<Option<JoinHandle<()>>>,
+    last_project_update: Mutex<DateTime<Utc>>,
+    last_status_check: Mutex<DateTime<Utc>>,
 }
 
 impl AppState {
@@ -33,6 +41,9 @@ impl AppState {
             project_info: Mutex::new(HashMap::new()),
             active_project: Mutex::new(None),
             compass_pid: Mutex::new(None),
+            background_task_handle: Mutex::new(None),
+            last_project_update: Mutex::new(chrono::Utc::now()),
+            last_status_check: Mutex::new(chrono::Utc::now()),
         }
     }
 
@@ -55,6 +66,13 @@ impl AppState {
                     log::info!("App state already initialized",);
                     self.emit_app_state_change(app_handle);
                     self.set_initializing(false);
+                    if self.background_task_handle.lock().unwrap().is_none() {
+                        let app_handle = app_handle.clone();
+                        let join_handle = tauri::async_runtime::spawn(async move {
+                            AppState::background_update_task(&app_handle).await;
+                        });
+                        *self.background_task_handle.lock().unwrap() = Some(join_handle);
+                    }
                     break;
                 }
                 _ => loading_state = self.init_internal(&app_handle).await,
@@ -123,15 +141,6 @@ impl AppState {
             }
         });
         Ok(())
-    }
-
-    pub async fn update_local_project_from_server(
-        &self,
-        project_id: Uuid,
-    ) -> Result<ProjectStatus, Error> {
-        let api_info = self.api_info();
-        let project_info = api::project::fetch_project_info(&api_info, project_id).await?;
-        self.update_local_project(project_info).await
     }
 
     pub async fn update_local_project(
@@ -210,7 +219,9 @@ impl AppState {
         let result = project_manager
             .save_local_changes(&api_info, commit_message)
             .await?;
-        self.update_local_project_from_server(project_id).await?;
+
+        let updated_project_info = api::project::fetch_project_info(&api_info, project_id).await?;
+        let project_manager = ProjectManager::initialize_from_info(updated_project_info);
         project_manager.update_local_copies(&api_info).await?;
         Ok(result)
     }
@@ -322,6 +333,7 @@ impl AppState {
                 for project in projects.clone() {
                     self.update_local_project(project).await?;
                 }
+                *self.last_project_update.lock().unwrap() = chrono::Utc::now();
                 Ok(projects)
             }
             Err(e) => {
@@ -424,5 +436,56 @@ impl AppState {
     fn clear_local_projects(&self) {
         let mut project_lock = self.project_info.lock().unwrap();
         project_lock.clear();
+    }
+
+    async fn background_update_task(app_handle: &AppHandle) {
+        let app_state = app_handle.state::<AppState>();
+        loop {
+            let last_projectupdate = *app_state.last_project_update.lock().unwrap();
+            if chrono::Utc::now()
+                .signed_duration_since(last_projectupdate)
+                .to_std()
+                .unwrap()
+                >= PROJECT_INFO_UPDATE_INTERVAL
+            {
+                trace!("Background task: updating project info from API");
+                match app_state.load_user_projects().await {
+                    Ok(_) => {
+                        app_state.emit_app_state_change(app_handle);
+                    }
+                    Err(e) => {
+                        error!("Background task: failed to update project info: {}", e);
+                    }
+                }
+            }
+            let last_local_status_check = *app_state.last_status_check.lock().unwrap();
+            if chrono::Utc::now()
+                .signed_duration_since(last_local_status_check)
+                .to_std()
+                .unwrap()
+                >= LOCAL_STATUS_CHECK_INTERVAL
+            {
+                trace!("Background task: checking local project statuses");
+                let project_info: Vec<ProjectInfo> = app_state
+                    .project_info
+                    .lock()
+                    .unwrap()
+                    .values()
+                    .cloned()
+                    .collect();
+                for project in project_info {
+                    let project_id = project.id;
+                    if let Err(e) = app_state.update_local_project(project).await {
+                        error!(
+                            "Background task: failed to update local project {}: {}",
+                            project_id, e
+                        );
+                    }
+                }
+                app_state.emit_app_state_change(app_handle);
+                *app_state.last_status_check.lock().unwrap() = chrono::Utc::now();
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
     }
 }

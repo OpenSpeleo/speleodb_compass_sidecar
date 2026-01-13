@@ -62,6 +62,13 @@ impl ProjectStatus {
     pub fn permission(&self) -> &str {
         &self.info.permission
     }
+
+    pub fn is_dirty(&self) -> bool {
+        matches!(
+            self.local_status,
+            LocalProjectStatus::Dirty | LocalProjectStatus::DirtyAndOutOfDate
+        )
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
