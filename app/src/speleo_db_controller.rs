@@ -138,7 +138,7 @@ impl SpeleoDBController {
         country: &str,
         latitude: Option<&str>,
         longitude: Option<&str>,
-    ) -> Result<ProjectInfo, String> {
+    ) -> Result<(), String> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
         struct Args<'a> {
@@ -157,11 +157,9 @@ impl SpeleoDBController {
             longitude,
         };
 
-        let project_info: ProjectInfo = invoke("create_project", &args)
+        invoke("create_project", &args)
             .await
-            .map_err(|e| e.to_string())?;
-
-        Ok(project_info)
+            .map_err(|e| e.to_string())
     }
     pub async fn sign_out(&self) -> Result<(), String> {
         let args = UnitArgs::new();

@@ -19,7 +19,7 @@ pub struct AppState {
     initializing: Mutex<bool>,
     loading_state: Mutex<LoadingState>,
     api_info: Mutex<ApiInfo>,
-    project_info: Mutex<HashMap<uuid::Uuid, ProjectManager>>,
+    project_info: Mutex<HashMap<uuid::Uuid, ProjectInfo>>,
     active_project: Mutex<Option<uuid::Uuid>>,
     compass_pid: Mutex<Option<u32>>,
 }
@@ -125,40 +125,26 @@ impl AppState {
         Ok(())
     }
 
-    pub async fn update_project_info_from_server(
+    pub async fn update_local_project_from_server(
         &self,
         project_id: Uuid,
     ) -> Result<ProjectStatus, Error> {
         let api_info = self.api_info();
         let project_info = api::project::fetch_project_info(&api_info, project_id).await?;
-        self.update_local_project_info(&api_info, project_info)
-            .await
+        self.update_local_project(project_info).await
     }
 
-    pub async fn update_local_project_info(
+    pub async fn update_local_project(
         &self,
-        api_info: &ApiInfo,
         project_info: ProjectInfo,
     ) -> Result<ProjectStatus, Error> {
-        let mut project = {
-            let mut project_lock = self.project_info.lock().unwrap();
-            // This clone is necessary to avoid holding the lock across an await point
-            // which would lead to a deadlock.
-            // The project manager simply represents the status on disk, so cloning it is cheap.
-            if let Some(existing_project) = project_lock.get_mut(&project_info.id) {
-                existing_project.update_project_info(project_info);
-                existing_project.clone()
-            } else {
-                let id = project_info.id;
-                let new_project = ProjectManager::initialize_from_info(project_info.clone());
-                project_lock.insert(id, new_project.clone());
-                new_project
-            }
-        };
-        project.make_local(api_info).await?;
+        let api_info = self.api_info();
+        self.set_project_info(project_info.clone());
+        let mut project = ProjectManager::initialize_from_info(project_info);
+        project.make_local(&api_info).await?;
         let project_status = project.update_project().await?;
         if let LocalProjectStatus::OutOfDate = project_status.local_status() {
-            project.update_local_copies(api_info).await?;
+            project.update_local_copies(&api_info).await?;
         }
         Ok(project_status)
     }
@@ -174,8 +160,7 @@ impl AppState {
                 api::project::acquire_project_mutex(&self.api_info(), project_id).await?;
             *self.active_project.lock().unwrap() = Some(project_id);
             self.emit_app_state_change(app_handle);
-            self.update_local_project_info(&self.api_info(), project_info)
-                .await?;
+            self.update_local_project(project_info).await?;
             self.emit_app_state_change(app_handle);
         } else {
             if let Some(active_project) = self.get_active_project_status() {
@@ -189,6 +174,7 @@ impl AppState {
                     let project_info =
                         api::project::release_project_mutex(&self.api_info(), active_project.id())
                             .await?;
+                    self.update_local_project(project_info).await?;
                 }
                 self.init_internal(app_handle).await;
             }
@@ -203,7 +189,8 @@ impl AppState {
     pub fn get_active_project_status(&self) -> Option<ProjectStatus> {
         let active_project_id = self.get_active_project_id()?;
         let project_lock = self.project_info.lock().unwrap();
-        let project_manager = project_lock.get(&active_project_id)?;
+        let project_info = project_lock.get(&active_project_id)?;
+        let project_manager = ProjectManager::initialize_from_info(project_info.clone());
         Some(project_manager.project_status())
     }
 
@@ -215,17 +202,15 @@ impl AppState {
             error!("No active project to save");
             return Err(Error::NoProjectSelected);
         };
-        let mut project_manager = self
-            .project_info
-            .lock()
-            .unwrap()
-            .get(&project_id)
-            .ok_or(Error::NoProjectSelected)?
-            .clone();
+        let project_info = self
+            .get_project_info(project_id)
+            .ok_or(Error::NoProjectSelected)?;
+        let mut project_manager = ProjectManager::initialize_from_info(project_info);
         let api_info = self.api_info();
         let result = project_manager
             .save_local_changes(&api_info, commit_message)
             .await?;
+        self.update_local_project_from_server(project_id).await?;
         project_manager.update_local_copies(&api_info).await?;
         Ok(result)
     }
@@ -246,7 +231,7 @@ impl AppState {
             .lock()
             .unwrap()
             .values()
-            .map(|p| p.project_status())
+            .map(|p| ProjectManager::initialize_from_info(p.clone()).project_status())
             .collect();
         let user_email = self.api_info().email().map(|s| s.to_string());
         let active_project_id = self.get_active_project_id();
@@ -333,8 +318,9 @@ impl AppState {
         let api_info = self.api_info();
         match api::project::fetch_projects(&api_info).await {
             Ok(projects) => {
+                self.clear_local_projects();
                 for project in projects.clone() {
-                    self.update_local_project_info(&api_info, project).await?;
+                    self.update_local_project(project).await?;
                 }
                 Ok(projects)
             }
@@ -423,5 +409,20 @@ impl AppState {
                 loading_state
             }
         }
+    }
+
+    fn set_project_info(&self, project_info: ProjectInfo) {
+        let mut project_lock = self.project_info.lock().unwrap();
+        project_lock.insert(project_info.id, project_info);
+    }
+
+    fn get_project_info(&self, project_id: Uuid) -> Option<ProjectInfo> {
+        let project_lock = self.project_info.lock().unwrap();
+        project_lock.get(&project_id).cloned()
+    }
+
+    fn clear_local_projects(&self) {
+        let mut project_lock = self.project_info.lock().unwrap();
+        project_lock.clear();
     }
 }

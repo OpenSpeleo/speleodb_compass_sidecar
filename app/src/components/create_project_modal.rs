@@ -106,8 +106,8 @@ pub fn create_project_modal(props: &CreateProjectModalProps) -> Html {
                     )
                     .await
                 {
-                    Ok(project) => {
-                        info!("Project created successfully: {}", project.id);
+                    Ok(()) => {
+                        info!("Project created successfully");
                         is_submitting.set(false);
                     }
                     Err(e) => {

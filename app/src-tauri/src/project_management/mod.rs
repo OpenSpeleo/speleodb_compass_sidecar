@@ -129,7 +129,6 @@ impl ProjectManager {
         self.update_project().await?;
         // Clean up temp zip file regardless of success or failure
         std::fs::remove_file(&zip_file).ok();
-        self.update_local_copies(api_info).await?;
         Ok(save_result)
     }
 

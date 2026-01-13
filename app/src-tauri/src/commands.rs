@@ -2,7 +2,7 @@ use crate::{
     paths::compass_project_working_path, project_management::LocalProject, state::AppState,
     user_prefs::UserPrefs,
 };
-use common::{Error, api_types::ProjectSaveResult};
+use common::{Error, api_types::ProjectSaveResult, ui_state::ProjectInfo};
 use log::info;
 use std::process::Command;
 use tauri::{AppHandle, Manager, State, Url};
@@ -188,6 +188,7 @@ pub async fn create_project(
     )
     .await?;
     let id = project_info.id;
+    app_state.update_local_project(project_info).await?;
     app_state.set_active_project(Some(id), &app_handle).await?;
     Ok(())
 }
