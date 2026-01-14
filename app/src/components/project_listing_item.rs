@@ -3,7 +3,10 @@ use wasm_bindgen_futures::spawn_local;
 use yew::{Callback, Html, Properties, classes, function_component, html};
 use yew_icons::{Icon, IconData};
 
-use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
+use crate::{
+    speleo_db_controller::SPELEO_DB_CONTROLLER,
+    ui_constants::{COLOR_ALARM, COLOR_BLUE, COLOR_GOOD, COLOR_GREY, COLOR_WARN, FONT_COLOR_BLUE},
+};
 
 #[derive(Properties, PartialEq)]
 pub struct ProjectListingItemProps {
@@ -18,12 +21,12 @@ pub fn project_listing_item_layout(
         user_email,
     }: &ProjectListingItemProps,
 ) -> Html {
-    let color_warn = "#ff7f00";
-    let color_alarm = "#ff6b6b";
-    let color_good = "#51cf66";
-    let color_blue = "#228be6";
-    let color_grey = "#868e96";
-    let font_color_blue = "#2c3e50";
+    let color_warn = COLOR_WARN;
+    let color_alarm = COLOR_ALARM;
+    let color_good = COLOR_GOOD;
+    let color_blue = COLOR_BLUE;
+    let color_grey = COLOR_GREY;
+    let font_color_blue = FONT_COLOR_BLUE;
 
     let project_id = project.id();
     let project_status = project.local_status().clone();
