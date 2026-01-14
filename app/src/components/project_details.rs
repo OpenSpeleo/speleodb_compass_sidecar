@@ -11,25 +11,25 @@
 use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use common::api_types::ProjectSaveResult;
-use common::ui_state::{LocalProjectStatus, UiState};
+use common::ui_state::{LocalProjectStatus, ProjectStatus};
 use log::info;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct ProjectDetailsProps {
-    pub ui_state: UiState,
+    pub project: ProjectStatus,
+    pub user_email: String,
 }
 
 #[function_component(ProjectDetails)]
-pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsProps) -> Html {
-    let selected_project_id = ui_state.selected_project_id.unwrap();
-    let selected_project = ui_state
-        .project_status
-        .iter()
-        .find(|p| (*p).id() == selected_project_id)
-        .unwrap();
-    let is_dirty = use_state(|| selected_project.is_dirty());
+pub fn project_details(
+    ProjectDetailsProps {
+        project,
+        user_email,
+    }: &ProjectDetailsProps,
+) -> Html {
+    let is_dirty = project.is_dirty();
     let initialized = use_state(|| false);
 
     let downloading = use_state(|| false);
@@ -42,22 +42,20 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
     let show_empty_project_modal = use_state(|| false);
     let error_message: UseStateHandle<Option<String>> = use_state(|| None);
     let upload_error: UseStateHandle<Option<String>> = use_state(|| None);
-    let is_readonly = use_state(|| false);
+    let is_readonly = project.active_mutex().is_some()
+        && &project.active_mutex().as_ref().unwrap().user != user_email
+        || project.permission() == "READ_ONLY";
     let download_complete = use_state(|| false);
     let commit_message = use_state(String::new);
     let commit_message_error = use_state(|| false);
+    let show_back_button = is_readonly || (!is_dirty);
 
     // On mount: Check if we need to show any modals based on project status
     if !*initialized {
         // On mount, check if the project is read-only
-        if selected_project.active_mutex().is_some()
-            && &selected_project.active_mutex().as_ref().unwrap().user
-                != ui_state.user_email.as_ref().unwrap()
-            || selected_project.permission() == "READ_ONLY"
-        {
-            is_readonly.set(true);
+        if is_readonly {
             show_readonly_modal.set(true);
-        } else if let LocalProjectStatus::EmptyLocal = selected_project.local_status() {
+        } else if let LocalProjectStatus::EmptyLocal = project.local_status() {
             show_empty_project_modal.set(true);
         }
         initialized.set(true);
@@ -84,7 +82,7 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
         let show_readonly_modal = show_readonly_modal.clone();
 
         use_effect_with(download_complete.clone(), move |complete| {
-            if **complete && !*is_readonly && !*show_readonly_modal {
+            if **complete && !is_readonly && !*show_readonly_modal {
                 show_success_modal.set(true);
             }
             || ()
@@ -101,7 +99,7 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
 
     // Open folder handler
     let on_open_project = {
-        let project_id = selected_project.id();
+        let project_id = project.id();
         Callback::from(move |_: ()| {
             spawn_local(async move {
                 let _ = SPELEO_DB_CONTROLLER.open_project(project_id).await;
@@ -124,7 +122,7 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
 
     // Save Project Handler
     let on_save = {
-        let project_id = selected_project.id();
+        let project_id = project.id();
         let commit_message = commit_message.clone();
         let commit_message_error = commit_message_error.clone();
         let uploading = uploading.clone();
@@ -180,7 +178,7 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
     let on_import_from_disk = {
         let show_empty_project_modal = show_empty_project_modal.clone();
         let error_message = error_message.clone();
-        let project_id = selected_project.id();
+        let project_id = project.id();
         Callback::from(move |_: ()| {
             let show_empty_project_modal = show_empty_project_modal.clone();
             let error_message = error_message.clone();
@@ -214,7 +212,23 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
     html! {
         <section style="width:100%;">
             <div style="width: 100%; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-                <button style="background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;opacity: disabled ? 0.5 : 1;" onclick={on_back_click} disabled={*is_dirty}>{"← Back to Projects"}</button>
+                {if show_back_button {
+                    html!(
+                    <button style="background-color: #10b981;
+                        color: white;
+                        border: none;
+                        padding: 8px 16px;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-weight: 500;
+                        opacity: disabled ? 0.5 : 1;"
+                        onclick={on_back_click} disabled={is_dirty}>
+                        {"← Back to Projects"}
+                    </button>
+                    )
+                } else {
+                    html!(<div></div>)
+                }}
                 <button
                     onclick={on_open_project.reform(|_| ())}
                     style=" color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
@@ -223,8 +237,8 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
                 </button>
             </div>
 
-            <h2><strong>{"Project: "}</strong>{&selected_project.name()}</h2>
-            <p style="color: #6b7280; font-size: 14px;">{format!("ID: {}", selected_project.id())}</p>
+            <h2><strong>{"Project: "}</strong>{&project.name()}</h2>
+            <p style="color: #6b7280; font-size: 14px;">{format!("ID: {}", project.id())}</p>
 
             {
                 if *downloading {
@@ -269,7 +283,7 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
             }
 
             {
-                if *is_readonly {
+                if is_readonly {
                     html! {
                         <div style="
                             padding: 12px 16px;
@@ -285,11 +299,11 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
                         </div>
                     }
                 } else {
-                    if *is_dirty {
+                    if is_dirty {
                     // Commit Section (Only if write access)
                         html! {
                             <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e5e7eb;">
-                                <h3 style="margin-bottom: 12px;">{"📝 Commit Changes"}</h3>
+                                <h3 style="margin-bottom: 12px;">{"Compass project has changes. Before you can go back, you need to describe and save your work."}</h3>
                                 <div style="margin-bottom: 16px;
                                 display: flex; flex-direction: column;">
                                     <textarea
@@ -300,7 +314,7 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
                                         placeholder="Describe your changes (max 255 characters)"
                                         maxlength="255"
                                         style={format!(
-                                            "max-width: 100%; flex: 1; padding: 8px; border: 1px solid {}; border-radius: 4px; font-family: inherit;",
+                                            "max-width: 94vw; flex: 1; padding: 8px; border: 1px solid {}; border-radius: 4px; font-family: inherit;",
                                             if *commit_message_error { "#ef4444" } else { "#d1d5db" }
                                         )}
                                     />
@@ -320,7 +334,7 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
                                 <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
                                     <button
                                         onclick={on_save}
-                                        disabled={ !*is_dirty || *uploading}
+                                        disabled={ !is_dirty || *uploading}
                                         style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: disabled ? 0.5 : 1;"
                                     >
                                         {if *uploading { "Saving..." } else { "Save Project" }}
@@ -364,7 +378,7 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
                             - the project is currently locked by another user, or
                             - you do not have permission to edit the project\n\n\
                             Contact a Project Administrator if you believe this is a mistake.",
-                            selected_project.name()
+                            project.name()
                         )}
                         modal_type={ModalType::Warning}
                         show_close_button={true}

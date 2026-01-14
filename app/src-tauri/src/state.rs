@@ -73,7 +73,6 @@ impl AppState {
                     log::info!("App state already initialized",);
                     self.emit_app_state_change();
                     self.set_initializing(false);
-                    #[cfg(not(debug_assertions))]
                     if self.background_task_handle.lock().unwrap().is_none() {
                         let app_handle = app_handle.clone();
                         let join_handle = tauri::async_runtime::spawn(async move {
@@ -187,7 +186,7 @@ impl AppState {
                         info!("Project lock grabbed successfully");
                         self.update_local_project(info).await?;
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         warn!(
                             "Failed to grab lock for project: {project_id}, opening as read-only"
                         );
