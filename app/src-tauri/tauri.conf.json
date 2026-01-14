@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "speleodb-compass-sidecar",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "identifier": "com.speleodb-compass-sidecar",
   "build": {
     "beforeDevCommand": "trunk serve",
@@ -42,7 +42,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZGNjVFOURFQzExRDk2RTkKUldUcGxoM0IzdWxsYndXL1Ryd0Q5ZmJ0OUFoT0YxQXdRVnhKS3VmOUZ0K09Vbk1FZ2JIcXMzKzAK",
       "endpoints": [
-        "https://github.com/user/repo/releases/latest/download/latest.json"
+        "https://github.com/OpenSpeleo/speleodb_compass_sidecar/releases/latest/download/latest.json"
       ]
     }
   }
