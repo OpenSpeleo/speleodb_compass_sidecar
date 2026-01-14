@@ -8,13 +8,14 @@ use common::{
         UI_STATE_NOTIFICATION_KEY, UiState,
     },
 };
-use log::{error, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use std::{collections::HashMap, sync::Mutex, time::Duration};
 use tauri::{
     AppHandle, Emitter, Manager,
     async_runtime::JoinHandle,
     menu::{MenuBuilder, MenuItem, Submenu, SubmenuBuilder},
 };
+use tauri_plugin_updater::{Update, UpdaterExt};
 use uuid::Uuid;
 
 const PROJECT_INFO_UPDATE_INTERVAL: Duration = Duration::from_secs(120); //  update the list of projects status every 2 minutes
@@ -295,17 +296,34 @@ impl AppState {
         state
     }
 
-    async fn check_for_updates(&self) -> Result<bool, Error> {
+    async fn check_for_update(&self) -> Result<Option<Update>, Error> {
         info!("Checking for app updates");
-        //TODO: Implement update checking logic
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        // For now, just return false to indicate no updates available
-        Ok(false)
+        let app_handle = self.app_handle()?;
+        Ok(match app_handle.updater().unwrap().check().await {
+            Ok(update) => update,
+            Err(e) => {
+                warn!("Failed to check for updates: {}", e);
+                None
+            }
+        })
     }
 
-    async fn update_app(&self) -> Result<(), Error> {
+    async fn update_app(&self, update: Update) -> Result<(), Error> {
         info!("Updating application");
-        Ok(())
+        update
+            .download_and_install(
+                |chunk_len, content_len| {
+                    if let Some(content_len) = content_len {
+                        let progress = chunk_len as f64 / content_len as f64;
+                        debug!("Download progress: {:.2}%", progress * 100.0);
+                    }
+                },
+                || info!("Download finished"),
+            )
+            .await
+            .unwrap();
+        let app_handle = self.app_handle().unwrap();
+        app_handle.restart()
     }
 
     fn load_user_preferences(&self) -> UserPrefs {
@@ -365,12 +383,14 @@ impl AppState {
         let sec_delay = 0;
         match loading_state {
             LoadingState::NotStarted => self.set_loading_state(LoadingState::CheckingForUpdates),
-            LoadingState::CheckingForUpdates => match self.check_for_updates().await {
-                Ok(update_available) => {
-                    if update_available {
+            LoadingState::CheckingForUpdates => match self.check_for_update().await {
+                Ok(update) => {
+                    if let Some(update) = update {
                         log::info!("Update available, upating...");
                         tokio::time::sleep(std::time::Duration::from_secs(sec_delay)).await;
-                        self.set_loading_state(LoadingState::Updating)
+                        let loading_state = self.set_loading_state(LoadingState::Updating);
+                        self.update_app(update).await.unwrap();
+                        loading_state
                     } else {
                         log::info!("No updates available, attempting to load user preferences");
                         tokio::time::sleep(Duration::from_secs(sec_delay)).await;
@@ -381,18 +401,6 @@ impl AppState {
                     log::warn!("Failed to check for updates: {}", e);
                     tokio::time::sleep(Duration::from_secs(sec_delay)).await;
                     self.set_loading_state(LoadingState::Failed(e))
-                }
-            },
-            LoadingState::Updating => match self.update_app().await {
-                Ok(_) => {
-                    log::info!("Update successful, loading user preferences");
-                    tokio::time::sleep(std::time::Duration::from_secs(sec_delay)).await;
-                    self.set_loading_state(LoadingState::LoadingPrefs)
-                }
-                Err(e) => {
-                    log::warn!("Failed to update application: {}", e);
-                    tokio::time::sleep(std::time::Duration::from_secs(sec_delay)).await;
-                    self.set_loading_state(LoadingState::LoadingPrefs)
                 }
             },
             LoadingState::LoadingPrefs => {

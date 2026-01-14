@@ -47,3 +47,6 @@ flexi_logger = "0.31"
 
 [dev-dependencies]
 serial_test = "3"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
