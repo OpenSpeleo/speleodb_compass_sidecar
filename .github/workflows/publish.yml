@@ -1,9 +1,9 @@
-name: 'publish'
+name: "publish"
 
 on:
   push:
     tags:
-      - '*'
+      - "*"
 
 concurrency:
   group: ${{ github.head_ref || github.run_id }}
@@ -30,8 +30,8 @@ jobs:
           #   args: '--target x86_64-apple-darwin'
           # - platform: 'ubuntu-22.04' # for Tauri v1 you could replace this with ubuntu-20.04.
           #   args: ''
-          - platform: 'windows-latest'
-            args: ''
+          - platform: "windows-latest"
+            args: ""
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -51,7 +51,7 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          workspaces: "./src-tauri -> target"
           cache-on-failure: true
 
       # Cache cargo binaries (tauri-cli and trunk) - this saves ~25 minutes
@@ -74,12 +74,10 @@ jobs:
       - uses: tauri-apps/tauri-action@action-v0.6.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUSTC_WRAPPER: sccache
-          SCCACHE_GHA_ENABLED: true
         with:
           tagName: app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
-          releaseName: 'App v__VERSION__'
-          releaseBody: 'See the assets to download this version and install.'
+          releaseName: "App v__VERSION__"
+          releaseBody: "See the assets to download this version and install."
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

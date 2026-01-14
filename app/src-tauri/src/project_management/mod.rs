@@ -13,7 +13,7 @@ use common::{
     api_types::{CommitInfo, ProjectInfo},
     ui_state::{LocalProjectStatus, ProjectSaveResult, ProjectStatus},
 };
-use log::{error, info};
+use log::{debug, error, info};
 use std::{
     fs::{File, copy, create_dir_all, read_dir},
     path::Path,
@@ -85,7 +85,7 @@ impl ProjectManager {
             _ => {}
         }
 
-        info!(
+        debug!(
             "Project: {} - status: {:?} - locked: {}",
             self.project_info.name,
             self.local_project_status(),

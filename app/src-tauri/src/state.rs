@@ -13,7 +13,7 @@ use std::{collections::HashMap, sync::Mutex, time::Duration};
 use tauri::{
     AppHandle, Emitter, Manager,
     async_runtime::JoinHandle,
-    menu::{MenuBuilder, MenuItem},
+    menu::{MenuBuilder, MenuItem, Submenu, SubmenuBuilder},
 };
 use uuid::Uuid;
 
@@ -112,16 +112,13 @@ impl AppState {
             let menu = if prefs.api_info().oauth_token().is_none() {
                 MenuBuilder::new(&app_handle).build().unwrap()
             } else {
-                let sign_out = MenuItem::with_id(
-                    &app_handle,
-                    "sign_out",
-                    &"Sign Out".to_string(),
-                    true,
-                    Some(""),
-                )
-                .unwrap();
+                let submenu = SubmenuBuilder::new(&app_handle, "Account")
+                    .submenu_native_icon(tauri::menu::NativeIcon::UserAccounts)
+                    .text("sign_out", "Sign Out")
+                    .build()
+                    .unwrap();
                 MenuBuilder::new(&app_handle)
-                    .item(&sign_out)
+                    .item(&submenu)
                     .build()
                     .unwrap()
             };
