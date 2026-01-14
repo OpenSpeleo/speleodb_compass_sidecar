@@ -2,6 +2,7 @@ mod app;
 mod components;
 mod error;
 mod speleo_db_controller;
+mod ui_constants;
 
 use app::App;
 pub use error::Error;
