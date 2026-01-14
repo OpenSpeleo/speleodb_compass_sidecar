@@ -76,7 +76,13 @@ impl LocalProject {
                 if index_copy == working_copy {
                     // No changes at the map level, now check the files
                     let index_project = LocalProject::load_index_compass_project(id)?;
-                    let working_project = LocalProject::load_working_copy_compass_project(id)?;
+                    // Compass likes to leave projects in invalid states while editing them.
+                    // If the working project fails to load, then some things have been changed but not others.
+                    let working_project = match LocalProject::load_working_copy_compass_project(id)
+                    {
+                        Ok(project) => project,
+                        Err(_) => return Ok(true),
+                    };
                     if index_project == working_project {
                         trace!(
                             "No changes detected between: {:?} and {:?}",

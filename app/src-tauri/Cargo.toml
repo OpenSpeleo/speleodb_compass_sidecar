@@ -1,7 +1,7 @@
 [package]
 name = "speleodb-compass-sidecar"
 version = "0.0.5"
-description = "A Tauri App"
+description = "Companion app to use SpeleoDB with Compass"
 authors = ["Jonathan Dekhtiar", "Zachary Heylmun"]
 edition = "2024"
 

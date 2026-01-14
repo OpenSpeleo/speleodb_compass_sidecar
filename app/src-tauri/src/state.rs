@@ -13,7 +13,7 @@ use std::{collections::HashMap, sync::Mutex, time::Duration};
 use tauri::{
     AppHandle, Emitter, Manager,
     async_runtime::JoinHandle,
-    menu::{MenuBuilder, MenuItem, Submenu, SubmenuBuilder},
+    menu::{MenuBuilder, SubmenuBuilder},
 };
 use tauri_plugin_updater::{Update, UpdaterExt};
 use uuid::Uuid;
@@ -336,7 +336,7 @@ impl AppState {
         user_prefs
     }
 
-    async fn authenticate_user(&self, app_handle: &AppHandle) -> Result<(), String> {
+    async fn authenticate_user(&self) -> Result<(), String> {
         let api_info = self.api_info();
         info!("Authenticating user");
         let Some(token) = api_info.oauth_token() else {
@@ -417,7 +417,7 @@ impl AppState {
             }
             LoadingState::Authenticating => {
                 tokio::time::sleep(Duration::from_secs(sec_delay)).await;
-                match self.authenticate_user(app_handle).await {
+                match self.authenticate_user().await {
                     Ok(_) => self.set_loading_state(LoadingState::LoadingProjects),
                     Err(e) => {
                         // TODO:: Handle different authentication errors appropriately

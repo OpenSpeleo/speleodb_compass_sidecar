@@ -4,7 +4,6 @@ use crate::{
 };
 use common::{Error, api_types::ProjectSaveResult};
 use log::info;
-use std::process::Command;
 use tauri::{AppHandle, Manager, State, Url};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
