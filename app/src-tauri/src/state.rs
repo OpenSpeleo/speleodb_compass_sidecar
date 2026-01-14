@@ -21,6 +21,7 @@ const PROJECT_INFO_UPDATE_INTERVAL: Duration = Duration::from_secs(120); //  upd
 const LOCAL_STATUS_CHECK_INTERVAL: Duration = Duration::from_secs(1); // check local project status and compass state every second
 
 pub struct AppState {
+    app_handle: Mutex<Option<AppHandle>>,
     initializing: Mutex<bool>,
     loading_state: Mutex<LoadingState>,
     api_info: Mutex<ApiInfo>,
@@ -35,6 +36,7 @@ pub struct AppState {
 impl AppState {
     pub fn new() -> Self {
         Self {
+            app_handle: Mutex::new(None),
             initializing: Mutex::new(false),
             loading_state: Mutex::new(LoadingState::NotStarted),
             api_info: Mutex::new(ApiInfo::default()),
@@ -50,6 +52,10 @@ impl AppState {
     /// Asynchronously initialize the application state.
     pub async fn init_app_state(&self, app_handle: &AppHandle) {
         info!("Initializing app state");
+        if self.app_handle.lock().unwrap().is_none() {
+            info!("Storing app handle in app state");
+            *self.app_handle.lock().unwrap() = Some(app_handle.clone());
+        }
         if self.initializing() {
             return;
         }
@@ -64,7 +70,7 @@ impl AppState {
                 }
                 LoadingState::Unauthenticated | LoadingState::Ready => {
                     log::info!("App state already initialized",);
-                    self.emit_app_state_change(app_handle);
+                    self.emit_app_state_change();
                     self.set_initializing(false);
                     if self.background_task_handle.lock().unwrap().is_none() {
                         let app_handle = app_handle.clone();
@@ -80,6 +86,14 @@ impl AppState {
         }
     }
 
+    fn app_handle(&self) -> Result<AppHandle, Error> {
+        self.app_handle
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or(Error::NoAppHandle)
+    }
+
     pub fn api_info(&self) -> ApiInfo {
         self.api_info.lock().unwrap().clone()
     }
@@ -88,11 +102,12 @@ impl AppState {
         *self.api_info.lock().unwrap() = api_info;
     }
 
-    pub fn update_user_prefs(&self, prefs: UserPrefs, app: &AppHandle) -> Result<(), Error> {
+    pub fn update_user_prefs(&self, prefs: UserPrefs) -> Result<(), Error> {
+        let app_handle = self.app_handle()?;
         info!("Updating user preferences");
         prefs.save()?;
         self.set_api_info(prefs.api_info().clone());
-        let app_handle = app.clone();
+        let app_handle = app_handle.clone();
         tauri::async_runtime::spawn(async move {
             let menu = if prefs.api_info().oauth_token().is_none() {
                 MenuBuilder::new(&app_handle).build().unwrap()
@@ -112,14 +127,16 @@ impl AppState {
             };
             app_handle.set_menu(menu).unwrap();
         });
-        self.emit_app_state_change(app);
+        self.emit_app_state_change();
 
         Ok(())
     }
 
-    pub async fn authenticated(&self, app_handle: &AppHandle) -> () {
-        self.set_loading_state(LoadingState::LoadingProjects, app_handle);
-        self.init_app_state(app_handle).await;
+    pub async fn authenticated(&self) -> () {
+        if let Ok(app_handle) = self.app_handle() {
+            self.set_loading_state(LoadingState::LoadingProjects);
+            self.init_app_state(&app_handle).await;
+        }
     }
 
     pub fn sign_out(&self, app_handle: &AppHandle) -> Result<(), Error> {
@@ -132,7 +149,7 @@ impl AppState {
             let user_prefs = ApiInfo::default();
             *self.api_info.lock().unwrap() = user_prefs;
         }
-        self.set_loading_state(LoadingState::NotStarted, app_handle);
+        self.set_loading_state(LoadingState::NotStarted);
         tauri::async_runtime::spawn({
             let app_handle = app_handle.clone();
             async move {
@@ -168,14 +185,14 @@ impl AppState {
             let project_info =
                 api::project::acquire_project_mutex(&self.api_info(), project_id).await?;
             *self.active_project.lock().unwrap() = Some(project_id);
-            self.emit_app_state_change(app_handle);
+            self.emit_app_state_change();
             self.update_local_project(project_info).await?;
-            self.emit_app_state_change(app_handle);
+            self.emit_app_state_change();
         } else {
             if let Some(active_project) = self.get_active_project_status() {
                 *self.active_project.lock().unwrap() = None;
-                self.set_loading_state(LoadingState::LoadingProjects, app_handle);
-                self.emit_app_state_change(app_handle);
+                self.set_loading_state(LoadingState::LoadingProjects);
+                self.emit_app_state_change();
                 if let LocalProjectStatus::Dirty = active_project.local_status() {
                     warn!("Refusing to release project mutex for dirty project");
                 } else {
@@ -231,12 +248,12 @@ impl AppState {
     }
 
     #[cfg(target_os = "windows")]
-    pub fn set_compass_pid(&self, pid: Option<u32>, app_handle: &AppHandle) {
+    pub fn set_compass_pid(&self, pid: Option<u32>) {
         *self.compass_pid.lock().unwrap() = pid;
-        self.emit_app_state_change(app_handle);
+        self.emit_app_state_change();
     }
 
-    pub fn emit_app_state_change(&self, app_handle: &AppHandle) {
+    pub fn emit_app_state_change(&self) {
         let loading_state = self.loading_state();
         let project_info = self
             .project_info
@@ -255,9 +272,11 @@ impl AppState {
             active_project_id,
             compass_is_open,
         );
-        app_handle
-            .emit(UI_STATE_NOTIFICATION_KEY, &ui_state)
-            .unwrap();
+        if let Ok(app_handle) = self.app_handle() {
+            app_handle
+                .emit(UI_STATE_NOTIFICATION_KEY, &ui_state)
+                .unwrap();
+        }
     }
 
     fn initializing(&self) -> bool {
@@ -273,9 +292,9 @@ impl AppState {
     }
 
     /// Internal function used to update loading state and emit state change event.
-    fn set_loading_state(&self, state: LoadingState, app_handle: &AppHandle) -> LoadingState {
+    fn set_loading_state(&self, state: LoadingState) -> LoadingState {
         *self.loading_state.lock().unwrap() = state.clone();
-        self.emit_app_state_change(app_handle);
+        self.emit_app_state_change();
         state
     }
 
@@ -292,10 +311,10 @@ impl AppState {
         Ok(())
     }
 
-    fn load_user_preferences(&self, app_handle: &AppHandle) -> UserPrefs {
+    fn load_user_preferences(&self) -> UserPrefs {
         info!("Loading user preferences");
         let user_prefs = UserPrefs::load().unwrap_or_default();
-        self.update_user_prefs(user_prefs.clone(), app_handle)
+        self.update_user_prefs(user_prefs.clone())
             .unwrap_or_else(|e| {
                 log::warn!("Failed to save loaded user preferences: {}", e);
             });
@@ -313,7 +332,7 @@ impl AppState {
             Ok(api_info) => {
                 log::info!("User authenticated successfully");
                 let prefs = UserPrefs::new(api_info);
-                if self.update_user_prefs(prefs, app_handle).is_err() {
+                if self.update_user_prefs(prefs).is_err() {
                     log::warn!("Failed to save user preferences after authentication");
                 }
                 Ok(())
@@ -348,59 +367,57 @@ impl AppState {
         let loading_state = self.loading_state();
         let sec_delay = 0;
         match loading_state {
-            LoadingState::NotStarted => {
-                self.set_loading_state(LoadingState::CheckingForUpdates, app_handle)
-            }
+            LoadingState::NotStarted => self.set_loading_state(LoadingState::CheckingForUpdates),
             LoadingState::CheckingForUpdates => match self.check_for_updates().await {
                 Ok(update_available) => {
                     if update_available {
                         log::info!("Update available, upating...");
                         tokio::time::sleep(std::time::Duration::from_secs(sec_delay)).await;
-                        self.set_loading_state(LoadingState::Updating, app_handle)
+                        self.set_loading_state(LoadingState::Updating)
                     } else {
                         log::info!("No updates available, attempting to load user preferences");
                         tokio::time::sleep(Duration::from_secs(sec_delay)).await;
-                        self.set_loading_state(LoadingState::LoadingPrefs, app_handle)
+                        self.set_loading_state(LoadingState::LoadingPrefs)
                     }
                 }
                 Err(e) => {
                     log::warn!("Failed to check for updates: {}", e);
                     tokio::time::sleep(Duration::from_secs(sec_delay)).await;
-                    self.set_loading_state(LoadingState::Failed(e), app_handle)
+                    self.set_loading_state(LoadingState::Failed(e))
                 }
             },
             LoadingState::Updating => match self.update_app().await {
                 Ok(_) => {
                     log::info!("Update successful, loading user preferences");
                     tokio::time::sleep(std::time::Duration::from_secs(sec_delay)).await;
-                    self.set_loading_state(LoadingState::LoadingPrefs, app_handle)
+                    self.set_loading_state(LoadingState::LoadingPrefs)
                 }
                 Err(e) => {
                     log::warn!("Failed to update application: {}", e);
                     tokio::time::sleep(std::time::Duration::from_secs(sec_delay)).await;
-                    self.set_loading_state(LoadingState::LoadingPrefs, app_handle)
+                    self.set_loading_state(LoadingState::LoadingPrefs)
                 }
             },
             LoadingState::LoadingPrefs => {
-                let prefs = self.load_user_preferences(app_handle);
+                let prefs = self.load_user_preferences();
                 if let Some(_token) = prefs.api_info().oauth_token() {
                     info!("User prefs found, attempting to authenticate user");
                     tokio::time::sleep(Duration::from_secs(sec_delay)).await;
-                    self.set_loading_state(LoadingState::Authenticating, app_handle)
+                    self.set_loading_state(LoadingState::Authenticating)
                 } else {
                     info!("No user prefs found, starting unauthenticated");
                     tokio::time::sleep(Duration::from_secs(sec_delay)).await;
-                    self.set_loading_state(LoadingState::Unauthenticated, app_handle)
+                    self.set_loading_state(LoadingState::Unauthenticated)
                 }
             }
             LoadingState::Authenticating => {
                 tokio::time::sleep(Duration::from_secs(sec_delay)).await;
                 match self.authenticate_user(app_handle).await {
-                    Ok(_) => self.set_loading_state(LoadingState::LoadingProjects, app_handle),
+                    Ok(_) => self.set_loading_state(LoadingState::LoadingProjects),
                     Err(e) => {
                         // TODO:: Handle different authentication errors appropriately
                         log::warn!("Authentication failed: {}", e);
-                        self.set_loading_state(LoadingState::Unauthenticated, app_handle)
+                        self.set_loading_state(LoadingState::Unauthenticated)
                     }
                 }
             }
@@ -409,11 +426,11 @@ impl AppState {
                 match self.load_user_projects().await {
                     Ok(_) => {
                         log::info!("User projects loaded successfully, app is ready");
-                        self.set_loading_state(LoadingState::Ready, app_handle)
+                        self.set_loading_state(LoadingState::Ready)
                     }
                     Err(e) => {
                         log::warn!("Failed to load user projects: {}", e);
-                        self.set_loading_state(LoadingState::Failed(e), app_handle)
+                        self.set_loading_state(LoadingState::Failed(e))
                     }
                 }
             }
@@ -452,7 +469,7 @@ impl AppState {
                 trace!("Background task: updating project info from API");
                 match app_state.load_user_projects().await {
                     Ok(_) => {
-                        app_state.emit_app_state_change(app_handle);
+                        app_state.emit_app_state_change();
                     }
                     Err(e) => {
                         error!("Background task: failed to update project info: {}", e);
@@ -483,7 +500,7 @@ impl AppState {
                         );
                     }
                 }
-                app_state.emit_app_state_change(app_handle);
+                app_state.emit_app_state_change();
                 *app_state.last_status_check.lock().unwrap() = chrono::Utc::now();
             }
             tokio::time::sleep(Duration::from_secs(1)).await;

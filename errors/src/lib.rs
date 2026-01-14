@@ -58,4 +58,6 @@ pub enum Error {
     CompassExecutable(String),
     #[error("Compass Project Error: {0}")]
     CompassProject(String),
+    #[error("No app handle available")]
+    NoAppHandle,
 }

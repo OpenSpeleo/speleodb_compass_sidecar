@@ -43,9 +43,9 @@ pub async fn auth_request(
     let prefs = UserPrefs::new(api_info);
     let app_state = app_handle.state::<AppState>();
     app_state
-        .update_user_prefs(prefs, &app_handle)
+        .update_user_prefs(prefs)
         .map_err(|e| e.to_string())?;
-    app_state.authenticated(&app_handle).await;
+    app_state.authenticated().await;
     Ok(())
 }
 
@@ -108,7 +108,7 @@ pub fn open_project(_app_state: State<'_, AppState>, project_id: Uuid) -> Result
             }
         }?;
         let pid = child_process.id();
-        _app_state.set_compass_process_pid(Some(pid));
+        _app_state.set_compass_pid(Some(pid));
         Ok(())
     }
 }
