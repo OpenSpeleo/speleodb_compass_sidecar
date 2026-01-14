@@ -25,7 +25,7 @@ pub fn main_layout(&MainLayoutProps { ref ui_state }: &MainLayoutProps) -> Html 
                     <h1 class={classes!("vertically-centered-text")} >{"SpeleoDB Compass Sidecar"}</h1>
                 </div>
             </header>
-            <section>
+            <section style="width:100%;">
                 {
                     if let Some(_selected_project_id) = &ui_state.selected_project_id {
                         // let email:String = ui_state.user_email.unwrap_or_default().to_string();

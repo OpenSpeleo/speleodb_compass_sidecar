@@ -47,7 +47,6 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
     let commit_message = use_state(String::new);
     let commit_message_error = use_state(|| false);
 
-
     // On mount: Check if we need to show any modals based on project status
     if !*initialized {
         // On mount, check if the project is read-only
@@ -214,13 +213,13 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
 
     html! {
         <section style="width:100%;">
-            <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-                <button onclick={on_back_click}>{"← Back to Projects"}</button>
+            <div style="width: 100%; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                <button style="background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;" onclick={on_back_click}>{"← Back to Projects"}</button>
                 <button
                     onclick={on_open_project.reform(|_| ())}
                     style="background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
                 >
-                    {"🟢 Open Project"}
+                    {"Open Project"}
                 </button>
             </div>
 
@@ -292,15 +291,17 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
 
                         <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e5e7eb;">
                             <h3 style="margin-bottom: 12px;">{"📝 Commit Changes"}</h3>
-                            <div style="margin-bottom: 16px;">
-                                <input
+                            <div style="margin-bottom: 16px;
+                            display: flex;">
+                                <textarea
+                                    rows="4"
                                     type="text"
                                     value={(*commit_message).clone()}
                                     oninput={onchange_message}
-                                    placeholder="Describe your changes..."
+                                    placeholder="Describe your changes (max 255 characters)"
                                     maxlength="255"
                                     style={format!(
-                                        "width: 100%; padding: 8px; border: 1px solid {}; border-radius: 4px; font-family: inherit;",
+                                        "max-width: 100%; flex: 1; padding: 8px; border: 1px solid {}; border-radius: 4px; font-family: inherit;",
                                         if *commit_message_error { "#ef4444" } else { "#d1d5db" }
                                     )}
                                 />
@@ -308,7 +309,7 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
                                     if *commit_message_error {
                                         html! {
                                             <p style="color: #ef4444; font-size: 12px; margin-top: 4px;">
-                                                {"Please enter a commit message."}
+                                                {"Please, enter a commit message."}
                                             </p>
                                         }
                                     } else {
