@@ -83,6 +83,7 @@ pub fn ensure_compass_project_dirs_exist(project_id: Uuid) -> Result<PathBuf, Er
 ///
 /// `level` is a string like "info", "debug", etc. If initialization fails, the error is returned.
 pub fn init_file_logger(level: &str) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(not(test))]
     pretty_env_logger::init();
     // Make sure the directory exists.
     std::fs::create_dir_all(&*COMPASS_HOME_DIR)?;

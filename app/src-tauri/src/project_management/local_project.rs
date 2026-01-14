@@ -339,13 +339,9 @@ mod test {
     #[serial]
     fn test_project_import() {
         let id = Uuid::new_v4();
-        let project = LocalProject::import_compass_project(
-            id,
-            &PathBuf::from_str("assets/test_data/Fulfords.mak").unwrap(),
-        )
-        .unwrap();
-        let serialized_project =
-            toml::to_string_pretty(&project).expect("Failed to serialize imported project");
-        println!("Imported project: {:?}", serialized_project);
+        let crate_dir = env!("CARGO_MANIFEST_DIR");
+        let mak_path = PathBuf::from_str(&format!("{}/assets/test_data/Fulfords.mak", crate_dir))
+            .expect("Failed to create path to test .mak file");
+        LocalProject::import_compass_project(id, &mak_path).unwrap();
     }
 }
