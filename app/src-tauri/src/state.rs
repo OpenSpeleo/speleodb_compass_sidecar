@@ -73,6 +73,7 @@ impl AppState {
                     log::info!("App state already initialized",);
                     self.emit_app_state_change();
                     self.set_initializing(false);
+                    #[cfg(not(debug_assertions))]
                     if self.background_task_handle.lock().unwrap().is_none() {
                         let app_handle = app_handle.clone();
                         let join_handle = tauri::async_runtime::spawn(async move {

@@ -214,7 +214,7 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
     html! {
         <section style="width:100%;">
             <div style="width: 100%; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-                <button style="background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;" onclick={on_back_click} disabled={*is_dirty}>{"← Back to Projects"}</button>
+                <button style="background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;opacity: disabled ? 0.5 : 1;" onclick={on_back_click} disabled={*is_dirty}>{"← Back to Projects"}</button>
                 <button
                     onclick={on_open_project.reform(|_| ())}
                     style=" color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
@@ -285,70 +285,72 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
                         </div>
                     }
                 } else {
+                    if *is_dirty {
                     // Commit Section (Only if write access)
-                    html! {
-
-                        <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e5e7eb;">
-                            <h3 style="margin-bottom: 12px;">{"📝 Commit Changes"}</h3>
-                            <div style="margin-bottom: 16px;
-                            display: flex; flex-direction: column;">
-                                <textarea
-                                    rows="4"
-                                    type="text"
-                                    value={(*commit_message).clone()}
-                                    oninput={onchange_message}
-                                    placeholder="Describe your changes (max 255 characters)"
-                                    maxlength="255"
-                                    style={format!(
-                                        "max-width: 100%; flex: 1; padding: 8px; border: 1px solid {}; border-radius: 4px; font-family: inherit;",
-                                        if *commit_message_error { "#ef4444" } else { "#d1d5db" }
-                                    )}
-                                />
+                        html! {
+                            <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e5e7eb;">
+                                <h3 style="margin-bottom: 12px;">{"📝 Commit Changes"}</h3>
+                                <div style="margin-bottom: 16px;
+                                display: flex; flex-direction: column;">
+                                    <textarea
+                                        rows="4"
+                                        type="text"
+                                        value={(*commit_message).clone()}
+                                        oninput={onchange_message}
+                                        placeholder="Describe your changes (max 255 characters)"
+                                        maxlength="255"
+                                        style={format!(
+                                            "max-width: 100%; flex: 1; padding: 8px; border: 1px solid {}; border-radius: 4px; font-family: inherit;",
+                                            if *commit_message_error { "#ef4444" } else { "#d1d5db" }
+                                        )}
+                                    />
+                                    {
+                                        if *commit_message_error {
+                                            html! {
+                                                <div>
+                                                <p style="color: #ef4444; font-size: 12px; margin-top: 4px;">
+                                                    {"Please, enter a commit message."}
+                                                </p></div>
+                                            }
+                                        } else {
+                                            html! {}
+                                        }
+                                    }
+                                </div>
+                                <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
+                                    <button
+                                        onclick={on_save}
+                                        disabled={ !*is_dirty || *uploading}
+                                        style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: disabled ? 0.5 : 1;"
+                                    >
+                                        {if *uploading { "Saving..." } else { "Save Project" }}
+                                    </button>
+                                    <button
+                                        onclick={
+                                            let show_reload_confirm = show_reload_confirm.clone();
+                                            move |_| show_reload_confirm.set(true)
+                                        }
+                                        style="background-color: #f3f4f6; color: #1f2937; border: 1px solid #d1d5db; padding: 8px 16px; border-radius: 4px; cursor: pointer;opacity: disabled ? 0.5 : 1;"
+                                    >
+                                        {"Reload Project"}
+                                    </button>
+                                </div>
                                 {
-                                    if *commit_message_error {
+                                    if let Some(err) = &*upload_error {
                                         html! {
-                                            <div>
-                                            <p style="color: #ef4444; font-size: 12px; margin-top: 4px;">
-                                                {"Please, enter a commit message."}
-                                            </p></div>
+                                            <div style="margin-top: 12px; color: #dc2626; font-size: 14px; text-align: center;">
+                                                {format!("Error: {}", err)}
+                                            </div>
                                         }
                                     } else {
                                         html! {}
                                     }
                                 }
                             </div>
-                            <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
-                                <button
-                                    onclick={on_save}
-                                    disabled={ *is_dirty}
-                                    style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: disabled ? 0.5 : 1;"
-                                >
-                                    {if *uploading { "Saving..." } else { "Save Project" }}
-                                </button>
-                                <button
-                                    onclick={
-                                        let show_reload_confirm = show_reload_confirm.clone();
-                                        move |_| show_reload_confirm.set(true)
-                                    }
-                                    style="background-color: #f3f4f6; color: #1f2937; border: 1px solid #d1d5db; padding: 8px 16px; border-radius: 4px; cursor: pointer;"
-                                >
-                                    {"Reload Project"}
-                                </button>
-                            </div>
-                            {
-                                if let Some(err) = &*upload_error {
-                                    html! {
-                                        <div style="margin-top: 12px; color: #dc2626; font-size: 14px; text-align: center;">
-                                            {format!("Error: {}", err)}
-                                        </div>
-                                    }
-                                } else {
-                                    html! {}
-                                }
-                            }
-                        </div>
+                        }
+                    } else {
+                        html!{<></>}
                     }
-
                 }
             }
             {
