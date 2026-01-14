@@ -161,11 +161,6 @@ impl SpeleoDBController {
             .await
             .map_err(|e| e.to_string())
     }
-    // pub async fn sign_out(&self) -> Result<(), String> {
-    //     let args = UnitArgs::new();
-    //     let _: () = invoke("sign_out", &args).await.unwrap();
-    //     Ok(())
-    // }
 }
 
 pub static SPELEO_DB_CONTROLLER: Lazy<SpeleoDBController> = Lazy::new(|| SpeleoDBController {});
