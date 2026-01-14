@@ -58,6 +58,8 @@ pub fn open_project(_app_state: State<'_, AppState>, project_id: Uuid) -> Result
     // Just open the folder in system file explorer
     #[cfg(target_os = "macos")]
     {
+        use std::process::Command;
+
         Command::new("open")
             .arg(&project_dir)
             .spawn()

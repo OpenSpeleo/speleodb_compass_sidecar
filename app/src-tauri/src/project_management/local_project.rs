@@ -92,8 +92,8 @@ impl LocalProject {
                         Ok(false)
                     } else {
                         warn!("Detected changes between loaded compass projects for: {id}");
-                        info!("Index project: {:#?}", index_project);
-                        info!("Working project: {:#?}", working_project);
+                        trace!("Index project: {:#?}", index_project);
+                        trace!("Working project: {:#?}", working_project);
                         // Changes detected
                         Ok(true)
                     }
