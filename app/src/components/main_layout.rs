@@ -1,12 +1,7 @@
 use common::ui_state::UiState;
-use log::{error, info};
-use wasm_bindgen_futures::spawn_local;
-use yew::{Callback, Html, Properties, classes, function_component, html};
+use yew::{Html, Properties, classes, function_component, html};
 
-use crate::{
-    components::{project_details::ProjectDetails, project_listing::ProjectListing},
-    speleo_db_controller::SPELEO_DB_CONTROLLER,
-};
+use crate::components::{project_details::ProjectDetails, project_listing::ProjectListing};
 
 #[derive(Properties, PartialEq)]
 pub struct MainLayoutProps {
@@ -16,35 +11,18 @@ pub struct MainLayoutProps {
 #[function_component(MainLayout)]
 pub fn main_layout(&MainLayoutProps { ref ui_state }: &MainLayoutProps) -> Html {
     // Disconnect handler: clear OAuth token in prefs and form, reset UI to login
-    let on_disconnect = {
-        Callback::from(move |_| {
-            spawn_local(async move {
-                info!("Signing out...");
-                match SPELEO_DB_CONTROLLER.sign_out().await {
-                    Ok(_) => {
-                        info!("Signed out successfully.");
-                    }
-                    Err(e) => {
-                        error!("Error signing out: {}", e);
-                    }
-                }
-            });
-        })
-    };
+
     let ui_state = ui_state.clone();
     return html! {
         <main class="container">
             <header style="display:flex;
-                justify-content:space-between;
+                justify-content:space-around;
                 align-items:center;flex-direction: row;
                 margin-bottom:24px;
                 width:96vw;
             ">
                 <div>
                     <h1 class={classes!("vertically-centered-text")} >{"SpeleoDB Compass Sidecar"}</h1>
-                </div>
-                <div>
-                    <button style="background-color:red; color:white;" onclick={on_disconnect.clone()}>{ "Sign Out" }</button>
                 </div>
             </header>
             <section>
