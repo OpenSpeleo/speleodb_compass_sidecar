@@ -2,8 +2,8 @@
 //! allows users to open the project in compass(Or just the folder on non-windows platforms),
 //!  commit changes with a message, and jump back to the project list.
 //! TODO:
-//! [ ] Only enable back button if up-to-date or in read-only mode
-//! [ ] Show project_status indicating local changes
+//! [ ] Only enable back button if up-to-date (not dirty) or in read-only mode
+//! [ ] Show project_status indicating local change (whether read only or not, whether up to date or not, )
 //! [ ] Only show commit section if user has write access and local changes are present
 //! [ ] Investigate making files read-only when in read-only mode
 //! [ ] Show whether Compass is being tracked open on Windows
@@ -30,8 +30,8 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
         .find(|p| (*p).id() == selected_project_id)
         .unwrap();
     let is_dirty = use_state(|| selected_project.is_dirty());
-
     let initialized = use_state(|| false);
+
     let downloading = use_state(|| false);
     let uploading = use_state(|| false);
     let show_readonly_modal = use_state(|| false);
@@ -214,17 +214,16 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
     html! {
         <section style="width:100%;">
             <div style="width: 100%; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-                <button style="background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;" onclick={on_back_click}>{"← Back to Projects"}</button>
+                <button style="background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;" onclick={on_back_click} disabled={*is_dirty}>{"← Back to Projects"}</button>
                 <button
                     onclick={on_open_project.reform(|_| ())}
-                    style="background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
+                    style=" color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
                 >
-                    {"Open Project"}
+                    {"Open in Compass"}
                 </button>
             </div>
 
-            <h2>{"Project Details"}</h2>
-            <p><strong>{"Project: "}</strong>{&selected_project.name()}</p>
+            <h2><strong>{"Project: "}</strong>{&selected_project.name()}</h2>
             <p style="color: #6b7280; font-size: 14px;">{format!("ID: {}", selected_project.id())}</p>
 
             {
@@ -292,7 +291,7 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
                         <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e5e7eb;">
                             <h3 style="margin-bottom: 12px;">{"📝 Commit Changes"}</h3>
                             <div style="margin-bottom: 16px;
-                            display: flex;">
+                            display: flex; flex-direction: column;">
                                 <textarea
                                     rows="4"
                                     type="text"
@@ -308,9 +307,10 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
                                 {
                                     if *commit_message_error {
                                         html! {
+                                            <div>
                                             <p style="color: #ef4444; font-size: 12px; margin-top: 4px;">
                                                 {"Please, enter a commit message."}
-                                            </p>
+                                            </p></div>
                                         }
                                     } else {
                                         html! {}
@@ -320,7 +320,7 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
                             <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
                                 <button
                                     onclick={on_save}
-                                    disabled={ !*is_dirty}
+                                    disabled={ *is_dirty}
                                     style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: disabled ? 0.5 : 1;"
                                 >
                                     {if *uploading { "Saving..." } else { "Save Project" }}
@@ -358,9 +358,9 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
                         title="Read-Only Access"
                         message={format!(
                             "The project '{}' was opened in READ-ONLY mode.\n\n\
-                            Modifications to this project cannot be saved because one of the following:\n\n\
-                            - the project is currently locked by another user\n\
-                            - you do not have edit permissions to the project\n\n\
+                            Modifications to this project cannot be saved because \n
+                            - the project is currently locked by another user, or
+                            - you do not have permission to edit the project\n\n\
                             Contact a Project Administrator if you believe this is a mistake.",
                             selected_project.name()
                         )}
