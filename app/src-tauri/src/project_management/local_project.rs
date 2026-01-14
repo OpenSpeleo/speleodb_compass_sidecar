@@ -184,7 +184,7 @@ impl LocalProject {
         }
         Ok(())
     }
-
+    #[cfg(target_os = "windows")]
     pub fn mak_file_path(id: Uuid) -> Result<PathBuf, Error> {
         let local_project = LocalProject::load_working_project(id)?;
         let mak_file_name = local_project

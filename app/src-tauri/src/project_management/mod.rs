@@ -36,10 +36,6 @@ impl ProjectManager {
         Self { project_info }
     }
 
-    pub fn update_project_info(&mut self, project_info: ProjectInfo) {
-        self.project_info = project_info;
-    }
-
     /// Get the project ID.
     pub fn id(&self) -> Uuid {
         self.project_info.id

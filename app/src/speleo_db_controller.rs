@@ -1,6 +1,6 @@
 // WASM controller now delegates network calls to native Tauri backend.
 use crate::{Error, invoke};
-use common::ui_state::{ProjectInfo, ProjectSaveResult};
+use common::ui_state::ProjectSaveResult;
 use log::{error, info};
 use once_cell::sync::Lazy;
 use serde::Serialize;

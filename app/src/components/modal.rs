@@ -5,7 +5,7 @@ pub enum ModalType {
     Info,
     Warning,
     Success,
-    Error,
+    //Error,
 }
 
 #[derive(Properties, PartialEq, Clone)]
@@ -30,7 +30,7 @@ pub fn modal(props: &ModalProps) -> Html {
         ModalType::Info => ("ℹ️", "#3b82f6"),
         ModalType::Warning => ("⚠️", "#f59e0b"),
         ModalType::Success => ("✅", "#10b981"),
-        ModalType::Error => ("❌", "#ef4444"),
+        //ModalType::Error => ("❌", "#ef4444"),
     };
 
     let close_handler = {

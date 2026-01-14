@@ -2,7 +2,7 @@ use crate::{
     paths::compass_project_working_path, project_management::LocalProject, state::AppState,
     user_prefs::UserPrefs,
 };
-use common::{Error, api_types::ProjectSaveResult, ui_state::ProjectInfo};
+use common::{Error, api_types::ProjectSaveResult};
 use log::info;
 use std::process::Command;
 use tauri::{AppHandle, Manager, State, Url};
@@ -107,6 +107,8 @@ pub fn open_project(_app_state: State<'_, AppState>, project_id: Uuid) -> Result
                 Err(Error::CompassExecutable(e.to_string()))
             }
         }?;
+        let pid = child_process.id();
+        _app_state.set_compass_process_pid(Some(pid));
         Ok(())
     }
 }

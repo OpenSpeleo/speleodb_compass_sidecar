@@ -230,6 +230,7 @@ impl AppState {
         self.compass_pid.lock().unwrap().is_some()
     }
 
+    #[cfg(target_os = "windows")]
     pub fn set_compass_pid(&self, pid: Option<u32>, app_handle: &AppHandle) {
         *self.compass_pid.lock().unwrap() = pid;
         self.emit_app_state_change(app_handle);
