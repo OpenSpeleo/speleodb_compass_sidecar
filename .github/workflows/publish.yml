@@ -71,7 +71,7 @@ jobs:
       - name: Install trunk and wasm-pack
         run: cargo binstall trunk wasm-pack
 
-      - uses: tauri-apps/tauri-action@action-v0.6.0
+      - uses: tauri-apps/tauri-action@action-v0.6.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
