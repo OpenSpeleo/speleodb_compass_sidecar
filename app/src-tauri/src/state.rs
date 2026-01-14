@@ -182,10 +182,18 @@ impl AppState {
         if let Some(project_id) = project_id {
             info!("Selecting: {project_id} as active project");
             let project_info =
-                api::project::acquire_project_mutex(&self.api_info(), project_id).await?;
+                match api::project::acquire_project_mutex(&self.api_info(), project_id).await {
+                    Ok(info) => {
+                        info!("Project lock grabbed successfully");
+                        self.update_local_project(info).await?;
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to grab lock for project: {project_id}, opening as read-only"
+                        );
+                    }
+                };
             *self.active_project.lock().unwrap() = Some(project_id);
-            self.emit_app_state_change();
-            self.update_local_project(project_info).await?;
             self.emit_app_state_change();
         } else {
             if let Some(active_project) = self.get_active_project_status() {
@@ -196,10 +204,20 @@ impl AppState {
                     warn!("Refusing to release project mutex for dirty project");
                 } else {
                     info!("Releasing mutex for clean active project");
-                    let project_info =
-                        api::project::release_project_mutex(&self.api_info(), active_project.id())
-                            .await?;
-                    self.update_local_project(project_info).await?;
+                    if let Some(active_mutex) = active_project.active_mutex()
+                        && let Some(email) = self.api_info().email()
+                        && active_mutex.user == email
+                    {
+                        info!("Active mutex owned by current user, releasing");
+                        let project_info = api::project::release_project_mutex(
+                            &self.api_info(),
+                            active_project.id(),
+                        )
+                        .await?;
+                        self.update_local_project(project_info).await?;
+                    } else {
+                        warn!("Active mutex not owned by current user, skipping release");
+                    }
                 }
                 self.init_internal(app_handle).await;
             }
