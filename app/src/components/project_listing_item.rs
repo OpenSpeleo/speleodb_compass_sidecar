@@ -18,6 +18,13 @@ pub fn project_listing_item_layout(
         user_email,
     }: &ProjectListingItemProps,
 ) -> Html {
+    let color_warn = "#ff7f00";
+    let color_alarm = "#ff6b6b";
+    let color_good = "#51cf66";
+    let color_blue = "#228be6";
+    let color_grey = "#868e96";
+    let font_color_blue = "#2c3e50";
+
     let project_id = project.id();
     let project_status = project.local_status().clone();
     let on_card_click = Callback::from(move |_| {
@@ -30,26 +37,25 @@ pub fn project_listing_item_layout(
     });
     let project_permission = project.permission();
     let permission_color = match project_permission {
-        "ADMIN" => "#ff7f00",
-        "READ_AND_WRITE" => "#228be6",
-        _ => "#868e96",
+        "ADMIN" => color_warn,
+        "READ_AND_WRITE" => color_blue,
+        _ => color_grey,
     };
     let lock_color;
     let lock_status = if let Some(mutex) = project.active_mutex() {
         if &mutex.user == user_email {
-            lock_color = "#ff7f00";
+            lock_color = color_warn;
             //return user locked version
             "🔒 by me"
         } else {
-            lock_color = "#ff6b6b";
+            lock_color = color_alarm;
             // locked by other user
             &format!("🔒 by {}", mutex.user)
         }
     } else {
-        lock_color = "#51cf66";
+        lock_color = color_good;
         "🔓 editable"
     };
-    // let lock_color = if is_locked { "#ff6b6b" } else { "#51cf66" };
     fn truncate_str_by_chars(s: &str, max_chars: usize) -> &str {
         match s.char_indices().nth(max_chars) {
             None => s,                   // The string is shorter than the max length
@@ -57,11 +63,13 @@ pub fn project_listing_item_layout(
         }
     }
     let truncated_name = truncate_str_by_chars(project.name(), 25).to_string();
+    let mut icon_color = color_good;
     let icon_data = match project_status {
         common::ui_state::LocalProjectStatus::UpToDate => {
             IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_CHECK
         }
         common::ui_state::LocalProjectStatus::Dirty => {
+            icon_color = color_warn;
             IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_EXCLAMATION
         }
         common::ui_state::LocalProjectStatus::RemoteOnly => {
@@ -74,17 +82,19 @@ pub fn project_listing_item_layout(
             IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_PLUS
         }
         common::ui_state::LocalProjectStatus::OutOfDate => {
+            icon_color = font_color_blue;
             IconData::FONT_AWESOME_SOLID_FILE_ARROW_DOWN
         }
         common::ui_state::LocalProjectStatus::DirtyAndOutOfDate => {
+            icon_color = color_alarm;
             IconData::FONT_AWESOME_SOLID_FACE_SAD_CRY
         }
     };
     return html! {
         <div class={classes!("project-card")} onclick={on_card_click}>
-            <span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; display:flex; background-color; blue; color: #2c3e50; gap: 12px">
-                <Icon data={icon_data} style="font-size: 12px;"></Icon>
-                <h3 class={classes!("vertically-centered-text")} style="margin: 0; font-size: 16px; ">
+            <span style={format!("padding: 4px 8px; border-radius: 4px; font-size: 12px; display:flex; gap: 12px; color: {};",icon_color)}>
+                <Icon data={icon_data}></Icon>
+                <h3 class={classes!("vertically-centered-text")} style={format!("margin: 0; font-size: 16px; color: {};",font_color_blue)}>
                     { truncated_name }
                 </h3>
             </span>

@@ -23,6 +23,14 @@ pub struct ProjectDetailsProps {
 
 #[function_component(ProjectDetails)]
 pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsProps) -> Html {
+    let selected_project_id = ui_state.selected_project_id.unwrap();
+    let selected_project = ui_state
+        .project_status
+        .iter()
+        .find(|p| (*p).id() == selected_project_id)
+        .unwrap();
+    let is_dirty = use_state(|| selected_project.is_dirty());
+
     let initialized = use_state(|| false);
     let downloading = use_state(|| false);
     let uploading = use_state(|| false);
@@ -38,13 +46,7 @@ pub fn project_details(&ProjectDetailsProps { ref ui_state }: &ProjectDetailsPro
     let download_complete = use_state(|| false);
     let commit_message = use_state(String::new);
     let commit_message_error = use_state(|| false);
-    let selected_project_id = ui_state.selected_project_id.unwrap();
-    let selected_project = ui_state
-        .project_status
-        .iter()
-        .find(|p| (*p).id() == selected_project_id)
-        .unwrap();
-    let is_dirty = use_state(|| selected_project.is_dirty());
+
 
     // On mount: Check if we need to show any modals based on project status
     if !*initialized {
