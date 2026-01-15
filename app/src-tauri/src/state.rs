@@ -204,11 +204,9 @@ impl AppState {
                     && active_mutex.user == email
                 {
                     info!("Active mutex owned by current user, releasing");
-                    let project_info = api::project::release_project_mutex(
-                        &self.api_info(),
-                        active_project.id(),
-                    )
-                    .await?;
+                    let project_info =
+                        api::project::release_project_mutex(&self.api_info(), active_project.id())
+                            .await?;
                     self.update_local_project(project_info).await?;
                 } else {
                     warn!("Active mutex not owned by current user, skipping release");
