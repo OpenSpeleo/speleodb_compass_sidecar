@@ -4,6 +4,7 @@ use crate::{
 };
 use common::{Error, api_types::ProjectSaveResult};
 use log::info;
+use std::process::Command;
 use tauri::{AppHandle, Manager, State, Url};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
@@ -95,10 +96,7 @@ pub fn open_project(_app_state: State<'_, AppState>, project_id: Uuid) -> Result
         );
 
         // Open the .MAK file with Compass
-        let child_process = match std::process::Command::new(COMPASS_EXE)
-            .arg(&project_path)
-            .spawn()
-        {
+        let child_process = match Command::new(COMPASS_EXE).arg(&project_path).spawn() {
             Ok(child) => {
                 log::info!("Compass launched with PID: {}", child.id());
                 Ok(child)

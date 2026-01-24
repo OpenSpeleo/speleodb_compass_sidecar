@@ -61,7 +61,7 @@ impl ProjectManager {
         ProjectStatus::new(local_status, self.project_info.clone())
     }
 
-    pub async fn update_project(&mut self) -> Result<ProjectStatus, Error> {
+    pub async fn update_project(&mut self, api_info: &ApiInfo) -> Result<ProjectStatus, Error> {
         // Check local project status, and update if clean and out of date
         let project_status = self.local_project_status();
         match project_status {
@@ -80,7 +80,7 @@ impl ProjectManager {
                     "Local working copy for project {} is out of date, updating local copy",
                     self.project_info.name
                 );
-                self.update_local_copies(&ApiInfo::default()).await?;
+                self.update_local_copies(api_info).await?;
             }
             _ => {}
         }
@@ -122,7 +122,7 @@ impl ProjectManager {
         let save_result =
             api::project::upload_project_zip(api_info, self.id(), commit_message, &zip_file)
                 .await?;
-        self.update_project().await?;
+        self.update_project(api_info).await?;
         // Clean up temp zip file regardless of success or failure
         std::fs::remove_file(&zip_file).ok();
         Ok(save_result)
