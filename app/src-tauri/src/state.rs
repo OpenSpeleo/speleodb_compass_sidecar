@@ -9,7 +9,7 @@ use common::{
     },
 };
 use log::{debug, error, info, trace, warn};
-use std::{collections::HashMap, sync::Mutex, thread::sleep, time::Duration};
+use std::{collections::HashMap, sync::Mutex, time::Duration};
 use tauri::{
     AppHandle, Emitter, Manager,
     async_runtime::JoinHandle,
@@ -191,32 +191,30 @@ impl AppState {
             };
             *self.active_project.lock().unwrap() = Some(project_id);
             self.emit_app_state_change();
-        } else {
-            if let Some(active_project) = self.get_active_project_status() {
-                *self.active_project.lock().unwrap() = None;
-                self.set_loading_state(LoadingState::LoadingProjects);
-                self.emit_app_state_change();
-                if let LocalProjectStatus::Dirty = active_project.local_status() {
-                    warn!("Refusing to release project mutex for dirty project");
+        } else if let Some(active_project) = self.get_active_project_status() {
+            *self.active_project.lock().unwrap() = None;
+            self.set_loading_state(LoadingState::LoadingProjects);
+            self.emit_app_state_change();
+            if let LocalProjectStatus::Dirty = active_project.local_status() {
+                warn!("Refusing to release project mutex for dirty project");
+            } else {
+                info!("Releasing mutex for clean active project");
+                if let Some(active_mutex) = active_project.active_mutex()
+                    && let Some(email) = self.api_info().email()
+                    && active_mutex.user == email
+                {
+                    info!("Active mutex owned by current user, releasing");
+                    let project_info = api::project::release_project_mutex(
+                        &self.api_info(),
+                        active_project.id(),
+                    )
+                    .await?;
+                    self.update_local_project(project_info).await?;
                 } else {
-                    info!("Releasing mutex for clean active project");
-                    if let Some(active_mutex) = active_project.active_mutex()
-                        && let Some(email) = self.api_info().email()
-                        && active_mutex.user == email
-                    {
-                        info!("Active mutex owned by current user, releasing");
-                        let project_info = api::project::release_project_mutex(
-                            &self.api_info(),
-                            active_project.id(),
-                        )
-                        .await?;
-                        self.update_local_project(project_info).await?;
-                    } else {
-                        warn!("Active mutex not owned by current user, skipping release");
-                    }
+                    warn!("Active mutex not owned by current user, skipping release");
                 }
-                self.init_internal().await;
             }
+            self.init_internal().await;
         };
         Ok(())
     }
@@ -389,7 +387,7 @@ impl AppState {
             log::warn!("No OAuth token found in user preferences");
             return Err("No OAuth token found".to_string());
         };
-        match api::auth::authorize_with_token(api_info.instance().clone(), &token).await {
+        match api::auth::authorize_with_token(api_info.instance().clone(), token).await {
             Ok(api_info) => {
                 log::info!("User authenticated successfully");
                 let prefs = UserPrefs::new(api_info);

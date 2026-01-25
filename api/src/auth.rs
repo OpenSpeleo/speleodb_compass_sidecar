@@ -27,7 +27,7 @@ async fn handle_auth_response(
             Some(token_response.user),
             Some(token_response.token),
         );
-        return Ok(api_info);
+        Ok(api_info)
     } else {
         error!("Authorization failed with status: {}", status);
         Err(format!("Authorization failed with status: {}", status))

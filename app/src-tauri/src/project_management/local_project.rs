@@ -109,7 +109,7 @@ impl LocalProject {
                     "Index populated, but working copy doesn't exist when checking for changes"
                 );
             }
-        } else if let Some(_) = working_copy {
+        } else if working_copy.is_some() {
             // No index copy, but working copy exists, so dirty
             Ok(true)
         } else {
@@ -196,7 +196,7 @@ impl LocalProject {
         let mak_file_name = local_project
             .project_map
             .mak_file
-            .ok_or_else(|| Error::NoProjectData(id))?;
+            .ok_or(Error::NoProjectData(id))?;
         let mut mak_path = compass_project_working_path(id);
         mak_path.push(&mak_file_name);
         Ok(mak_path)
@@ -224,13 +224,7 @@ impl LocalProject {
 
     pub fn working_copy_exists(id: Uuid) -> bool {
         match LocalProject::load_working_project(id) {
-            Ok(working_copy) => {
-                if working_copy.project_map.mak_file.is_none() {
-                    false
-                } else {
-                    true
-                }
-            }
+            Ok(working_copy) => working_copy.project_map.mak_file.is_some(),
             Err(Error::ProjectNotFound(_)) => false,
             Err(e) => panic!("Error checking working copy existence: {}", e),
         }
@@ -238,13 +232,7 @@ impl LocalProject {
 
     pub fn index_exists(id: Uuid) -> bool {
         match LocalProject::load_index_project(id) {
-            Ok(index) => {
-                if index.project_map.mak_file.is_none() {
-                    false
-                } else {
-                    true
-                }
-            }
+            Ok(index) => index.project_map.mak_file.is_some(),
             Err(Error::ProjectNotFound(_)) => false,
             Err(e) => panic!("Error checking index existence: {}", e),
         }
@@ -274,9 +262,9 @@ impl LocalProject {
         let project_dir = compass_project_working_path(id);
 
         if let Some(mak_file_path) = working_copy.project_map.mak_file.as_ref() {
-            let mak_full_path = project_dir.join(&mak_file_path);
+            let mak_full_path = project_dir.join(mak_file_path);
             zip_writer
-                .start_file(&mak_file_path, options)
+                .start_file(mak_file_path, options)
                 .map_err(|e| Error::ZipFile(e.to_string()))?;
             let mak_contents =
                 std::fs::read(&mak_full_path).map_err(|e| Error::FileRead(e.to_string()))?;
@@ -288,7 +276,7 @@ impl LocalProject {
         for dat_path in working_copy.project_map.dat_files.iter() {
             let dat_full_path = project_dir.join(dat_path);
             zip_writer
-                .start_file(&dat_path, options)
+                .start_file(dat_path, options)
                 .map_err(|e| Error::ZipFile(e.to_string()))?;
             let dat_contents =
                 std::fs::read(&dat_full_path).map_err(|e| Error::FileRead(e.to_string()))?;
@@ -318,7 +306,7 @@ impl LocalProject {
         let mak_file_name = local_project
             .project_map
             .mak_file
-            .ok_or_else(|| Error::NoProjectData(id))?;
+            .ok_or(Error::NoProjectData(id))?;
         project_path.push(&mak_file_name);
         LocalProject::load_compass_project(&project_path)
     }
@@ -329,7 +317,7 @@ impl LocalProject {
         let mak_file_name = local_project
             .project_map
             .mak_file
-            .ok_or_else(|| Error::NoProjectData(id))?;
+            .ok_or(Error::NoProjectData(id))?;
         project_path.push(&mak_file_name);
         LocalProject::load_compass_project(&project_path)
     }

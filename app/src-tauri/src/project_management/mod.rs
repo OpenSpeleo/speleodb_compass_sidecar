@@ -49,7 +49,7 @@ impl ProjectManager {
     /// Get the latest remote revision as a `SpeleoDbProjectRevision`, if available.
     pub fn latest_remote_revision(&self) -> Option<SpeleoDbProjectRevision> {
         self.latest_remote_commit()
-            .map(|commit| SpeleoDbProjectRevision::from(commit))
+            .map(SpeleoDbProjectRevision::from)
     }
 
     pub fn local_revision(&self) -> Option<SpeleoDbProjectRevision> {
@@ -283,7 +283,7 @@ fn unpack_project_zip(project_id: Uuid, zip_bytes: Bytes) -> Result<(), Error> {
 
 fn cleanup_temp_zip(zip_path: &Path) {
     if zip_path.exists() {
-        if let Err(e) = std::fs::remove_file(&zip_path) {
+        if let Err(e) = std::fs::remove_file(zip_path) {
             log::warn!(
                 "Failed to delete temp zip file {}: {}",
                 zip_path.display(),

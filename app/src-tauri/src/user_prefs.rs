@@ -27,17 +27,9 @@ pub fn user_prefs_file_path() -> &'static Path {
 }
 
 /// User preferences structure
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct UserPrefs {
     api_info: ApiInfo,
-}
-
-impl Default for UserPrefs {
-    fn default() -> Self {
-        Self {
-            api_info: ApiInfo::default(),
-        }
-    }
 }
 
 impl UserPrefs {

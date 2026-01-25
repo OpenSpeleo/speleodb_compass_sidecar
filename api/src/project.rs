@@ -1,4 +1,4 @@
-use std::{panic, path::Path};
+use std::path::Path;
 
 use common::{
     ApiInfo,
@@ -30,15 +30,15 @@ pub async fn create_project(
     body.insert("description".to_string(), serde_json::json!(description));
     body.insert("country".to_string(), serde_json::json!(country));
     body.insert("type".to_string(), serde_json::json!(&ProjectType::Compass));
-    if let Some(lat) = latitude {
-        if !lat.is_empty() {
-            body.insert("latitude".to_string(), serde_json::json!(lat));
-        }
+    if let Some(lat) = latitude
+        && !lat.is_empty()
+    {
+        body.insert("latitude".to_string(), serde_json::json!(lat));
     }
-    if let Some(lon) = longitude {
-        if !lon.is_empty() {
-            body.insert("longitude".to_string(), serde_json::json!(lon));
-        }
+    if let Some(lon) = longitude
+        && !lon.is_empty()
+    {
+        body.insert("longitude".to_string(), serde_json::json!(lon));
     }
 
     let resp = client
@@ -278,7 +278,7 @@ pub async fn upload_project_zip(
     let url = format!("{}api/v1/projects/{}/upload/compass_zip/", base, project_id);
     let client = get_api_client();
     // Read ZIP file
-    let zip_bytes = std::fs::read(&zip_path).map_err(|e| Error::FileRead(e.to_string()))?;
+    let zip_bytes = std::fs::read(zip_path).map_err(|e| Error::FileRead(e.to_string()))?;
 
     // Create multipart form
     let part = reqwest::multipart::Part::bytes(zip_bytes)
