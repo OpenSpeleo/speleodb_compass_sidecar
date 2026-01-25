@@ -38,7 +38,6 @@ pub fn project_details(
     let uploading = use_state(|| false);
     let show_readonly_modal = use_state(|| false);
     let show_success_modal = use_state(|| false);
-    let show_reload_confirm = use_state(|| false);
     let show_upload_success = use_state(|| false);
     let show_no_changes_modal = use_state(|| false);
     let show_empty_project_modal = use_state(|| false);
@@ -352,24 +351,13 @@ pub fn project_details(
                                         }
                                     }
                                 </div>
-                                <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
-                                    <button
-                                        onclick={on_save}
-                                        disabled={ !is_dirty || *uploading}
-                                        style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: disabled ? 0.5 : 1;"
-                                    >
-                                        {if *uploading { "Saving..." } else { "Save Project" }}
-                                    </button>
-                                    <button
-                                        onclick={
-                                            let show_reload_confirm = show_reload_confirm.clone();
-                                            move |_| show_reload_confirm.set(true)
-                                        }
-                                        style="background-color: #f3f4f6; color: #1f2937; border: 1px solid #d1d5db; padding: 8px 16px; border-radius: 4px; cursor: pointer;opacity: disabled ? 0.5 : 1;"
-                                    >
-                                        {"Reload Project"}
-                                    </button>
-                                </div>
+                                <button
+                                    onclick={on_save}
+                                    disabled={ !is_dirty || *uploading}
+                                    style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: disabled ? 0.5 : 1;"
+                                >
+                                    {if *uploading { "Saving..." } else { "Save Project" }}
+                                </button>
                                 {
                                     if let Some(err) = &*upload_error {
                                         html! {
