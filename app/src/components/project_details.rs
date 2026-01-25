@@ -20,6 +20,7 @@ use yew::prelude::*;
 pub struct ProjectDetailsProps {
     pub project: ProjectStatus,
     pub user_email: String,
+    pub compass_open: bool,
 }
 
 #[function_component(ProjectDetails)]
@@ -27,6 +28,7 @@ pub fn project_details(
     ProjectDetailsProps {
         project,
         user_email,
+        compass_open,
     }: &ProjectDetailsProps,
 ) -> Html {
     let is_dirty = project.is_dirty();
@@ -48,7 +50,7 @@ pub fn project_details(
     let download_complete = use_state(|| false);
     let commit_message = use_state(String::new);
     let commit_message_error = use_state(|| false);
-    let show_back_button = is_readonly || (!is_dirty);
+    let show_back_button = !compass_open && (is_readonly || !is_dirty);
 
     // On mount: Check if we need to show any modals based on project status
     if !*initialized {
@@ -236,6 +238,25 @@ pub fn project_details(
                     {"Open in Compass"}
                 </button>
             </div>
+
+            {if *compass_open {
+                html! {
+                    <div style="
+                        padding: 12px 16px;
+                        background-color: #dbeafe;
+                        border-left: 4px solid #3b82f6;
+                        border-radius: 4px;
+                        margin-bottom: 16px;
+                    ">
+                        <strong style="color: #1e40af;">{"Compass is open"}</strong>
+                        <p style="color: #1e3a8a; margin-top: 4px; font-size: 14px;">
+                            {"Please close Compass before navigating back to prevent losing unsaved work."}
+                        </p>
+                    </div>
+                }
+            } else {
+                html! {}
+            }}
 
             <h2><strong>{"Project: "}</strong>{&project.name()}</h2>
             <p style="color: #6b7280; font-size: 14px;">{format!("ID: {}", project.id())}</p>
