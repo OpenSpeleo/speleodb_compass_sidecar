@@ -1,5 +1,5 @@
 use common::ui_state::UiState;
-use yew::{Html, Properties, classes, function_component, html, use_state};
+use yew::{Html, Properties, classes, function_component, html};
 
 use crate::components::{project_details::ProjectDetails, project_listing::ProjectListing};
 

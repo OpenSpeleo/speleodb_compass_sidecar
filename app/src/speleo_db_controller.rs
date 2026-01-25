@@ -7,16 +7,6 @@ use serde::Serialize;
 use url::Url;
 use uuid::Uuid;
 
-/// Empty struct for no-argument invocations.
-#[derive(Serialize)]
-struct UnitArgs {}
-
-impl UnitArgs {
-    fn new() -> Self {
-        Self {}
-    }
-}
-
 /// Struct for invocations that require only a project ID.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -34,8 +24,7 @@ pub struct SpeleoDBController {}
 
 impl SpeleoDBController {
     pub async fn ensure_initialized(&self) {
-        let args = UnitArgs::new();
-        let _: () = invoke("ensure_initialized", &args).await.unwrap();
+        let _: () = invoke("ensure_initialized", &()).await.unwrap();
     }
 
     pub async fn authenticate(

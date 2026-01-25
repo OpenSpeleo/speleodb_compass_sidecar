@@ -5,8 +5,6 @@ use crate::Error;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub const UI_STATE_NOTIFICATION_KEY: &str = "event::ui_state";
-
 /// The status of a local project in relation to its remote counterpart.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub enum LocalProjectStatus {

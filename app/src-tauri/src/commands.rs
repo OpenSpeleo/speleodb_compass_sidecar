@@ -10,10 +10,15 @@ use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
 
 #[tauri::command]
-pub async fn ensure_initialized(app_handle: AppHandle) {
+pub fn ensure_initialized(app_handle: AppHandle) {
     info!("Ensuring app is initialized");
     let app_state = app_handle.state::<AppState>();
-    app_state.init_app_state(&app_handle).await;
+    app_state.reset_ui_state();
+    // Spawn initialization on background task so command returns immediately
+    tauri::async_runtime::spawn(async move {
+        let app_state = app_handle.state::<AppState>();
+        app_state.init_app_state(&app_handle).await;
+    });
 }
 
 #[tauri::command]

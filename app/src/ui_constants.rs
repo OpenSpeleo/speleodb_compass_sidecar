@@ -1,5 +1,3 @@
-const SOME_COLOR: &str = "#000000";
-
 pub const COLOR_WARN: &str = "#ff7f00";
 pub const COLOR_ALARM: &str = "#ff6b6b";
 pub const COLOR_GOOD: &str = "#51cf66";

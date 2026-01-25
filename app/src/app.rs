@@ -2,53 +2,58 @@ use crate::{
     components::{auth_screen::AuthScreen, loading_screen::LoadingScreen, main_layout::MainLayout},
     speleo_db_controller::SPELEO_DB_CONTROLLER,
 };
-use common::ui_state::{LoadingState, UI_STATE_NOTIFICATION_KEY, UiState};
+use common::ui_state::{LoadingState, UiState};
 use futures::StreamExt;
 use log::info;
-use tauri_sys::event::listen;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
+/// Event key for UI state notifications (must match backend)
+const UI_STATE_EVENT: &str = "ui-state-update";
+
 #[function_component(App)]
 pub fn app() -> Html {
-    // UI state
-    let ui_state = use_state(|| UiState::default());
+    let ui_state = use_state(UiState::default);
 
-    let loading_state = (*ui_state).loading_state.clone();
-    use_effect(move || {
-        if let LoadingState::NotStarted = loading_state {
-            spawn_local(async { SPELEO_DB_CONTROLLER.ensure_initialized().await });
-        }
-    });
+    // Initialize app and subscribe to UI state updates via events
+    {
+        let ui_state = ui_state.clone();
+        use_effect_with((), move |_| {
+            spawn_local(async move {
+                // Listen for UI state events from backend
+                let mut event_stream = tauri_sys::event::listen::<UiState>(UI_STATE_EVENT)
+                    .await
+                    .expect("Failed to listen for UI state events");
 
-    // Listen for UI state updates from backend
-    let ui_state_clone = ui_state.clone();
-    spawn_local(async move {
-        let mut ui_event_stream = listen::<UiState>(UI_STATE_NOTIFICATION_KEY).await.unwrap();
-        while let Some(event) = ui_event_stream.next().await {
-            let updated_ui_state = event.payload;
-            info!("ui_state : {:?}", updated_ui_state);
-            ui_state_clone.set(updated_ui_state);
-        }
-    });
+                // Start initialization after listener is set up
+                SPELEO_DB_CONTROLLER.ensure_initialized().await;
+
+                // Process events as they arrive
+                while let Some(event) = event_stream.next().await {
+                    info!("ui_state: {:?}", event.payload);
+                    ui_state.set(event.payload);
+                }
+            });
+        });
+    }
 
     let loading_state = (*ui_state).loading_state.clone();
     match loading_state {
         LoadingState::Ready => {
-            return html! {
+            html! {
                 <MainLayout ui_state={(*ui_state).clone()}/>
-            };
+            }
         }
         LoadingState::Unauthenticated => {
-            return html! {
+            html! {
                <AuthScreen/>
-            };
+            }
         }
         // All other states occur on the loading screen
         _ => {
-            return html! {
+            html! {
                  <LoadingScreen loading_state={loading_state}/>
-            };
+            }
         }
     }
 }
