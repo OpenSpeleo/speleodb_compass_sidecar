@@ -82,7 +82,7 @@ impl AppState {
                     }
                     break;
                 }
-                _ => loading_state = self.init_internal(&app_handle).await,
+                _ => loading_state = self.init_internal().await,
             }
         }
     }
@@ -218,7 +218,7 @@ impl AppState {
                         warn!("Active mutex not owned by current user, skipping release");
                     }
                 }
-                self.init_internal(app_handle).await;
+                self.init_internal().await;
             }
         };
         Ok(())
@@ -267,6 +267,26 @@ impl AppState {
     pub fn set_compass_pid(&self, pid: Option<u32>) {
         *self.compass_pid.lock().unwrap() = pid;
         self.emit_app_state_change();
+    }
+
+    #[cfg(target_os = "windows")]
+    fn get_compass_pid(&self) -> Option<u32> {
+        *self.compass_pid.lock().unwrap()
+    }
+
+    /// Check if the Compass process is still running and update state if it has exited.
+    #[cfg(target_os = "windows")]
+    fn check_compass_process(&self) {
+        use sysinfo::System;
+
+        if let Some(pid) = self.get_compass_pid() {
+            let s = System::new_all();
+            let pid = sysinfo::Pid::from_u32(pid);
+            if s.process(pid).is_none() {
+                info!("Compass process (PID {}) has exited", pid);
+                self.set_compass_pid(None);
+            }
+        }
     }
 
     pub fn emit_app_state_change(&self) {
@@ -396,7 +416,7 @@ impl AppState {
         }
     }
 
-    async fn init_internal(&self, app_handle: &AppHandle) -> LoadingState {
+    async fn init_internal(&self) -> LoadingState {
         let loading_state = self.loading_state();
         let sec_delay = 0;
         match loading_state {
@@ -523,6 +543,8 @@ impl AppState {
                         );
                     }
                 }
+                #[cfg(target_os = "windows")]
+                app_state.check_compass_process();
                 app_state.emit_app_state_change();
                 *app_state.last_status_check.lock().unwrap() = chrono::Utc::now();
             }
