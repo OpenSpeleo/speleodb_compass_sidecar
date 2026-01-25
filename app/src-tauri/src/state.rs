@@ -314,7 +314,6 @@ impl AppState {
                 return;
             }
             *last_state = ui_state.clone();
-            sleep(Duration::from_millis(100));
         }
 
         if let Ok(app_handle) = self.app_handle() {
