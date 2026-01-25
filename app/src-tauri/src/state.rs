@@ -9,7 +9,7 @@ use common::{
     },
 };
 use log::{debug, error, info, trace, warn};
-use std::{collections::HashMap, sync::Mutex, time::Duration};
+use std::{collections::HashMap, sync::Mutex, thread::sleep, time::Duration};
 use tauri::{
     AppHandle, Emitter, Manager,
     async_runtime::JoinHandle,
@@ -32,6 +32,7 @@ pub struct AppState {
     background_task_handle: Mutex<Option<JoinHandle<()>>>,
     last_project_update: Mutex<DateTime<Utc>>,
     last_status_check: Mutex<DateTime<Utc>>,
+    last_emitted_ui_state: Mutex<UiState>,
 }
 
 impl AppState {
@@ -47,6 +48,7 @@ impl AppState {
             background_task_handle: Mutex::new(None),
             last_project_update: Mutex::new(chrono::Utc::now()),
             last_status_check: Mutex::new(chrono::Utc::now()),
+            last_emitted_ui_state: Mutex::new(UiState::default()),
         }
     }
 
@@ -165,7 +167,6 @@ impl AppState {
         let api_info = self.api_info();
         self.set_project_info(project_info.clone());
         let mut project = ProjectManager::initialize_from_info(project_info);
-        project.make_local(&api_info).await?;
         let project_status = project.update_project(&self.api_info()).await?;
         if let LocalProjectStatus::OutOfDate = project_status.local_status() {
             project.update_local_copies(&api_info).await?;
@@ -173,25 +174,21 @@ impl AppState {
         Ok(project_status)
     }
 
-    pub async fn set_active_project(
-        &self,
-        project_id: Option<Uuid>,
-        app_handle: &AppHandle,
-    ) -> Result<(), Error> {
+    pub async fn set_active_project(&self, project_id: Option<Uuid>) -> Result<(), Error> {
         if let Some(project_id) = project_id {
             info!("Selecting: {project_id} as active project");
-            let project_info =
-                match api::project::acquire_project_mutex(&self.api_info(), project_id).await {
-                    Ok(info) => {
-                        info!("Project lock grabbed successfully");
-                        self.update_local_project(info).await?;
-                    }
-                    Err(_e) => {
-                        warn!(
-                            "Failed to grab lock for project: {project_id}, opening as read-only"
-                        );
-                    }
-                };
+
+            match api::project::acquire_project_mutex(&self.api_info(), project_id).await {
+                Ok(info) => {
+                    info!("Project lock grabbed successfully");
+                    let project = ProjectManager::initialize_from_info(info.clone());
+                    project.make_local(&self.api_info()).await?;
+                    self.update_local_project(info).await?;
+                }
+                Err(_e) => {
+                    warn!("Failed to grab lock for project: {project_id}, opening as read-only");
+                }
+            };
             *self.active_project.lock().unwrap() = Some(project_id);
             self.emit_app_state_change();
         } else {
@@ -308,10 +305,22 @@ impl AppState {
             active_project_id,
             compass_is_open,
         );
+        // Scope to limit the lock duration
+        {
+            // Only emit if the state has actually changed to avoid Tauri crash on rapid events
+            let mut last_state = self.last_emitted_ui_state.lock().unwrap();
+            if *last_state == ui_state {
+                trace!("UI state unchanged, skipping emit");
+                return;
+            }
+            *last_state = ui_state.clone();
+            sleep(Duration::from_millis(100));
+        }
+
         if let Ok(app_handle) = self.app_handle() {
             app_handle
                 .emit(UI_STATE_NOTIFICATION_KEY, &ui_state)
-                .unwrap();
+                .expect("Expected to update UI successfully");
         }
     }
 

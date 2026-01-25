@@ -145,16 +145,14 @@ pub async fn import_compass_project(app_handle: AppHandle, project_id: Uuid) -> 
 pub async fn set_active_project(app_handle: AppHandle, project_id: Uuid) -> Result<(), Error> {
     info!("Setting active project: {project_id}");
     let app_state = app_handle.state::<AppState>();
-    app_state
-        .set_active_project(Some(project_id), &app_handle)
-        .await
+    app_state.set_active_project(Some(project_id)).await
 }
 
 #[tauri::command]
 pub async fn clear_active_project(app_handle: AppHandle) -> Result<(), Error> {
     info!("Clearing active project");
     let app_state = app_handle.state::<AppState>();
-    app_state.set_active_project(None, &app_handle).await
+    app_state.set_active_project(None).await
 }
 
 #[tauri::command]
@@ -190,6 +188,6 @@ pub async fn create_project(
     .await?;
     let id = project_info.id;
     app_state.update_local_project(project_info).await?;
-    app_state.set_active_project(Some(id), &app_handle).await?;
+    app_state.set_active_project(Some(id)).await?;
     Ok(())
 }

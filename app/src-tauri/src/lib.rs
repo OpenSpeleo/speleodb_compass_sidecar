@@ -14,7 +14,8 @@ use crate::{
     state::AppState,
 };
 use semver::Version;
-use tauri::Manager;
+use tauri::{Manager, WindowEvent};
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 const SPELEODB_COMPASS_VERSION: Version = Version::new(0, 0, 1);
 
@@ -66,6 +67,21 @@ pub fn run() {
                 }
             });
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let app_state = window.state::<AppState>();
+                if app_state.compass_is_open() {
+                    log::info!("Window close prevented: Compass is still open");
+                    api.prevent_close();
+                    window
+                        .dialog()
+                        .message("Please close Compass before exiting to prevent losing unsaved work.")
+                        .title("Compass is Open")
+                        .kind(MessageDialogKind::Warning)
+                        .blocking_show();
+                }
+            }
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
