@@ -6,7 +6,7 @@ use common::{
     ui_state::{LoadingState, LocalProjectStatus, ProjectSaveResult, ProjectStatus, UiState},
 };
 use log::{debug, error, info, trace, warn};
-use std::{collections::HashMap, sync::Mutex, time::Duration};
+use std::{collections::HashMap, sync::Mutex, thread, time::Duration};
 use tauri::{
     AppHandle, Emitter, Manager,
     async_runtime::JoinHandle,
@@ -304,6 +304,7 @@ impl AppState {
 
     pub async fn emit_app_state_change(&self) {
         let _emit_lock = self.emit_mutex.lock().await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
         let loading_state = self.loading_state();
         // Clone project info while holding lock briefly, then release before doing I/O
         let mut projects: Vec<ProjectInfo> = match self.project_info.lock() {
@@ -368,14 +369,15 @@ impl AppState {
                 return;
             }
         };
-        tokio::task::yield_now().await;
+        thread::sleep(Duration::from_millis(1));
         // Emit event to frontend
         if let Err(e) = app_handle.emit_str(UI_STATE_EVENT, serialized) {
             error!("Failed to emit UI state event: {}", e);
         } else {
             trace!("UI state event emitted successfully");
         }
-        tokio::task::yield_now().await;
+        // What if we block the OS thread here and let the webview catch up?
+        thread::sleep(Duration::from_millis(1));
     }
 
     fn initializing(&self) -> bool {
