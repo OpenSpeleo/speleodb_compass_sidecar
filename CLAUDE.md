@@ -54,56 +54,113 @@ cargo test -- --test-threads=1
 
 ## Workspace Structure
 
-Five Cargo workspace members:
+Five Cargo workspace members (resolver v3, Rust edition 2024):
 
 - **api/** - SpeleoDB REST API client (auth, project CRUD, mutex acquire/release)
-- **app/** - Yew WASM frontend (components, IPC to backend)
-- **app/src-tauri/** - Tauri backend (commands, state management, Compass integration)
-- **common/** - Shared types (ApiInfo, ProjectInfo, UiState, LoadingState)
+- **app/** - Yew WASM frontend (`speleodb-compass-sidecar-ui`, components + IPC to backend)
+- **app/src-tauri/** - Tauri backend (`speleodb-compass-sidecar`, commands, state management, Compass integration)
+- **common/** - Shared types (ApiInfo, OauthToken, ProjectInfo, UiState, LoadingState, LocalProjectStatus)
 - **errors/** - Single Error enum with ~30 variants, serializable for frontend
+
+Workspace dependencies defined in root `Cargo.toml`: bytes, log, serde, serde_json, thiserror, tokio, toml, url, uuid.
 
 ## Architecture
 
 ### Data Flow
 
-1. **Authentication**: Frontend calls `auth_request` command → backend calls api crate → credentials stored in `~/.speleodb_compass/api_info.toml`
+1. **Authentication**: Frontend calls `auth_request` command → backend calls api crate → credentials stored in `~/.compass/user_prefs.json` (TOML format, 0o600 permissions on Unix)
 
-2. **Project Sync**: Backend fetches from SpeleoDB API → compares with local `.revision.txt` files → emits LocalProjectStatus (RemoteOnly, UpToDate, OutOfDate, Dirty, etc.)
+2. **Project Sync**: Backend fetches from SpeleoDB API → compares with local `.revision.txt` files → emits LocalProjectStatus (RemoteOnly, EmptyLocal, UpToDate, OutOfDate, Dirty, DirtyAndOutOfDate)
 
-3. **Compass Launch**: Backend acquires project mutex via API → launches comp32.exe (Windows) → monitors process → releases mutex when Compass closes
+3. **Compass Launch**: Backend acquires project mutex via API → launches wcomp32.exe (Windows) → monitors process via sysinfo crate → releases mutex when Compass closes. On macOS/Linux, opens the project folder in the system file explorer instead.
+
+4. **Background Tasks**: `AppState` runs a background async task polling every 120s for remote project updates and every 1s for local status changes (including Compass process monitoring on Windows).
 
 ### Key Files
 
 **Backend (app/src-tauri/src/)**
-- `commands.rs` - Tauri commands exposed to frontend
-- `state.rs` - AppState with background tasks (project status updates every 120s)
-- `project_management/mod.rs` - ProjectManager for local project operations
+- `lib.rs` - Tauri app setup: plugins (updater, dialog), command registration, window close prevention if Compass is open, menu with sign-out, Sentry init
+- `commands.rs` - Tauri commands: `ensure_initialized`, `auth_request`, `sign_out`, `open_project`, `save_project`, `import_compass_project`, `set_active_project`, `clear_active_project`, `release_project_mutex`, `create_project`
+- `state.rs` - `AppState` with Mutex-protected fields (api_info, project_info HashMap, active_project, compass_pid, loading_state), background task, `emit_app_state_change()` to push `UiState` to frontend via `UI_STATE_EVENT`
+- `paths.rs` - Path constants and helpers: `~/.compass/` home dir, `~/.compass/projects/{uuid}/index` and `working_copy` layout, file logger setup
+- `user_prefs.rs` - `UserPrefs` persistence: load/save TOML credentials, env var fallback for tests (`TEST_SPELEODB_INSTANCE`, `TEST_SPELEODB_OAUTH`)
+- `project_management/mod.rs` - `ProjectManager`: local status detection, project download/upload, mutex management
+- `project_management/local_project.rs` - `LocalProject`: Compass file handling (`.MAK`, `.DAT`, `.PLT`), dirty detection (index vs working_copy), ZIP packing, project import via `compass_data` crate
+- `project_management/revision.rs` - `.revision.txt` read/write for tracking synced commit hash
 
 **Frontend (app/src/)**
-- `speleo_db_controller.rs` - Wrapper for Tauri IPC calls
-- `components/project_details.rs` - Main project view
-- `components/auth_screen.rs` - Login UI
+- `main.rs` - WASM entry: panic hook, wasm_logger, renders `App`
+- `app.rs` - Root component: subscribes to `UI_STATE_EVENT`, calls `ensure_initialized()`, routes to AuthScreen / MainLayout / LoadingScreen based on `LoadingState`
+- `speleo_db_controller.rs` - `SpeleoDBController` singleton wrapping Tauri `invoke()` calls with input validation (OAuth = 40 hex chars)
+- `error.rs` - Frontend `Error` enum (Command, Serde variants)
+- `ui_constants.rs` - Color palette constants (warn, alarm, good, blue, grey)
+- `components/mod.rs` - Module declarations for all components
+- `components/auth_screen.rs` - Login UI with OAuth token and email/password tabs, instance URL dropdown (stage/production)
+- `components/main_layout.rs` - Two-pane authenticated layout: project listing + project details, header with user email and sign-out
+- `components/project_listing.rs` - Scrollable project list from `UiState.project_status`
+- `components/project_listing_item.rs` - Individual project row with status indicator
+- `components/project_details.rs` - Project detail view: open in Compass, download, commit form, read-only indicator, mutex status
+- `components/create_project_modal.rs` - New project form (name, description, country, coordinates)
+- `components/loading_screen.rs` - Loading state display with status text
+- `components/modal.rs` - Generic modal component (Success, Error, Info, Warning, Confirmation types)
 
 **API (api/src/)**
-- `auth.rs` - OAuth and email/password authentication
-- `project.rs` - Project operations including mutex handling
+- `lib.rs` - Module declarations, global HTTP client (`reqwest`) with 10s timeout
+- `auth.rs` - `authorize_with_token()` and `authorize_with_email()` against SpeleoDB API
+- `project.rs` - `create_project()`, `fetch_project_info()`, `acquire_project_mutex()`, `release_project_mutex()`
+
+**Common (common/src/)**
+- `lib.rs` - Re-exports, conditional `API_BASE_URL` (stage in debug, production in release)
+- `api_info.rs` - `ApiInfo` (instance URL, email, oauth_token), `OauthToken` newtype
+- `api_types.rs` - `ProjectInfo`, `CommitInfo`, `ProjectType` (ARIANE, COMPASS), `ProjectSaveResult`
+- `ui_state.rs` - `UiState`, `LoadingState`, `LocalProjectStatus`, `ProjectStatus`, `Platform`
+
+**Errors (errors/src/)**
+- `lib.rs` - ~30 error variants covering auth, file I/O, project state, network, OS/Compass, serialization
 
 ### IPC Communication
 
-- Frontend → Backend: `invoke()` calls (JSON serialized)
-- Backend → Frontend: `emit()` events via `UI_STATE_NOTIFICATION_KEY`
+- Frontend → Backend: `invoke()` calls via `tauri-sys` (JSON serialized with `serde-wasm-bindgen`)
+- Backend → Frontend: `emit()` events via `UI_STATE_EVENT` ("ui-state-update")
+- Frontend listens with Yew stream subscription in `App` component
+
+### Local Project Layout
+
+```
+~/.compass/
+├── user_prefs.json          # Credentials (TOML format despite .json extension)
+├── speleodb_compass*.log    # Application logs (flexi_logger)
+└── projects/
+    └── {project-uuid}/
+        ├── index/           # Last synced remote copy
+        │   ├── .compass/    # compass.toml with SpeleoDb metadata
+        │   └── ...          # Compass project files
+        ├── working_copy/    # User's editable copy
+        │   └── ...          # Compass project files (.MAK, .DAT, .PLT)
+        └── .revision.txt    # Commit hash of last sync
+```
 
 ## Logging
 
-Logs written to: `~/.speleodb_compass/speleodb_compass.log`
+Logs written to: `~/.compass/speleodb_compass*.log`
 
 ```bash
 # Real-time logs
-tail -f ~/.speleodb_compass/speleodb_compass.log
+tail -f ~/.compass/speleodb_compass*.log
 
 # Search logs
-grep "pattern" ~/.speleodb_compass/speleodb_compass.log
+grep "pattern" ~/.compass/speleodb_compass*.log
 ```
+
+## Key Dependencies
+
+- **Tauri 2** with plugins: `tauri-plugin-dialog`, `tauri-plugin-updater`
+- **Yew 0.22** (CSR mode) with `yew_icons` (FontAwesome)
+- **compass_data 0.0.7** - Parses Compass survey file formats
+- **sentry 0.46** - Error tracking
+- **reqwest 0.12** (rustls-tls) - HTTP client for SpeleoDB API
+- **sysinfo 0.33** (Windows only) - Compass process monitoring
+- **zip 7** - Project packaging for upload/download
 
 ## Windows Development Setup
 
@@ -122,5 +179,12 @@ Also requires MSYS2 with `base-devel` and `mingw-w64-ucrt-x86_64-toolchain` pack
 
 ## CI/CD
 
-- `ci.yml` - Runs on push/PR, executes `make test` on Windows
-- `publish.yml` - Triggered by git tags, depends on CI passing
+- `ci.yml` - Runs on push/PR to main, executes `make test` on Windows. Uses cargo-binstall for trunk/wasm-pack.
+- `publish.yml` - Triggered by git tags, depends on CI passing. Builds for macOS (aarch64) and Windows via `tauri-action`. Creates signed GitHub release with updater artifacts.
+- `dependabot.yml` - Automated dependency updates
+
+## Version Info
+
+- Tauri backend Cargo.toml: `0.0.7`
+- tauri.conf.json: `0.0.6` (note: out of sync with Cargo.toml)
+- `SPELEODB_COMPASS_VERSION` constant in `lib.rs`: `0.0.1`
