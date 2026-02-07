@@ -43,6 +43,8 @@ pub fn project_details(
     let show_empty_project_modal = use_state(|| false);
     let error_message: UseStateHandle<Option<String>> = use_state(|| None);
     let upload_error: UseStateHandle<Option<String>> = use_state(|| None);
+    let locked_by_user = project.active_mutex().is_some()
+        && project.active_mutex().as_ref().unwrap().user == *user_email;
     let is_readonly = project.active_mutex().is_some()
         && &project.active_mutex().as_ref().unwrap().user != user_email
         || project.permission() == "READ_ONLY";
@@ -250,6 +252,25 @@ pub fn project_details(
                         <strong style="color: #1e40af;">{"Compass is open"}</strong>
                         <p style="color: #1e3a8a; margin-top: 4px; font-size: 14px;">
                             {"Please close Compass before navigating back to prevent losing unsaved work."}
+                        </p>
+                    </div>
+                }
+            } else {
+                html! {}
+            }}
+
+            {if locked_by_user {
+                html! {
+                    <div style="
+                        padding: 12px 16px;
+                        background-color: #fef3c7;
+                        border-left: 4px solid #f59e0b;
+                        border-radius: 4px;
+                        margin-bottom: 16px;
+                    ">
+                        <strong style="color: #92400e;">{"Project Locked"}</strong>
+                        <p style="color: #78350f; margin-top: 4px; font-size: 14px;">
+                            {"This project is locked and unavailable to other users until you close it."}
                         </p>
                     </div>
                 }
