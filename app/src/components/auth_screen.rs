@@ -5,7 +5,7 @@ use yew::{
     use_state,
 };
 
-use crate::{invoke, speleo_db_controller::SPELEO_DB_CONTROLLER};
+use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 
 #[function_component(AuthScreen)]
 pub fn auth_screen() -> Html {
@@ -140,26 +140,6 @@ pub fn auth_screen() -> Html {
             oauth.set(None);
             show_error.set(false);
             error_msg.set(String::new());
-        })
-    };
-
-    let on_forget = {
-        let instance = instance.clone();
-        let email = email.clone();
-        let password = password.clone();
-        let oauth = oauth.clone();
-        Callback::from(move |_| {
-            let instance = instance.clone();
-            let email = email.clone();
-            let password = password.clone();
-            let oauth = oauth.clone();
-            spawn_local(async move {
-                let _: () = invoke("forget_user_prefs", &()).await.unwrap();
-                instance.set("https://www.speleoDB.org".to_string());
-                email.set(None);
-                password.set(None);
-                oauth.set(None);
-            });
         })
     };
 
@@ -344,7 +324,6 @@ pub fn auth_screen() -> Html {
                 <div class="accent-bar" aria-hidden="true" />
 
                 <div class="actions">
-                    <button type="button" onclick={on_forget} style="background-color:#c84d4d;color:white;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:500;width: 14em;">{"Delete Saved Credentials"}</button>
                     <button type="button" onclick={on_reset} style="background-color:#6b7280;color:white;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:500;width: 14em;">{"Reset Form"}</button>
                     <button type="submit" disabled={is_connect_disabled} style="background-color:#2563eb;color:white;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:500;width: 14em;">{ if *loading { "Connecting..." } else { "Connect" } }</button>
                 </div>
