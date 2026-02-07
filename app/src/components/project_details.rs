@@ -41,13 +41,17 @@ pub fn project_details(
     let show_upload_success = use_state(|| false);
     let show_no_changes_modal = use_state(|| false);
     let show_empty_project_modal = use_state(|| false);
+    let show_discard_confirm_modal = use_state(|| false);
+    let discarding = use_state(|| false);
     let error_message: UseStateHandle<Option<String>> = use_state(|| None);
     let upload_error: UseStateHandle<Option<String>> = use_state(|| None);
+    let discard_error: UseStateHandle<Option<String>> = use_state(|| None);
     let locked_by_user = project.active_mutex().is_some()
         && project.active_mutex().as_ref().unwrap().user == *user_email;
     let is_readonly = project.active_mutex().is_some()
         && &project.active_mutex().as_ref().unwrap().user != user_email
         || project.permission() == "READ_ONLY";
+    let busy = *uploading || *discarding;
     let download_complete = use_state(|| false);
     let commit_message = use_state(String::new);
     let commit_message_error = use_state(|| false);
@@ -225,7 +229,7 @@ pub fn project_details(
                         cursor: pointer;
                         font-weight: 500;
                         opacity: disabled ? 0.5 : 1;"
-                        onclick={on_back_click} disabled={is_dirty}>
+                        onclick={on_back_click} disabled={is_dirty || busy}>
                         {"← Back to Projects"}
                     </button>
                     )
@@ -234,7 +238,8 @@ pub fn project_details(
                 }}
                 <button
                     onclick={on_open_project.reform(|_| ())}
-                    style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
+                    disabled={busy}
+                    style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500; opacity: disabled ? 0.5 : 1;"
                 >
                     {"Open in Compass"}
                 </button>
@@ -372,15 +377,33 @@ pub fn project_details(
                                         }
                                     }
                                 </div>
-                                <button
-                                    onclick={on_save}
-                                    disabled={ !is_dirty || *uploading}
-                                    style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: disabled ? 0.5 : 1;"
-                                >
-                                    {if *uploading { "Saving..." } else { "Save Project" }}
-                                </button>
+                                <div style="display: flex; gap: 12px;">
+                                    <button
+                                        onclick={on_save}
+                                        disabled={!is_dirty || busy}
+                                        style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: disabled ? 0.5 : 1;"
+                                    >
+                                        {if *uploading { "Saving..." } else { "Save Project" }}
+                                    </button>
+                                    <button
+                                        onclick={{
+                                            let show_discard_confirm_modal = show_discard_confirm_modal.clone();
+                                            Callback::from(move |_| show_discard_confirm_modal.set(true))
+                                        }}
+                                        disabled={busy}
+                                        style="background-color: #dc2626; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: disabled ? 0.5 : 1;"
+                                    >
+                                        {if *discarding { "Discarding..." } else { "Discard Changes" }}
+                                    </button>
+                                </div>
                                 {
                                     if let Some(err) = &*upload_error {
+                                        html! {
+                                            <div style="margin-top: 12px; color: #dc2626; font-size: 14px; text-align: center;">
+                                                {format!("Error: {}", err)}
+                                            </div>
+                                        }
+                                    } else if let Some(err) = &*discard_error {
                                         html! {
                                             <div style="margin-top: 12px; color: #dc2626; font-size: 14px; text-align: center;">
                                                 {format!("Error: {}", err)}
@@ -430,6 +453,44 @@ pub fn project_details(
                 html! {}
             }
                     }
+
+            // Discard Changes Confirmation Modal
+            {
+                if *show_discard_confirm_modal {
+                    let show_discard_confirm_modal_close = show_discard_confirm_modal.clone();
+                    let show_discard_confirm_modal_action = show_discard_confirm_modal.clone();
+                    let discarding = discarding.clone();
+                    let discard_error = discard_error.clone();
+                    html! {
+                        <Modal
+                            title="Discard Changes?"
+                            message="This will permanently discard all local changes and replace your working copy with the latest version from the server.\n\nThis action cannot be undone."
+                            modal_type={ModalType::Warning}
+                            show_close_button={true}
+                            primary_button_text="Discard Changes"
+                            on_close={Callback::from(move |_| show_discard_confirm_modal_close.set(false))}
+                            on_primary_action={Callback::from(move |_| {
+                                show_discard_confirm_modal_action.set(false);
+                                discarding.set(true);
+                                discard_error.set(None);
+                                let discarding = discarding.clone();
+                                let discard_error = discard_error.clone();
+                                spawn_local(async move {
+                                    match SPELEO_DB_CONTROLLER.discard_changes().await {
+                                        Ok(()) => {}
+                                        Err(e) => {
+                                            discard_error.set(Some(format!("Failed to discard changes: {}", e)));
+                                        }
+                                    }
+                                    discarding.set(false);
+                                });
+                            })}
+                        />
+                    }
+                } else {
+                    html! {}
+                }
+            }
 
             // Success modal (Download)
             {

@@ -147,6 +147,13 @@ pub async fn import_compass_project(app_handle: AppHandle, project_id: Uuid) -> 
 }
 
 #[tauri::command]
+pub async fn discard_changes(app_handle: AppHandle) -> Result<(), Error> {
+    info!("Discarding local changes for active project");
+    let app_state = app_handle.state::<AppState>();
+    app_state.discard_active_project_changes().await
+}
+
+#[tauri::command]
 pub async fn set_active_project(app_handle: AppHandle, project_id: Uuid) -> Result<(), Error> {
     info!("Setting active project: {project_id}");
     let app_state = app_handle.state::<AppState>();

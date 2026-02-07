@@ -104,6 +104,12 @@ impl SpeleoDBController {
         Ok(result)
     }
 
+    pub async fn discard_changes(&self) -> Result<(), String> {
+        invoke::<_, ()>("discard_changes", &())
+            .await
+            .map_err(|e| e.to_string())
+    }
+
     pub async fn import_compass_project(&self, id: Uuid) -> Result<(), Error> {
         let args = ProjectIdArgs::new(id);
         invoke("import_compass_project", &args).await

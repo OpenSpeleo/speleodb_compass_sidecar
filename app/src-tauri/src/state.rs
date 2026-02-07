@@ -266,6 +266,21 @@ impl AppState {
         Ok(result)
     }
 
+    pub async fn discard_active_project_changes(&self) -> Result<(), Error> {
+        let Some(project_id) = self.get_active_project_id() else {
+            error!("No active project to discard changes for");
+            return Err(Error::NoProjectSelected);
+        };
+        let project_info = self
+            .get_project_info(project_id)
+            .ok_or(Error::NoProjectSelected)?;
+        let project_manager = ProjectManager::initialize_from_info(project_info);
+        let api_info = self.api_info();
+        project_manager.update_local_copies(&api_info).await?;
+        self.emit_app_state_change().await;
+        Ok(())
+    }
+
     pub fn compass_is_open(&self) -> bool {
         self.compass_pid.lock().unwrap().is_some()
     }
