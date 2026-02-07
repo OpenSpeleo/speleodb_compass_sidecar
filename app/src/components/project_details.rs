@@ -232,7 +232,7 @@ pub fn project_details(
                 }}
                 <button
                     onclick={on_open_project.reform(|_| ())}
-                    style=" color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
+                    style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;"
                 >
                     {"Open in Compass"}
                 </button>
