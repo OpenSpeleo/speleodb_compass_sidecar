@@ -21,6 +21,7 @@ pub struct ProjectDetailsProps {
     pub project: ProjectStatus,
     pub user_email: String,
     pub compass_open: bool,
+    pub project_downloading: bool,
 }
 
 #[function_component(ProjectDetails)]
@@ -29,12 +30,13 @@ pub fn project_details(
         project,
         user_email,
         compass_open,
+        project_downloading,
     }: &ProjectDetailsProps,
 ) -> Html {
     let is_dirty = project.is_dirty();
     let initialized = use_state(|| false);
 
-    let downloading = use_state(|| false);
+    let downloading = *project_downloading;
     let uploading = use_state(|| false);
     let show_readonly_modal = use_state(|| false);
     let show_success_modal = use_state(|| false);
@@ -51,7 +53,7 @@ pub fn project_details(
     let is_readonly = project.active_mutex().is_some()
         && &project.active_mutex().as_ref().unwrap().user != user_email
         || project.permission() == "READ_ONLY";
-    let busy = *uploading || *discarding;
+    let busy = *uploading || *discarding || downloading;
     let download_complete = use_state(|| false);
     let commit_message = use_state(String::new);
     let commit_message_error = use_state(|| false);
@@ -287,7 +289,7 @@ pub fn project_details(
             <p style="color: #6b7280; font-size: 14px;">{format!("ID: {}", project.id())}</p>
 
             {
-                if *downloading {
+                if downloading {
                     html! {
                         <div style="
                             padding: 24px;

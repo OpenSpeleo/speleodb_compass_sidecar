@@ -40,7 +40,7 @@ pub fn main_layout(&MainLayoutProps { ref ui_state }: &MainLayoutProps) -> Html 
             <section style="width:100%;">
                 {
                     if let Some((selected_project, email)) = selected_project_info {
-                        html!{ <ProjectDetails project={selected_project} user_email={email} compass_open={ui_state.compass_open} /> }
+                        html!{ <ProjectDetails project={selected_project} user_email={email} compass_open={ui_state.compass_open} project_downloading={ui_state.project_downloading} /> }
                     } else {
                         html!{ <ProjectListing  ui_state={ui_state.clone()}/> }
                     }

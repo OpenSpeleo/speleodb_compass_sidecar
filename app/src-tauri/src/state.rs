@@ -28,6 +28,7 @@ pub struct AppState {
     api_info: Mutex<ApiInfo>,
     project_info: Mutex<HashMap<uuid::Uuid, ProjectInfo>>,
     active_project: Mutex<Option<uuid::Uuid>>,
+    project_downloading: Mutex<bool>,
     compass_pid: Mutex<Option<u32>>,
     background_task_handle: Mutex<Option<JoinHandle<()>>>,
     last_project_update: Mutex<DateTime<Utc>>,
@@ -45,6 +46,7 @@ impl AppState {
             api_info: Mutex::new(ApiInfo::default()),
             project_info: Mutex::new(HashMap::new()),
             active_project: Mutex::new(None),
+            project_downloading: Mutex::new(false),
             compass_pid: Mutex::new(None),
             background_task_handle: Mutex::new(None),
             last_project_update: Mutex::new(chrono::Utc::now()),
@@ -192,19 +194,36 @@ impl AppState {
         if let Some(project_id) = project_id {
             info!("Selecting: {project_id} as active project");
 
-            match api::project::acquire_project_mutex(&self.api_info(), project_id).await {
-                Ok(info) => {
-                    info!("Project lock grabbed successfully");
-                    let project = ProjectManager::initialize_from_info(info.clone());
-                    project.make_local(&self.api_info()).await?;
-                    self.update_local_project(info).await?;
-                }
-                Err(_e) => {
-                    warn!("Failed to grab lock for project: {project_id}, opening as read-only");
-                }
-            };
+            // Immediately switch to the project detail view and show downloading spinner
             *self.active_project.lock().unwrap() = Some(project_id);
+            *self.project_downloading.lock().unwrap() = true;
             self.emit_app_state_change().await;
+
+            // Now do the heavy work (mutex acquisition + download)
+            let result = async {
+                match api::project::acquire_project_mutex(&self.api_info(), project_id).await {
+                    Ok(info) => {
+                        info!("Project lock grabbed successfully");
+                        let project = ProjectManager::initialize_from_info(info.clone());
+                        project.make_local(&self.api_info()).await?;
+                        self.update_local_project(info).await?;
+                    }
+                    Err(_e) => {
+                        warn!(
+                            "Failed to grab lock for project: {project_id}, opening as read-only"
+                        );
+                    }
+                };
+                Ok::<(), Error>(())
+            }
+            .await;
+
+            // Clear downloading state regardless of success/failure
+            *self.project_downloading.lock().unwrap() = false;
+            self.emit_app_state_change().await;
+
+            // Propagate any error from the download
+            result?;
         } else if let Some(active_project) = self.get_active_project_status() {
             *self.active_project.lock().unwrap() = None;
             self.set_loading_state_sync(LoadingState::LoadingProjects);
@@ -339,12 +358,14 @@ impl AppState {
         let user_email = self.api_info().email().map(|s| s.to_string());
         let active_project_id = self.get_active_project_id();
         let compass_is_open = self.compass_is_open();
+        let project_downloading = *self.project_downloading.lock().unwrap();
         let ui_state = UiState::new(
             loading_state,
             user_email,
             project_statuses,
             active_project_id,
             compass_is_open,
+            project_downloading,
         );
         // Only send if the state has actually changed
         {
