@@ -29,8 +29,21 @@ async fn handle_auth_response(
         );
         Ok(api_info)
     } else {
-        error!("Authorization failed with status: {}", status);
-        Err(format!("Authorization failed with status: {}", status))
+        // Try to extract a message from the response body for logging
+        let body = response.text().await.unwrap_or_default();
+        error!("Authorization failed with status: {} — body: {}", status, body);
+
+        let user_message = match status.as_u16() {
+            400 | 401 | 403 => {
+                "Invalid credentials. Please check your email/password or OAuth token and try again.".to_string()
+            }
+            404 => "Authentication endpoint not found. Please verify the instance URL is correct.".to_string(),
+            429 => "Too many login attempts. Please wait a moment and try again.".to_string(),
+            500..=599 => format!("The server encountered an error (HTTP {status}). Please try again later."),
+            _ => format!("Authentication failed (HTTP {status}). Please try again."),
+        };
+
+        Err(user_message)
     }
 }
 

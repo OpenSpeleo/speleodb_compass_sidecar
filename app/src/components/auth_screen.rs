@@ -113,9 +113,13 @@ pub fn auth_screen() -> Html {
                         logged_in.set(true);
                     }
                     Err(e) => {
-                        // Check if it's a 403 error (invalid credentials)
-                        let is_403 = e.contains("403") || e.to_lowercase().contains("forbidden");
-                        error_is_403.set(is_403);
+                        // Check if it's a credentials error (400/401/403)
+                        let is_credentials_error = e.contains("Invalid credentials")
+                            || e.contains("403")
+                            || e.contains("401")
+                            || e.contains("400")
+                            || e.to_lowercase().contains("forbidden");
+                        error_is_403.set(is_credentials_error);
                         error_msg.set(e);
                         show_error.set(true);
                     }
