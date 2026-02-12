@@ -207,7 +207,7 @@ pub fn create_project_modal(props: &CreateProjectModalProps) -> Html {
                             style="width: 100%; padding: 8px; border: 1px solid transparent; border-radius: 8px; box-sizing: border-box; font-family: inherit; font-size: 14px; background-color: rgb(205, 205, 205); color: #313131;"
                             disabled={*is_submitting}
                         >
-                            <option value="">{"Select a country..."}</option>
+                            <option value="" disabled=true selected=true>{"Select a country..."}</option>
                             {
                                 for countries.iter().map(|(code, name)| {
                                     html! {
