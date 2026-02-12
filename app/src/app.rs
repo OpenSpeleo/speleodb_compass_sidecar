@@ -4,7 +4,6 @@ use crate::{
 };
 use common::ui_state::{LoadingState, UiState};
 use futures::StreamExt;
-use log::info;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
@@ -30,7 +29,6 @@ pub fn app() -> Html {
 
                 // Process events as they arrive
                 while let Some(event) = event_stream.next().await {
-                    info!("ui_state: {:?}", event.payload);
                     ui_state.set(event.payload);
                 }
             });

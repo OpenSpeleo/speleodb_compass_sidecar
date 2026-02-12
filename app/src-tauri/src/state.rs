@@ -6,7 +6,14 @@ use common::{
     ui_state::{LoadingState, LocalProjectStatus, ProjectSaveResult, ProjectStatus, UiState},
 };
 use log::{debug, error, info, trace, warn};
-use std::{collections::HashMap, sync::Mutex, thread, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 use tauri::{
     AppHandle, Emitter, Manager,
     async_runtime::JoinHandle,
@@ -35,6 +42,10 @@ pub struct AppState {
     last_status_check: Mutex<DateTime<Utc>>,
     last_emitted_ui_state: Mutex<UiState>,
     emit_mutex: tokio::sync::Mutex<()>,
+    /// Flag indicating the WebView frontend is ready to receive events.
+    /// Set to `true` when the first `ensure_initialized` IPC call arrives from the frontend.
+    /// Before this flag is set, `emit_str` calls are skipped to avoid crashing WebView2.
+    webview_ready: AtomicBool,
 }
 
 impl AppState {
@@ -53,6 +64,7 @@ impl AppState {
             last_status_check: Mutex::new(chrono::Utc::now()),
             last_emitted_ui_state: Mutex::new(UiState::default()),
             emit_mutex: tokio::sync::Mutex::new(()),
+            webview_ready: AtomicBool::new(false),
         }
     }
 
@@ -60,11 +72,20 @@ impl AppState {
         *self.last_emitted_ui_state.lock().unwrap() = UiState::default();
     }
 
+    /// Mark the WebView frontend as ready to receive events.
+    /// Called when the first `ensure_initialized` IPC arrives from the WASM frontend.
+    pub fn mark_webview_ready(&self) {
+        self.webview_ready.swap(true, Ordering::SeqCst);
+    }
+
+    /// Check whether the WebView frontend is ready to receive events.
+    pub fn is_webview_ready(&self) -> bool {
+        self.webview_ready.load(Ordering::SeqCst)
+    }
+
     /// Asynchronously initialize the application state.
     pub async fn init_app_state(&self, app_handle: &AppHandle) {
-        info!("Initializing app state");
         if self.app_handle.lock().unwrap().is_none() {
-            info!("Storing app handle in app state");
             *self.app_handle.lock().unwrap() = Some(app_handle.clone());
         }
         if self.initializing() {
@@ -75,12 +96,12 @@ impl AppState {
         loop {
             match &loading_state {
                 LoadingState::Failed(e) => {
-                    log::warn!("Previous initialization failed with error: {}.", e);
+                    warn!("Previous initialization failed with error: {}", e);
                     self.set_initializing(false);
                     break;
                 }
                 LoadingState::Unauthenticated | LoadingState::Ready => {
-                    log::info!("App state already initialized",);
+                    self.apply_menu_for_auth_state();
                     self.emit_app_state_change().await;
                     self.set_initializing(false);
                     if self.background_task_handle.lock().unwrap().is_none() {
@@ -92,7 +113,9 @@ impl AppState {
                     }
                     break;
                 }
-                _ => loading_state = self.init_internal().await,
+                _ => {
+                    loading_state = self.init_internal().await;
+                }
             }
         }
     }
@@ -114,37 +137,38 @@ impl AppState {
     }
 
     pub fn update_user_prefs(&self, prefs: UserPrefs) -> Result<(), Error> {
-        let app_handle = self.app_handle()?;
-        info!("Updating user preferences");
+        let _ = self.app_handle()?;
         prefs.save()?;
         self.set_api_info(prefs.api_info().clone());
-        let app_handle_clone = app_handle.clone();
-        tauri::async_runtime::spawn(async move {
-            let menu = if prefs.api_info().oauth_token().is_none() {
-                MenuBuilder::new(&app_handle_clone).build().unwrap()
-            } else {
-                let submenu = SubmenuBuilder::new(&app_handle_clone, "Account")
-                    .submenu_native_icon(tauri::menu::NativeIcon::UserAccounts)
-                    .text("sign_out", "Sign Out")
-                    .build()
-                    .unwrap();
-                MenuBuilder::new(&app_handle_clone)
-                    .item(&submenu)
-                    .build()
-                    .unwrap()
-            };
-            app_handle_clone.set_menu(menu).unwrap();
-        });
-        // Spawn emit in a separate task since this function is sync
-        tauri::async_runtime::spawn({
-            let app_handle = app_handle.clone();
-            async move {
-                let app_state = app_handle.state::<AppState>();
-                app_state.emit_app_state_change().await;
-            }
-        });
+
+        // Menu update is deferred to `apply_menu_for_auth_state()`.
+        // Do NOT spawn set_menu or emit_app_state_change here.
 
         Ok(())
+    }
+
+    /// Apply the correct menu bar based on the current authentication state.
+    /// Called once after initialization reaches a terminal state (Ready / Unauthenticated)
+    /// to avoid racing with WebView2 event callbacks during the rapid init sequence.
+    fn apply_menu_for_auth_state(&self) {
+        let Ok(app_handle) = self.app_handle() else {
+            return;
+        };
+        let has_token = self.api_info().oauth_token().is_some();
+        let menu = if !has_token {
+            MenuBuilder::new(&app_handle).build().unwrap()
+        } else {
+            let submenu = SubmenuBuilder::new(&app_handle, "Account")
+                .submenu_native_icon(tauri::menu::NativeIcon::UserAccounts)
+                .text("sign_out", "Sign Out")
+                .build()
+                .unwrap();
+            MenuBuilder::new(&app_handle)
+                .item(&submenu)
+                .build()
+                .unwrap()
+        };
+        app_handle.set_menu(menu).unwrap();
     }
 
     pub async fn authenticated(&self) -> () {
@@ -338,7 +362,6 @@ impl AppState {
 
     pub async fn emit_app_state_change(&self) {
         let _emit_lock = self.emit_mutex.lock().await;
-        tokio::time::sleep(Duration::from_millis(50)).await;
         let loading_state = self.loading_state();
         // Clone project info while holding lock briefly, then release before doing I/O
         let mut projects: Vec<ProjectInfo> = match self.project_info.lock() {
@@ -360,7 +383,7 @@ impl AppState {
         let compass_is_open = self.compass_is_open();
         let project_downloading = *self.project_downloading.lock().unwrap();
         let ui_state = UiState::new(
-            loading_state,
+            loading_state.clone(),
             user_email,
             project_statuses,
             active_project_id,
@@ -377,13 +400,21 @@ impl AppState {
                 }
             };
             if *last_state == ui_state {
-                trace!("UI state unchanged, skipping send");
                 return;
             }
             *last_state = ui_state.clone();
         }
 
-        // Validate serialization before sending (to catch issues before Tauri runtime)
+        // ── WebView readiness gate ──
+        // If the WebView hasn't signaled readiness (via ensure_initialized IPC),
+        // we update internal state above but skip the actual emit_str call.
+        // This prevents STATUS_FATAL_USER_CALLBACK_EXCEPTION (0xc000041d) on
+        // Windows when WebView2 hasn't finished initializing its JS runtime.
+        if !self.is_webview_ready() {
+            return;
+        }
+
+        // Serialize and send to frontend
         let serialized = match serde_json::to_string(&ui_state) {
             Ok(s) => s,
             Err(e) => {
@@ -391,11 +422,6 @@ impl AppState {
                 return;
             }
         };
-        info!(
-            "About to send UI state: {} projects, {} bytes",
-            ui_state.project_status.len(),
-            serialized.len()
-        );
 
         // Get app handle for emitting
         let app_handle = match self.app_handle() {
@@ -405,15 +431,10 @@ impl AppState {
                 return;
             }
         };
-        thread::sleep(Duration::from_millis(1));
         // Emit event to frontend
         if let Err(e) = app_handle.emit_str(UI_STATE_EVENT, serialized) {
             error!("Failed to emit UI state event: {}", e);
-        } else {
-            trace!("UI state event emitted successfully");
         }
-        // What if we block the OS thread here and let the webview catch up?
-        thread::sleep(Duration::from_millis(1));
     }
 
     fn initializing(&self) -> bool {
@@ -523,9 +544,9 @@ impl AppState {
         }
     }
 
+    /// Advance the loading state machine by one step.
     async fn init_internal(&self) -> LoadingState {
         let loading_state = self.loading_state();
-        let sec_delay = 0;
         match loading_state {
             LoadingState::NotStarted => {
                 self.set_loading_state(LoadingState::CheckingForUpdates)
@@ -534,63 +555,38 @@ impl AppState {
             LoadingState::CheckingForUpdates => match self.check_for_update().await {
                 Ok(update) => {
                     if let Some(update) = update {
-                        log::info!("Update available, upating...");
-                        tokio::time::sleep(std::time::Duration::from_secs(sec_delay)).await;
                         let loading_state = self.set_loading_state(LoadingState::Updating).await;
                         self.update_app(update).await.unwrap();
                         loading_state
                     } else {
-                        log::info!("No updates available, attempting to load user preferences");
-                        tokio::time::sleep(Duration::from_secs(sec_delay)).await;
                         self.set_loading_state(LoadingState::LoadingPrefs).await
                     }
                 }
                 Err(e) => {
-                    log::warn!("Failed to check for updates: {}", e);
-                    tokio::time::sleep(Duration::from_secs(sec_delay)).await;
+                    warn!("Failed to check for updates: {}", e);
                     self.set_loading_state(LoadingState::Failed(e)).await
                 }
             },
             LoadingState::LoadingPrefs => {
                 let prefs = self.load_user_preferences();
                 if let Some(_token) = prefs.api_info().oauth_token() {
-                    info!("User prefs found, attempting to authenticate user");
-                    tokio::time::sleep(Duration::from_secs(sec_delay)).await;
                     self.set_loading_state(LoadingState::Authenticating).await
                 } else {
-                    info!("No user prefs found, starting unauthenticated");
-                    tokio::time::sleep(Duration::from_secs(sec_delay)).await;
                     self.set_loading_state(LoadingState::Unauthenticated).await
                 }
             }
-            LoadingState::Authenticating => {
-                tokio::time::sleep(Duration::from_secs(sec_delay)).await;
-                match self.authenticate_user().await {
-                    Ok(_) => self.set_loading_state(LoadingState::LoadingProjects).await,
-                    Err(e) => {
-                        // TODO:: Handle different authentication errors appropriately
-                        log::warn!("Authentication failed: {}", e);
-                        self.set_loading_state(LoadingState::Unauthenticated).await
-                    }
+            LoadingState::Authenticating => match self.authenticate_user().await {
+                Ok(_) => self.set_loading_state(LoadingState::LoadingProjects).await,
+                Err(_) => self.set_loading_state(LoadingState::Unauthenticated).await,
+            },
+            LoadingState::LoadingProjects => match self.load_user_projects().await {
+                Ok(_) => self.set_loading_state(LoadingState::Ready).await,
+                Err(e) => {
+                    warn!("Failed to load user projects: {}", e);
+                    self.set_loading_state(LoadingState::Failed(e)).await
                 }
-            }
-            LoadingState::LoadingProjects => {
-                tokio::time::sleep(Duration::from_secs(sec_delay)).await;
-                match self.load_user_projects().await {
-                    Ok(_) => {
-                        log::info!("User projects loaded successfully, app is ready");
-                        self.set_loading_state(LoadingState::Ready).await
-                    }
-                    Err(e) => {
-                        log::warn!("Failed to load user projects: {}", e);
-                        self.set_loading_state(LoadingState::Failed(e)).await
-                    }
-                }
-            }
-            _ => {
-                log::info!("App already initialized or in progress");
-                loading_state
-            }
+            },
+            _ => loading_state,
         }
     }
 

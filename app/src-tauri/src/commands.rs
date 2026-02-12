@@ -12,9 +12,14 @@ use uuid::Uuid;
 
 #[tauri::command]
 pub fn ensure_initialized(app_handle: AppHandle) {
-    info!("Ensuring app is initialized");
     let app_state = app_handle.state::<AppState>();
+
+    // Mark the WebView as ready BEFORE doing anything else.
+    // This is the signal that the frontend JS runtime is alive and the
+    // Tauri IPC bridge is functional — it's now safe to call emit_str().
+    app_state.mark_webview_ready();
     app_state.reset_ui_state();
+
     // Spawn initialization on background task so command returns immediately
     tauri::async_runtime::spawn(async move {
         let app_state = app_handle.state::<AppState>();
