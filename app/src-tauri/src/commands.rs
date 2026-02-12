@@ -1,3 +1,5 @@
+use std::process::Command;
+
 use crate::{
     paths::compass_project_working_path, project_management::LocalProject, state::AppState,
     user_prefs::UserPrefs,
