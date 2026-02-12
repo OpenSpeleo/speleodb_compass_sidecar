@@ -36,7 +36,7 @@ pub fn project_listing(ProjectListingProps { ui_state }: &ProjectListingProps) -
                 <section style="width:100%;">
                     <h2>{"Projects"}</h2>
                     <div style="display: flex; justify-content: center; gap: 12px; margin-bottom: 16px;">
-                        <button onclick={on_create_new.clone()}>{"Create New Project"}</button>
+                        <button onclick={on_create_new.clone()} style="background-color: #2563eb; color: #f6f6f6;">{"Create New Project"}</button>
                     </div>
                     <div class="error-message" style="color: red; padding: 12px; border: 1px solid red; border-radius: 4px;">
                         <strong>{"Error: "}</strong>
@@ -61,7 +61,7 @@ pub fn project_listing(ProjectListingProps { ui_state }: &ProjectListingProps) -
                         <h2 class={classes!("vertically-centered-text")} >{"Projects"}</h2>
                     </div>
                     <div style="display: flex; justify-content: center; gap: 12px; margin-bottom: 16px;">
-                        <button onclick={on_create_new.clone()}>{"Create New Project"}</button>
+                        <button onclick={on_create_new.clone()} style="background-color: #2563eb; color: #f6f6f6;">{"Create New Project"}</button>
                     </div>
                 </div>
                 <div class="projects-list" style=" display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
