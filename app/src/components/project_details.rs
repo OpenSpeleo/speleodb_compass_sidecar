@@ -294,7 +294,10 @@ pub fn project_details(
             reimporting.set(true);
             error_message.set(None);
             spawn_local(async move {
-                match SPELEO_DB_CONTROLLER.import_compass_project(project_id).await {
+                match SPELEO_DB_CONTROLLER
+                    .import_compass_project(project_id)
+                    .await
+                {
                     Ok(imported) => {
                         if imported {
                             show_empty_project_modal.set(false);

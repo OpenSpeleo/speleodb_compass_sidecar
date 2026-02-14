@@ -31,7 +31,10 @@ async fn handle_auth_response(
     } else {
         // Try to extract a message from the response body for logging
         let body = response.text().await.unwrap_or_default();
-        error!("Authorization failed with status: {} — body: {}", status, body);
+        error!(
+            "Authorization failed with status: {} — body: {}",
+            status, body
+        );
 
         let user_message = match status.as_u16() {
             400 | 401 | 403 => {
