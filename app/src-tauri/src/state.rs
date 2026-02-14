@@ -208,9 +208,6 @@ impl AppState {
         self.set_project_info(project_info.clone());
         let mut project = ProjectManager::initialize_from_info(project_info);
         let project_status = project.update_project(&self.api_info()).await?;
-        if let LocalProjectStatus::OutOfDate = project_status.local_status() {
-            project.update_local_copies(&api_info).await?;
-        }
         Ok(project_status)
     }
 
