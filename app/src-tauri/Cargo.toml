@@ -44,6 +44,7 @@ tauri-plugin-dialog = "2"
 zip = "7"
 dirs = "6"
 flexi_logger = "0.31"
+notify = "8"
 
 [dev-dependencies]
 serial_test = "3"
