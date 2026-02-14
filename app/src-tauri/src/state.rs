@@ -1,4 +1,6 @@
-use crate::{project_management::ProjectManager, user_prefs::UserPrefs};
+use crate::{
+    paths::compass_dir_path, project_management::ProjectManager, user_prefs::UserPrefs,
+};
 use chrono::{DateTime, Utc};
 use common::{
     ApiInfo, Error,
@@ -6,6 +8,7 @@ use common::{
     ui_state::{LoadingState, LocalProjectStatus, ProjectSaveResult, ProjectStatus, UiState},
 };
 use log::{debug, error, info, trace, warn};
+use notify::{RecursiveMode, Watcher};
 use std::{
     collections::HashMap,
     sync::{
@@ -22,8 +25,7 @@ use tauri::{
 use tauri_plugin_updater::{Update, UpdaterExt};
 use uuid::Uuid;
 
-const PROJECT_INFO_UPDATE_INTERVAL: Duration = Duration::from_secs(120); //  update the list of projects status every 2 minutes
-const LOCAL_STATUS_CHECK_INTERVAL: Duration = Duration::from_secs(1); // check local project status and compass state every second
+const PROJECT_INFO_UPDATE_INTERVAL: Duration = Duration::from_secs(120); // update the list of projects status every 2 minutes
 
 /// Event key for UI state notifications
 pub const UI_STATE_EVENT: &str = "ui-state-update";
@@ -39,7 +41,6 @@ pub struct AppState {
     compass_pid: Mutex<Option<u32>>,
     background_task_handle: Mutex<Option<JoinHandle<()>>>,
     last_project_update: Mutex<DateTime<Utc>>,
-    last_status_check: Mutex<DateTime<Utc>>,
     last_emitted_ui_state: Mutex<UiState>,
     emit_mutex: tokio::sync::Mutex<()>,
     /// Flag indicating the WebView frontend is ready to receive events.
@@ -61,7 +62,6 @@ impl AppState {
             compass_pid: Mutex::new(None),
             background_task_handle: Mutex::new(None),
             last_project_update: Mutex::new(chrono::Utc::now()),
-            last_status_check: Mutex::new(chrono::Utc::now()),
             last_emitted_ui_state: Mutex::new(UiState::default()),
             emit_mutex: tokio::sync::Mutex::new(()),
             webview_ready: AtomicBool::new(false),
@@ -603,10 +603,38 @@ impl AppState {
 
     async fn background_update_task(app_handle: &AppHandle) {
         let app_state = app_handle.state::<AppState>();
+
+        // Set up filesystem watcher on the projects directory so we only
+        // re-check local project statuses when something actually changes
+        // on disk, instead of polling every second.
+        let (fs_tx, fs_rx) = std::sync::mpsc::channel();
+        let mut _watcher = notify::recommended_watcher(move |res| {
+            if let Ok(event) = res {
+                let _ = fs_tx.send(event);
+            }
+        });
+        match &mut _watcher {
+            Ok(w) => {
+                let projects_dir = compass_dir_path();
+                if !projects_dir.exists() {
+                    if let Err(e) = std::fs::create_dir_all(projects_dir) {
+                        error!("Failed to create projects directory for watcher: {}", e);
+                    }
+                }
+                if let Err(e) = w.watch(projects_dir, RecursiveMode::Recursive) {
+                    error!("Failed to start filesystem watcher: {}", e);
+                }
+            }
+            Err(e) => {
+                error!("Failed to create filesystem watcher: {}", e);
+            }
+        }
+
         loop {
-            let last_projectupdate = *app_state.last_project_update.lock().unwrap();
+            // Remote API update on a timer
+            let last_project_update = *app_state.last_project_update.lock().unwrap();
             if chrono::Utc::now()
-                .signed_duration_since(last_projectupdate)
+                .signed_duration_since(last_project_update)
                 .to_std()
                 .unwrap()
                 >= PROJECT_INFO_UPDATE_INTERVAL
@@ -621,14 +649,15 @@ impl AppState {
                     }
                 }
             }
-            let last_local_status_check = *app_state.last_status_check.lock().unwrap();
-            if chrono::Utc::now()
-                .signed_duration_since(last_local_status_check)
-                .to_std()
-                .unwrap()
-                >= LOCAL_STATUS_CHECK_INTERVAL
-            {
-                trace!("Background task: checking local project statuses");
+
+            // Drain filesystem events — only recheck local status when files changed
+            let mut fs_changed = false;
+            while fs_rx.try_recv().is_ok() {
+                fs_changed = true;
+            }
+
+            if fs_changed {
+                trace!("Background task: filesystem change detected, checking local project statuses");
                 let project_info: Vec<ProjectInfo> = app_state
                     .project_info
                     .lock()
@@ -645,11 +674,12 @@ impl AppState {
                         );
                     }
                 }
-                #[cfg(target_os = "windows")]
-                app_state.check_compass_process();
                 app_state.emit_app_state_change().await;
-                *app_state.last_status_check.lock().unwrap() = chrono::Utc::now();
             }
+
+            #[cfg(target_os = "windows")]
+            app_state.check_compass_process();
+
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
     }
