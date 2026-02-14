@@ -157,7 +157,6 @@ impl AppState {
             MenuBuilder::new(&app_handle).build().unwrap()
         } else {
             let submenu = SubmenuBuilder::new(&app_handle, "Account")
-                .submenu_native_icon(tauri::menu::NativeIcon::UserAccounts)
                 .text("sign_out", "Sign Out")
                 .build()
                 .unwrap();
