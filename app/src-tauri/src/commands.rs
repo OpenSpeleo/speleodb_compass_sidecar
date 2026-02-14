@@ -1,11 +1,10 @@
-use std::process::Command;
-
 use crate::{
     paths::compass_project_working_path, project_management::LocalProject, state::AppState,
     user_prefs::UserPrefs,
 };
 use common::{Error, api_types::ProjectSaveResult};
 use log::info;
+use std::process::Command;
 use tauri::{AppHandle, Manager, State, Url};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
@@ -70,8 +69,6 @@ pub fn open_project(_app_state: State<'_, AppState>, project_id: Uuid) -> Result
     // Just open the folder in system file explorer
     #[cfg(target_os = "macos")]
     {
-        use std::process::Command;
-
         Command::new("open")
             .arg(&project_dir)
             .spawn()

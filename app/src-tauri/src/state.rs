@@ -204,7 +204,6 @@ impl AppState {
         &self,
         project_info: ProjectInfo,
     ) -> Result<ProjectStatus, Error> {
-        let api_info = self.api_info();
         self.set_project_info(project_info.clone());
         let mut project = ProjectManager::initialize_from_info(project_info);
         let project_status = project.update_project(&self.api_info()).await?;
