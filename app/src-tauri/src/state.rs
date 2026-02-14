@@ -1,6 +1,4 @@
-use crate::{
-    paths::compass_dir_path, project_management::ProjectManager, user_prefs::UserPrefs,
-};
+use crate::{paths::compass_dir_path, project_management::ProjectManager, user_prefs::UserPrefs};
 use chrono::{DateTime, Utc};
 use common::{
     ApiInfo, Error,
@@ -608,12 +606,12 @@ impl AppState {
         // re-check local project statuses when something actually changes
         // on disk, instead of polling every second.
         let (fs_tx, fs_rx) = std::sync::mpsc::channel();
-        let mut _watcher = notify::recommended_watcher(move |res| {
+        let mut watcher = notify::recommended_watcher(move |res| {
             if let Ok(event) = res {
                 let _ = fs_tx.send(event);
             }
         });
-        match &mut _watcher {
+        match &mut watcher {
             Ok(w) => {
                 let projects_dir = compass_dir_path();
                 if !projects_dir.exists() {
@@ -657,7 +655,9 @@ impl AppState {
             }
 
             if fs_changed {
-                trace!("Background task: filesystem change detected, checking local project statuses");
+                trace!(
+                    "Background task: filesystem change detected, checking local project statuses"
+                );
                 let project_info: Vec<ProjectInfo> = app_state
                     .project_info
                     .lock()
