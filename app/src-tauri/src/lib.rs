@@ -17,7 +17,7 @@ use semver::Version;
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
-const SPELEODB_COMPASS_VERSION: Version = Version::new(0, 0, 1);
+const SPELEODB_COMPASS_VERSION: Version = Version::new(0, 1, 0);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
