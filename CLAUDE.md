@@ -187,4 +187,4 @@ Also requires MSYS2 with `base-devel` and `mingw-w64-ucrt-x86_64-toolchain` pack
 
 - Tauri backend Cargo.toml: `0.0.7`
 - tauri.conf.json: `0.0.6` (note: out of sync with Cargo.toml)
-- `SPELEODB_COMPASS_VERSION` constant in `lib.rs`: `0.0.1`
+- `SPELEODB_COMPASS_VERSION` constant in `lib.rs`: `1.0.0`
