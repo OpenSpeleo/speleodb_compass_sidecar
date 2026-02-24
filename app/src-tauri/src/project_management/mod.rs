@@ -23,6 +23,7 @@ use zip::ZipArchive;
 
 pub const SPELEODB_COMPASS_PROJECT_FILE: &str = "compass.toml";
 const SPELEODB_PROJECT_REVISION_FILE: &str = ".revision.txt";
+const AUTOMATED_PROJECT_CREATION_COMMIT_MESSAGE: &str = "[Automated] Project Creation";
 
 // Information about the status of a Compass project.
 #[derive(Clone, Debug)]
@@ -48,12 +49,22 @@ impl ProjectManager {
 
     /// Get the latest remote revision as a `SpeleoDbProjectRevision`, if available.
     pub fn latest_remote_revision(&self) -> Option<SpeleoDbProjectRevision> {
+        if !self.remote_project_has_compass_data() {
+            return None;
+        }
         self.latest_remote_commit()
             .map(SpeleoDbProjectRevision::from)
     }
 
     pub fn local_revision(&self) -> Option<SpeleoDbProjectRevision> {
         SpeleoDbProjectRevision::revision_for_local_project(self.id())
+    }
+
+    fn remote_project_has_compass_data(&self) -> bool {
+        self.latest_remote_commit().is_some_and(|latest_commit| {
+            !(latest_commit.message == AUTOMATED_PROJECT_CREATION_COMMIT_MESSAGE
+                && latest_commit.tree.is_empty())
+        })
     }
 
     pub fn project_status(&self) -> ProjectStatus {
@@ -133,7 +144,7 @@ impl ProjectManager {
     /// `project_info` field.
     fn local_project_status(&self) -> LocalProjectStatus {
         let project_dir = compass_project_path(self.id());
-        if self.latest_remote_commit().is_none() && !project_dir.exists() {
+        if !self.remote_project_has_compass_data() && !project_dir.exists() {
             return LocalProjectStatus::EmptyLocal;
         } else if !project_dir.exists() {
             return LocalProjectStatus::RemoteOnly;
@@ -180,7 +191,7 @@ impl ProjectManager {
         }
         // If there is no working copy, but the project directory exists, it must be empty
         // If there's a remote version we're  out of date, otherwise it's just a newly created empty local
-        if self.latest_remote_commit().is_some() {
+        if self.remote_project_has_compass_data() {
             LocalProjectStatus::OutOfDate
         } else {
             LocalProjectStatus::EmptyLocal
@@ -326,10 +337,77 @@ fn copy_dir_all<A: AsRef<Path>>(src: impl AsRef<Path>, dst: A) -> std::io::Resul
 mod tests {
     use super::*;
     use crate::paths::{compass_project_index_path, compass_project_path};
+    use common::api_types::{CommitInfo, CommitTreeEntry, ProjectInfo, ProjectType};
     use std::io::Write;
 
     fn cleanup_project_dir(id: Uuid) {
         let _ = std::fs::remove_dir_all(compass_project_path(id));
+    }
+
+    fn test_project_info(id: Uuid, latest_commit: Option<CommitInfo>) -> ProjectInfo {
+        ProjectInfo {
+            id,
+            name: "Test Project".to_string(),
+            description: "Test Description".to_string(),
+            is_active: true,
+            permission: "ADMIN".to_string(),
+            active_mutex: None,
+            country: "US".to_string(),
+            created_by: "tester@example.com".to_string(),
+            creation_date: "2026-01-01T00:00:00Z".to_string(),
+            modified_date: "2026-01-01T00:00:00Z".to_string(),
+            latitude: None,
+            longitude: None,
+            fork_from: None,
+            visibility: "PRIVATE".to_string(),
+            exclude_geojson: false,
+            latest_commit,
+            project_type: ProjectType::Compass,
+        }
+    }
+
+    fn test_commit(message: &str, tree_entries: usize) -> CommitInfo {
+        CommitInfo {
+            id: "abc123".to_string(),
+            message: message.to_string(),
+            author_name: "SpeleoDB".to_string(),
+            dt_since: "now".to_string(),
+            tree: vec![CommitTreeEntry {}; tree_entries],
+        }
+    }
+
+    #[test]
+    fn test_local_project_status_empty_for_automated_project_creation_with_empty_tree() {
+        let project_id = Uuid::new_v4();
+        cleanup_project_dir(project_id);
+
+        let manager = ProjectManager::initialize_from_info(test_project_info(
+            project_id,
+            Some(test_commit(AUTOMATED_PROJECT_CREATION_COMMIT_MESSAGE, 0)),
+        ));
+
+        assert_eq!(
+            manager.local_project_status(),
+            LocalProjectStatus::EmptyLocal
+        );
+        cleanup_project_dir(project_id);
+    }
+
+    #[test]
+    fn test_local_project_status_not_empty_for_automated_project_creation_with_files() {
+        let project_id = Uuid::new_v4();
+        cleanup_project_dir(project_id);
+
+        let manager = ProjectManager::initialize_from_info(test_project_info(
+            project_id,
+            Some(test_commit(AUTOMATED_PROJECT_CREATION_COMMIT_MESSAGE, 1)),
+        ));
+
+        assert_eq!(
+            manager.local_project_status(),
+            LocalProjectStatus::RemoteOnly
+        );
+        cleanup_project_dir(project_id);
     }
 
     #[test]
