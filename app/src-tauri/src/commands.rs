@@ -4,10 +4,12 @@ use crate::{
 };
 use common::{Error, api_types::ProjectSaveResult};
 use log::info;
-use std::{path::PathBuf, process::Command};
+use std::{path::PathBuf, process::Command, sync::mpsc, time::Duration};
 use tauri::{AppHandle, Manager, State, Url};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
+
+const FILE_PICKER_TIMEOUT: Duration = Duration::from_secs(300);
 
 #[tauri::command]
 pub fn ensure_initialized(app_handle: AppHandle) {
@@ -130,13 +132,23 @@ pub async fn save_project(
     app_state.save_active_project(commit_message).await
 }
 
-fn pick_compass_project_file_path(app_handle: &AppHandle) -> Result<PathBuf, Error> {
-    let Some(file_path) = app_handle
+async fn pick_compass_project_file_path(app_handle: &AppHandle) -> Result<PathBuf, Error> {
+    let (tx, rx) = mpsc::channel::<Option<FilePath>>();
+    app_handle
         .dialog()
         .file()
         .add_filter("MAK", &["mak"])
-        .blocking_pick_file()
-    else {
+        .pick_file(move |file_path| {
+            let _ = tx.send(file_path);
+        });
+
+    // Wait off the async runtime thread so we never block the UI event loop.
+    let file_path = tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(FILE_PICKER_TIMEOUT))
+        .await
+        .map_err(|e| Error::OsCommand(format!("File picker task failed: {e}")))?
+        .map_err(|e| Error::OsCommand(format!("File picker timed out or failed: {e}")))?;
+
+    let Some(file_path) = file_path else {
         return Err(Error::NoProjectSelected);
     };
 
@@ -169,8 +181,12 @@ async fn import_project_from_path(
 }
 
 #[tauri::command]
-pub async fn import_compass_project(app_handle: AppHandle, project_id: Uuid) -> Result<(), Error> {
-    let file_path = pick_compass_project_file_path(&app_handle)?;
+pub async fn import_compass_project(app_handle: AppHandle, project_id: Uuid) -> Result<bool, Error> {
+    let file_path = match pick_compass_project_file_path(&app_handle).await {
+        Ok(path) => path,
+        Err(Error::NoProjectSelected) => return Ok(false),
+        Err(err) => return Err(err),
+    };
     import_project_from_path(
         app_handle,
         project_id,
@@ -178,12 +194,13 @@ pub async fn import_compass_project(app_handle: AppHandle, project_id: Uuid) -> 
         "Imported local project".to_string(),
         false,
     )
-    .await
+    .await?;
+    Ok(true)
 }
 
 #[tauri::command]
-pub fn pick_compass_project_file(app_handle: AppHandle) -> Result<Option<String>, Error> {
-    match pick_compass_project_file_path(&app_handle) {
+pub async fn pick_compass_project_file(app_handle: AppHandle) -> Result<Option<String>, Error> {
+    match pick_compass_project_file_path(&app_handle).await {
         Ok(path) => Ok(Some(path.to_string_lossy().to_string())),
         Err(Error::NoProjectSelected) => Ok(None),
         Err(err) => Err(err),

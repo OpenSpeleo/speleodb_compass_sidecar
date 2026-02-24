@@ -259,23 +259,33 @@ pub fn project_details(
     let on_import_from_disk = {
         let show_empty_project_modal = show_empty_project_modal.clone();
         let error_message = error_message.clone();
+        let reimporting = reimporting.clone();
         let project_id = project.id();
         Callback::from(move |_: ()| {
+            if *reimporting {
+                return;
+            }
             let show_empty_project_modal = show_empty_project_modal.clone();
             let error_message = error_message.clone();
+            let reimporting = reimporting.clone();
+            reimporting.set(true);
+            error_message.set(None);
             spawn_local(async move {
-                match SPELEO_DB_CONTROLLER
-                    .import_compass_project(project_id)
-                    .await
-                {
-                    Ok(()) => {
-                        show_empty_project_modal.set(false);
+                match SPELEO_DB_CONTROLLER.import_compass_project(project_id).await {
+                    Ok(imported) => {
+                        if imported {
+                            show_empty_project_modal.set(false);
+                        } else {
+                            // File picker was cancelled: keep the empty project modal visible.
+                            show_empty_project_modal.set(true);
+                        }
                     }
                     Err(e) => {
                         show_empty_project_modal.set(false);
                         error_message.set(Some(format!("Failed to select file: {}", e)));
                     }
                 }
+                reimporting.set(false);
             });
         })
     };
@@ -854,6 +864,55 @@ pub fn project_details(
                             show_close_button={true}
                             on_close={move |_| show_no_changes_modal.set(false)}
                         />
+                    }
+                } else {
+                    html! {}
+                }
+            }
+
+            // Import processing overlay shown for both import entry points
+            {
+                if *reimporting {
+                    html! {
+                        <div class="modal" style="
+                            position: fixed;
+                            top: 0;
+                            left: 0;
+                            width: 100vw;
+                            height: 100vh;
+                            background-color: rgba(0, 0, 0, 0.5);
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            z-index: 2000;
+                        ">
+                            <div class="modal-card" style="
+                                background-color: white;
+                                border-radius: 12px;
+                                padding: 24px;
+                                max-width: 500px;
+                                width: 90%;
+                                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+                                border-top: 4px solid #2563eb;
+                                text-align: center;
+                            ">
+                                <h3 style="margin: 0 0 12px 0; font-size: 20px; color: #1f2937;">
+                                    {"Importing Project"}
+                                </h3>
+                                <p style="color: #4b5563; line-height: 1.6; margin-bottom: 20px;">
+                                    {"Processing Compass files and syncing the project. This can take a moment."}
+                                </p>
+                                <div style="
+                                    border: 4px solid #e5e7eb;
+                                    border-top-color: #3b82f6;
+                                    border-radius: 50%;
+                                    width: 48px;
+                                    height: 48px;
+                                    animation: spin 1s linear infinite;
+                                    margin: 0 auto;
+                                " />
+                            </div>
+                        </div>
                     }
                 } else {
                     html! {}

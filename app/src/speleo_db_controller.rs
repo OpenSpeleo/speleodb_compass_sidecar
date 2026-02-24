@@ -110,7 +110,7 @@ impl SpeleoDBController {
             .map_err(|e| e.to_string())
     }
 
-    pub async fn import_compass_project(&self, id: Uuid) -> Result<(), Error> {
+    pub async fn import_compass_project(&self, id: Uuid) -> Result<bool, Error> {
         let args = ProjectIdArgs::new(id);
         invoke("import_compass_project", &args).await
     }
