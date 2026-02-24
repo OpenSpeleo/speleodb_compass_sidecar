@@ -230,6 +230,25 @@ button:active {
     background-color: #0f0f0f69;
 }
 
+/* Project details primary action buttons */
+.project-primary-action-button {
+    background-color: #2563eb;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.project-primary-action-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.project-primary-action-button:not(:disabled) {
+    cursor: pointer;
+}
+
 #greet-input {
     margin-right: 5px;
 }

@@ -64,6 +64,24 @@ mod tests {
             }
         );
     }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn project_action_buttons_disabled_when_compass_is_open() {
+        assert!(should_disable_project_action_buttons(true, false));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn project_action_buttons_disabled_when_busy() {
+        assert!(should_disable_project_action_buttons(false, true));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn project_action_buttons_enabled_when_idle_and_compass_closed() {
+        assert!(!should_disable_project_action_buttons(false, false));
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -90,6 +108,10 @@ fn next_reimport_state_after_file_pick(selected_path: Option<String>) -> Reimpor
 
 fn validate_import_commit_message(message: &str) -> bool {
     !message.trim().is_empty() && message.chars().count() <= 255
+}
+
+fn should_disable_project_action_buttons(compass_open: bool, busy: bool) -> bool {
+    compass_open || busy
 }
 
 #[function_component(ProjectDetails)]
@@ -126,6 +148,7 @@ pub fn project_details(
         && &project.active_mutex().as_ref().unwrap().user != user_email
         || project.permission() == "READ_ONLY";
     let busy = *uploading || *discarding || *reimporting || downloading;
+    let disable_project_action_buttons = should_disable_project_action_buttons(*compass_open, busy);
     let download_complete = use_state(|| false);
     let commit_message = use_state(String::new);
     let commit_message_error = use_state(|| false);
@@ -390,8 +413,8 @@ pub fn project_details(
                 }}
                 <button
                     onclick={on_open_project.reform(|_| ())}
-                    disabled={busy}
-                    style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500; opacity: disabled ? 0.5 : 1;"
+                    disabled={disable_project_action_buttons}
+                    class="project-primary-action-button"
                 >
                     {"Open in Compass"}
                 </button>
@@ -443,8 +466,8 @@ pub fn project_details(
                         <div style="display: flex; justify-content: center; margin-top: 12px; margin-bottom: 4px;">
                             <button
                                 onclick={on_project_reimport_click}
-                                disabled={busy}
-                                style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500; opacity: disabled ? 0.5 : 1;"
+                                disabled={disable_project_action_buttons}
+                                class="project-primary-action-button"
                             >
                                 {if *reimporting { "Importing..." } else { "Import Compass Project From Disk" }}
                             </button>
