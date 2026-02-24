@@ -115,6 +115,33 @@ impl SpeleoDBController {
         invoke("import_compass_project", &args).await
     }
 
+    pub async fn pick_compass_project_file(&self) -> Result<Option<String>, Error> {
+        invoke("pick_compass_project_file", &()).await
+    }
+
+    pub async fn reimport_compass_project(
+        &self,
+        project_id: Uuid,
+        mak_path: &str,
+        commit_message: &str,
+    ) -> Result<(), Error> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args<'a> {
+            project_id: Uuid,
+            mak_path: &'a str,
+            commit_message: &'a str,
+        }
+
+        let args = Args {
+            project_id,
+            mak_path,
+            commit_message,
+        };
+
+        invoke("reimport_compass_project", &args).await
+    }
+
     pub async fn set_active_project(&self, project_id: Uuid) -> Result<(), String> {
         let args = ProjectIdArgs::new(project_id);
         let _: () = invoke("set_active_project", &args).await.unwrap();

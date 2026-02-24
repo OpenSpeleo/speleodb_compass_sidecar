@@ -208,7 +208,7 @@ impl ProjectManager {
                 // Copy index to working copy
                 let src = compass_project_index_path(self.id());
                 let dst = compass_project_working_path(self.id());
-                copy_dir_all(&src, &dst).map_err(|e| {
+                sync_dir_all(&src, &dst).map_err(|e| {
                     error!(
                         "Failed to copy index to working copy ({} -> {}): {}",
                         src.display(),
@@ -250,6 +250,7 @@ fn unpack_project_zip(project_id: Uuid, zip_bytes: Bytes) -> Result<(), Error> {
     let mut archive = ZipArchive::new(file).map_err(|e| Error::ZipFile(e.to_string()))?;
 
     let index_path = compass_project_index_path(project_id);
+    reset_dir(&index_path).map_err(|e| Error::FileWrite(e.to_string()))?;
 
     // Extract all files
     for i in 0..archive.len() {
@@ -295,6 +296,18 @@ fn cleanup_temp_zip(zip_path: &Path) {
     }
 }
 
+fn reset_dir(path: &Path) -> std::io::Result<()> {
+    if path.exists() {
+        std::fs::remove_dir_all(path)?;
+    }
+    create_dir_all(path)
+}
+
+fn sync_dir_all<A: AsRef<Path>>(src: impl AsRef<Path>, dst: A) -> std::io::Result<()> {
+    reset_dir(dst.as_ref())?;
+    copy_dir_all(src, dst)
+}
+
 fn copy_dir_all<A: AsRef<Path>>(src: impl AsRef<Path>, dst: A) -> std::io::Result<()> {
     create_dir_all(&dst)?;
     for entry in read_dir(src)? {
@@ -307,4 +320,77 @@ fn copy_dir_all<A: AsRef<Path>>(src: impl AsRef<Path>, dst: A) -> std::io::Resul
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::paths::{compass_project_index_path, compass_project_path};
+    use std::io::Write;
+
+    fn cleanup_project_dir(id: Uuid) {
+        let _ = std::fs::remove_dir_all(compass_project_path(id));
+    }
+
+    #[test]
+    fn test_sync_dir_all_replaces_destination_contents() {
+        let temp_root = std::env::temp_dir().join(format!("speleodb_sync_test_{}", Uuid::new_v4()));
+        let src = temp_root.join("src");
+        let dst = temp_root.join("dst");
+        std::fs::create_dir_all(&src).expect("src dir should exist");
+        std::fs::create_dir_all(&dst).expect("dst dir should exist");
+        std::fs::write(src.join("fresh.txt"), "fresh").expect("fresh file should be created");
+        std::fs::write(dst.join("stale.txt"), "stale").expect("stale file should be created");
+
+        sync_dir_all(&src, &dst).expect("sync should succeed");
+
+        assert!(
+            dst.join("fresh.txt").exists(),
+            "fresh file should be copied"
+        );
+        assert!(
+            !dst.join("stale.txt").exists(),
+            "stale destination file should be removed"
+        );
+
+        let _ = std::fs::remove_dir_all(temp_root);
+    }
+
+    #[test]
+    fn test_unpack_project_zip_clears_stale_index_files() {
+        let project_id = Uuid::new_v4();
+        cleanup_project_dir(project_id);
+        let index_path = compass_project_index_path(project_id);
+        std::fs::create_dir_all(&index_path).expect("index dir should be created");
+        std::fs::write(index_path.join("stale.dat"), "stale")
+            .expect("stale file should be created");
+
+        let mut cursor = std::io::Cursor::new(Vec::<u8>::new());
+        {
+            let mut zip_writer = zip::ZipWriter::new(&mut cursor);
+            let options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated);
+            zip_writer
+                .start_file(SPELEODB_COMPASS_PROJECT_FILE, options)
+                .expect("zip file should start");
+            zip_writer
+                .write_all(b"project = 'data'")
+                .expect("zip write should succeed");
+            zip_writer.finish().expect("zip finish should succeed");
+        }
+        let zip_bytes = bytes::Bytes::from(cursor.into_inner());
+
+        unpack_project_zip(project_id, zip_bytes).expect("unpack should succeed");
+
+        assert!(
+            !index_path.join("stale.dat").exists(),
+            "stale file should be removed when unpacking"
+        );
+        assert!(
+            index_path.join(SPELEODB_COMPASS_PROJECT_FILE).exists(),
+            "new compass.toml should exist after unpack"
+        );
+
+        cleanup_project_dir(project_id);
+    }
 }

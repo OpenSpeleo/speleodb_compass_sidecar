@@ -24,6 +24,74 @@ pub struct ProjectDetailsProps {
     pub project_downloading: bool,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
+
+    #[cfg(target_arch = "wasm32")]
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn import_message_validation_rejects_empty_or_too_long() {
+        assert!(!validate_import_commit_message(""));
+        assert!(!validate_import_commit_message("   "));
+        assert!(!validate_import_commit_message(&"a".repeat(256)));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn import_message_validation_accepts_trimmed_non_empty_message() {
+        assert!(validate_import_commit_message("Initial import"));
+        assert!(validate_import_commit_message("  Import from disk  "));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn reimport_flow_transitions_for_cancel_and_file_pick() {
+        assert_eq!(start_reimport_flow(), ReimportFlowState::ConfirmOverwrite);
+        assert_eq!(cancel_reimport_flow(), ReimportFlowState::Idle);
+        assert_eq!(
+            next_reimport_state_after_file_pick(None),
+            ReimportFlowState::Idle
+        );
+        assert_eq!(
+            next_reimport_state_after_file_pick(Some("/tmp/test.mak".to_string())),
+            ReimportFlowState::EnterCommitMessage {
+                mak_path: "/tmp/test.mak".to_string()
+            }
+        );
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum ReimportFlowState {
+    Idle,
+    ConfirmOverwrite,
+    EnterCommitMessage { mak_path: String },
+}
+
+fn start_reimport_flow() -> ReimportFlowState {
+    ReimportFlowState::ConfirmOverwrite
+}
+
+fn cancel_reimport_flow() -> ReimportFlowState {
+    ReimportFlowState::Idle
+}
+
+fn next_reimport_state_after_file_pick(selected_path: Option<String>) -> ReimportFlowState {
+    match selected_path {
+        Some(mak_path) => ReimportFlowState::EnterCommitMessage { mak_path },
+        None => cancel_reimport_flow(),
+    }
+}
+
+fn validate_import_commit_message(message: &str) -> bool {
+    !message.trim().is_empty() && message.chars().count() <= 255
+}
+
 #[function_component(ProjectDetails)]
 pub fn project_details(
     ProjectDetailsProps {
@@ -44,6 +112,10 @@ pub fn project_details(
     let show_no_changes_modal = use_state(|| false);
     let show_empty_project_modal = use_state(|| false);
     let show_discard_confirm_modal = use_state(|| false);
+    let reimport_flow_state = use_state(cancel_reimport_flow);
+    let reimport_message = use_state(String::new);
+    let reimport_message_error = use_state(|| false);
+    let reimporting = use_state(|| false);
     let discarding = use_state(|| false);
     let error_message: UseStateHandle<Option<String>> = use_state(|| None);
     let upload_error: UseStateHandle<Option<String>> = use_state(|| None);
@@ -53,7 +125,7 @@ pub fn project_details(
     let is_readonly = project.active_mutex().is_some()
         && &project.active_mutex().as_ref().unwrap().user != user_email
         || project.permission() == "READ_ONLY";
-    let busy = *uploading || *discarding || downloading;
+    let busy = *uploading || *discarding || *reimporting || downloading;
     let download_complete = use_state(|| false);
     let commit_message = use_state(String::new);
     let commit_message_error = use_state(|| false);
@@ -208,6 +280,74 @@ pub fn project_details(
         })
     };
 
+    let on_close_empty_project_modal = {
+        let show_empty_project_modal = show_empty_project_modal.clone();
+        Callback::from(move |_: ()| {
+            show_empty_project_modal.set(false);
+            spawn_local(async move {
+                // Return to project listing when dismissing the empty project modal.
+                let _ = SPELEO_DB_CONTROLLER.clear_active_project().await;
+            });
+        })
+    };
+
+    let on_project_reimport_click = {
+        let reimport_flow_state = reimport_flow_state.clone();
+        let reimport_message = reimport_message.clone();
+        let reimport_message_error = reimport_message_error.clone();
+        Callback::from(move |_| {
+            reimport_message.set(String::new());
+            reimport_message_error.set(false);
+            reimport_flow_state.set(start_reimport_flow());
+        })
+    };
+
+    let on_reimport_warning_cancel = {
+        let reimport_flow_state = reimport_flow_state.clone();
+        Callback::from(move |_| {
+            reimport_flow_state.set(cancel_reimport_flow());
+        })
+    };
+
+    let on_reimport_warning_proceed = {
+        let reimport_flow_state = reimport_flow_state.clone();
+        let error_message = error_message.clone();
+        let reimport_message = reimport_message.clone();
+        let reimport_message_error = reimport_message_error.clone();
+        Callback::from(move |_| {
+            reimport_flow_state.set(cancel_reimport_flow());
+            let reimport_flow_state = reimport_flow_state.clone();
+            let error_message = error_message.clone();
+            let reimport_message = reimport_message.clone();
+            let reimport_message_error = reimport_message_error.clone();
+            spawn_local(async move {
+                match SPELEO_DB_CONTROLLER.pick_compass_project_file().await {
+                    Ok(selected_path) => {
+                        reimport_message.set(String::new());
+                        reimport_message_error.set(false);
+                        reimport_flow_state.set(next_reimport_state_after_file_pick(selected_path));
+                    }
+                    Err(e) => {
+                        error_message.set(Some(format!("Failed to select file: {}", e)));
+                    }
+                }
+            });
+        })
+    };
+
+    let on_reimport_message_input = {
+        let reimport_message = reimport_message.clone();
+        let reimport_message_error = reimport_message_error.clone();
+        Callback::from(move |e: InputEvent| {
+            let input: web_sys::HtmlTextAreaElement = e.target_unchecked_into();
+            let new_message = input.value();
+            reimport_message.set(new_message.clone());
+            if validate_import_commit_message(&new_message) {
+                reimport_message_error.set(false);
+            }
+        })
+    };
+
     // Back button handler - release mutex before navigating back
     let on_back_click = {
         Callback::from(move |_| {
@@ -287,6 +427,23 @@ pub fn project_details(
 
             <h2><strong>{"Project: "}</strong>{&project.name()}</h2>
             <p style="color: #6b7280; font-size: 14px;">{format!("ID: {}", project.id())}</p>
+            {
+                if !is_readonly {
+                    html! {
+                        <div style="display: flex; justify-content: center; margin-top: 12px; margin-bottom: 4px;">
+                            <button
+                                onclick={on_project_reimport_click}
+                                disabled={busy}
+                                style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500; opacity: disabled ? 0.5 : 1;"
+                            >
+                                {if *reimporting { "Importing..." } else { "Import Compass Project From Disk" }}
+                            </button>
+                        </div>
+                    }
+                } else {
+                    html! {}
+                }
+            }
 
             {
                 if downloading {
@@ -442,11 +599,15 @@ pub fn project_details(
                 };
             } else if *show_empty_project_modal {
                 let on_import_from_disk = on_import_from_disk.clone();
+                let on_close_empty_project_modal = on_close_empty_project_modal.clone();
                 html! {
                     <Modal
                         title="Empty Project"
                         message="This project contains no Compass data yet.\n\nTo initialize the project, use the 'Import from Disk' button to upload your local project files."
                         modal_type={ModalType::Info}
+                        show_close_button={true}
+                        close_button_text={Some("Back to Projects".to_string())}
+                        on_close={on_close_empty_project_modal}
                         primary_button_text="Import Compass Project From Disk"
                         on_primary_action={on_import_from_disk}
                     />
@@ -455,6 +616,150 @@ pub fn project_details(
                 html! {}
             }
                     }
+
+            // Reimport warning + commit message flow for the project-details button
+            {
+                match &*reimport_flow_state {
+                    ReimportFlowState::ConfirmOverwrite => {
+                        html! {
+                            <Modal
+                                title="Import Project From Disk?"
+                                message="You are about to import a local Compass project into the current project.\n\nWarning: this may overwrite existing project data:\n- Existing unsaved data may be lost.\n- The imported files will become the current project content.\n- This action cannot be undone.\n\nDo you want to proceed?"
+                                modal_type={ModalType::Warning}
+                                show_close_button={true}
+                                close_button_text={Some("Cancel".to_string())}
+                                primary_button_text={Some("Proceed".to_string())}
+                                on_close={on_reimport_warning_cancel.clone()}
+                                on_primary_action={on_reimport_warning_proceed.clone()}
+                            />
+                        }
+                    }
+                    ReimportFlowState::EnterCommitMessage { mak_path } => {
+                        let reimport_flow_state_cancel = reimport_flow_state.clone();
+                        let reimport_message_cancel = reimport_message.clone();
+                        let reimport_message_error_cancel = reimport_message_error.clone();
+                        let cancel_message_modal = Callback::from(move |_| {
+                            reimport_message_cancel.set(String::new());
+                            reimport_message_error_cancel.set(false);
+                            reimport_flow_state_cancel.set(cancel_reimport_flow());
+                        });
+
+                        let project_id = project.id();
+                        let mak_path_display = mak_path.to_string();
+                        let mak_path_for_import = mak_path_display.clone();
+                        let reimport_flow_state_for_import = reimport_flow_state.clone();
+                        let reimport_message_for_import = reimport_message.clone();
+                        let reimport_message_error_for_import = reimport_message_error.clone();
+                        let reimporting_for_import = reimporting.clone();
+                        let error_message_for_import = error_message.clone();
+                        let on_confirm_reimport = Callback::from(move |_| {
+                            let message = (*reimport_message_for_import).clone();
+                            if !validate_import_commit_message(&message) {
+                                reimport_message_error_for_import.set(true);
+                                return;
+                            }
+                            reimporting_for_import.set(true);
+                            error_message_for_import.set(None);
+                            let mak_path = mak_path_for_import.clone();
+                            let reimport_flow_state = reimport_flow_state_for_import.clone();
+                            let reimport_message = reimport_message_for_import.clone();
+                            let reimport_message_error = reimport_message_error_for_import.clone();
+                            let reimporting = reimporting_for_import.clone();
+                            let error_message = error_message_for_import.clone();
+                            spawn_local(async move {
+                                match SPELEO_DB_CONTROLLER
+                                    .reimport_compass_project(project_id, &mak_path, &message)
+                                    .await
+                                {
+                                    Ok(()) => {
+                                        reimport_message.set(String::new());
+                                        reimport_message_error.set(false);
+                                        reimport_flow_state.set(cancel_reimport_flow());
+                                    }
+                                    Err(e) => {
+                                        error_message
+                                            .set(Some(format!("Failed to import project: {}", e)));
+                                    }
+                                }
+                                reimporting.set(false);
+                            });
+                        });
+
+                        html! {
+                            <div class="modal" style="
+                                position: fixed;
+                                top: 0;
+                                left: 0;
+                                width: 100vw;
+                                height: 100vh;
+                                background-color: rgba(0, 0, 0, 0.5);
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                z-index: 1000;
+                            ">
+                                <div class="modal-card" style="
+                                    background-color: white;
+                                    border-radius: 12px;
+                                    padding: 24px;
+                                    max-width: 560px;
+                                    width: 90%;
+                                    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+                                    border-top: 4px solid #3b82f6;
+                                ">
+                                    <h3 style="margin: 0 0 12px 0; font-size: 20px; color: #1f2937;">{"Import Message"}</h3>
+                                    <p style="color: #4b5563; margin-bottom: 8px; white-space: pre-line;">
+                                        {"Enter a commit message for this import."}
+                                    </p>
+                                    <p style="color: #6b7280; margin-bottom: 12px; font-size: 12px; word-break: break-word;">
+                                        {format!("Selected file: {}", mak_path_display)}
+                                    </p>
+                                    <textarea
+                                        rows="4"
+                                        value={(*reimport_message).clone()}
+                                        oninput={on_reimport_message_input}
+                                        placeholder="Describe this import (max 255 characters)"
+                                        maxlength="255"
+                                        disabled={*reimporting}
+                                        style={format!(
+                                            "width: 100%; padding: 8px; border: 1px solid {}; border-radius: 6px; box-sizing: border-box; font-family: inherit;",
+                                            if *reimport_message_error { "#ef4444" } else { "#d1d5db" }
+                                        )}
+                                    />
+                                    {
+                                        if *reimport_message_error {
+                                            html! {
+                                                <p style="color: #ef4444; font-size: 12px; margin-top: 6px;">
+                                                    {"Please enter an import message before continuing."}
+                                                </p>
+                                            }
+                                        } else {
+                                            html! {}
+                                        }
+                                    }
+                                    <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px;">
+                                        <button
+                                            onclick={cancel_message_modal}
+                                            disabled={*reimporting}
+                                            style="padding: 8px 16px; border: 1px solid #d1d5db; border-radius: 6px; background-color: white; color: #374151; cursor: pointer;"
+                                        >
+                                            {"Cancel"}
+                                        </button>
+                                        <button
+                                            onclick={on_confirm_reimport}
+                                            disabled={*reimporting}
+                                            style="padding: 8px 16px; border: none; border-radius: 6px; background-color: #2563eb; color: white; cursor: pointer; font-weight: 500;"
+                                        >
+                                            {if *reimporting { "Importing..." } else { "Import Project" }}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                    ReimportFlowState::Idle => html! {},
+                }
+            }
 
             // Discard Changes Confirmation Modal
             {

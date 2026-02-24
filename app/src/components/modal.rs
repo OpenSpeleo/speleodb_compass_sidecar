@@ -22,6 +22,8 @@ pub struct ModalProps {
     pub on_primary_action: Callback<()>,
     #[prop_or_default]
     pub show_close_button: bool,
+    #[prop_or_default]
+    pub close_button_text: Option<String>,
 }
 
 #[function_component(Modal)]
@@ -75,6 +77,10 @@ pub fn modal(props: &ModalProps) -> Html {
                 <div style="display: flex; justify-content: flex-end; gap: 12px;">
                     {
                         if props.show_close_button {
+                            let close_button_text = props
+                                .close_button_text
+                                .as_deref()
+                                .unwrap_or("Close");
                             html! {
                                 <button
                                     onclick={close_handler.clone()}
@@ -89,7 +95,7 @@ pub fn modal(props: &ModalProps) -> Html {
                                         transition: background-color 0.2s;
                                     "
                                 >
-                                    {"Close"}
+                                    {close_button_text}
                                 </button>
                             }
                         } else {

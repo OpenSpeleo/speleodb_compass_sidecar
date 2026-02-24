@@ -6,9 +6,9 @@ mod user_prefs;
 
 use crate::{
     commands::{
-        auth_request, clear_active_project, create_project, discard_changes,
-        ensure_initialized, import_compass_project, open_project, release_project_mutex,
-        save_project, set_active_project, sign_out,
+        auth_request, clear_active_project, create_project, discard_changes, ensure_initialized,
+        import_compass_project, open_project, pick_compass_project_file, reimport_compass_project,
+        release_project_mutex, save_project, set_active_project, sign_out,
     },
     paths::{compass_home, ensure_app_dir_exists, init_file_logger},
     state::AppState,
@@ -53,6 +53,8 @@ pub fn run() {
             ensure_initialized,
             sign_out,
             import_compass_project,
+            pick_compass_project_file,
+            reimport_compass_project,
             open_project,
             release_project_mutex,
             set_active_project,
@@ -77,7 +79,9 @@ pub fn run() {
                     api.prevent_close();
                     window
                         .dialog()
-                        .message("Please close Compass before exiting to prevent losing unsaved work.")
+                        .message(
+                            "Please close Compass before exiting to prevent losing unsaved work.",
+                        )
                         .title("Compass is Open")
                         .kind(MessageDialogKind::Warning)
                         .blocking_show();
