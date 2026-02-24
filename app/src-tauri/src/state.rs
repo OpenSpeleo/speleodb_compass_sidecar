@@ -296,9 +296,14 @@ impl AppState {
             .save_local_changes(&api_info, commit_message)
             .await?;
 
-        let updated_project_info = api::project::fetch_project_info(&api_info, project_id).await?;
-        let project_manager = ProjectManager::initialize_from_info(updated_project_info);
+        // Refresh remote metadata after upload so local status compares against
+        // the latest server commit, not stale project info.
+        let updated_project_info =
+            api::project::fetch_project_info(&api_info, project_id).await?;
+        let project_manager = ProjectManager::initialize_from_info(updated_project_info.clone());
         project_manager.update_local_copies(&api_info).await?;
+        self.set_project_info(updated_project_info);
+        self.emit_app_state_change().await;
         Ok(result)
     }
 
