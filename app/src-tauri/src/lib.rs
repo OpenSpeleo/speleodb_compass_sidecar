@@ -6,15 +6,16 @@ mod user_prefs;
 
 use crate::{
     commands::{
-        auth_request, clear_active_project, create_project, discard_changes, ensure_initialized,
-        import_compass_project, open_project, pick_compass_project_file, reimport_compass_project,
-        release_project_mutex, save_project, set_active_project, sign_out,
+        about_info, auth_request, clear_active_project, create_project, discard_changes,
+        ensure_initialized, import_compass_project, open_project, pick_compass_project_file,
+        reimport_compass_project, release_project_mutex, save_project, set_active_project,
+        sign_out,
     },
     paths::{compass_home, ensure_app_dir_exists, init_file_logger},
     state::AppState,
 };
 use semver::Version;
-use tauri::{Manager, WindowEvent};
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 const SPELEODB_COMPASS_VERSION: Version = Version::new(1, 0, 0);
@@ -46,6 +47,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            about_info,
             auth_request,
             clear_active_project,
             create_project,
@@ -62,12 +64,30 @@ pub fn run() {
         ])
         .manage(AppState::new())
         .setup(|app| {
-            app.on_menu_event(move |app_handle, event| {
-                let app_state = app_handle.state::<AppState>();
-                if event.id().0.as_str() == "sign_out" {
+            app.on_menu_event(move |app_handle, event| match event.id().0.as_str() {
+                "sign_out" => {
                     log::info!("Sign out menu item clicked");
+                    let app_state = app_handle.state::<AppState>();
                     app_state.sign_out(app_handle).ok();
                 }
+                "about" => {
+                    log::info!("About menu item clicked");
+                    if let Some(window) = app_handle.get_webview_window("about") {
+                        window.set_focus().ok();
+                    } else {
+                        WebviewWindowBuilder::new(
+                            app_handle,
+                            "about",
+                            WebviewUrl::App("about.html".into()),
+                        )
+                        .title("About SpeleoDB Compass Sidecar")
+                        .inner_size(450.0, 550.0)
+                        .resizable(false)
+                        .build()
+                        .ok();
+                    }
+                }
+                _ => {}
             });
             Ok(())
         })

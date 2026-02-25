@@ -153,15 +153,23 @@ impl AppState {
             return;
         };
         let has_token = self.api_info().oauth_token().is_some();
+        let help_submenu = SubmenuBuilder::new(&app_handle, "Help")
+            .text("about", "About")
+            .build()
+            .unwrap();
         let menu = if !has_token {
-            MenuBuilder::new(&app_handle).build().unwrap()
+            MenuBuilder::new(&app_handle)
+                .item(&help_submenu)
+                .build()
+                .unwrap()
         } else {
-            let submenu = SubmenuBuilder::new(&app_handle, "Account")
+            let account_submenu = SubmenuBuilder::new(&app_handle, "Account")
                 .text("sign_out", "Sign Out")
                 .build()
                 .unwrap();
             MenuBuilder::new(&app_handle)
-                .item(&submenu)
+                .item(&account_submenu)
+                .item(&help_submenu)
                 .build()
                 .unwrap()
         };
@@ -298,8 +306,7 @@ impl AppState {
 
         // Refresh remote metadata after upload so local status compares against
         // the latest server commit, not stale project info.
-        let updated_project_info =
-            api::project::fetch_project_info(&api_info, project_id).await?;
+        let updated_project_info = api::project::fetch_project_info(&api_info, project_id).await?;
         let project_manager = ProjectManager::initialize_from_info(updated_project_info.clone());
         project_manager.update_local_copies(&api_info).await?;
         self.set_project_info(updated_project_info);

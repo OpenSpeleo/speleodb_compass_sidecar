@@ -80,7 +80,7 @@ Workspace dependencies defined in root `Cargo.toml`: bytes, log, serde, serde_js
 
 **Backend (app/src-tauri/src/)**
 - `lib.rs` - Tauri app setup: plugins (updater, dialog), command registration, window close prevention if Compass is open, menu with sign-out, Sentry init
-- `commands.rs` - Tauri commands: `ensure_initialized`, `auth_request`, `sign_out`, `open_project`, `save_project`, `import_compass_project`, `set_active_project`, `clear_active_project`, `release_project_mutex`, `create_project`
+- `commands.rs` - Tauri commands: `about_info`, `auth_request`, `clear_active_project`, `create_project`, `discard_changes`, `ensure_initialized`, `import_compass_project`, `open_project`, `pick_compass_project_file`, `reimport_compass_project`, `release_project_mutex`, `save_project`, `set_active_project`, `sign_out`
 - `state.rs` - `AppState` with Mutex-protected fields (api_info, project_info HashMap, active_project, compass_pid, loading_state), background task, `emit_app_state_change()` to push `UiState` to frontend via `UI_STATE_EVENT`
 - `paths.rs` - Path constants and helpers: `~/.compass/` home dir, `~/.compass/projects/{uuid}/index` and `working_copy` layout, file logger setup
 - `user_prefs.rs` - `UserPrefs` persistence: load/save TOML credentials, env var fallback for tests (`TEST_SPELEODB_INSTANCE`, `TEST_SPELEODB_OAUTH`)
@@ -185,6 +185,5 @@ Also requires MSYS2 with `base-devel` and `mingw-w64-ucrt-x86_64-toolchain` pack
 
 ## Version Info
 
-- Tauri backend Cargo.toml: `0.0.7`
-- tauri.conf.json: `0.0.6` (note: out of sync with Cargo.toml)
+- Cargo.toml and tauri.conf.json: `0.1.0`
 - `SPELEODB_COMPASS_VERSION` constant in `lib.rs`: `1.0.0`

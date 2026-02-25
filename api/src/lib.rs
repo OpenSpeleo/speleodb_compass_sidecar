@@ -8,7 +8,10 @@ use std::{sync::LazyLock, time::Duration};
 pub const API_BASE_URL: &str = "https://stage.speleodb.org";
 #[cfg(not(debug_assertions))]
 pub const API_BASE_URL: &str = "https://www.speleodb.com";
-const API_USER_AGENT: &str = concat!("Tauri/SpeleoDB-Compass-Sidecar/v", env!("CARGO_PKG_VERSION"));
+const API_USER_AGENT: &str = concat!(
+    "Tauri/SpeleoDB-Compass-Sidecar/v",
+    env!("CARGO_PKG_VERSION")
+);
 
 static API_CLIENT: LazyLock<Client> = LazyLock::new(|| {
     Client::builder()
@@ -30,7 +33,10 @@ mod tests {
     fn api_user_agent_has_expected_format() {
         assert_eq!(
             API_USER_AGENT,
-            format!("Tauri/SpeleoDB-Compass-Sidecar/v{}", env!("CARGO_PKG_VERSION"))
+            format!(
+                "Tauri/SpeleoDB-Compass-Sidecar/v{}",
+                env!("CARGO_PKG_VERSION")
+            )
         );
     }
 }

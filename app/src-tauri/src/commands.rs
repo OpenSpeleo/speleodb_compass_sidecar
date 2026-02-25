@@ -1,15 +1,34 @@
 use crate::{
-    paths::compass_project_working_path, project_management::LocalProject, state::AppState,
-    user_prefs::UserPrefs,
+    SPELEODB_COMPASS_VERSION, paths::compass_project_working_path,
+    project_management::LocalProject, state::AppState, user_prefs::UserPrefs,
 };
 use common::{Error, api_types::ProjectSaveResult};
 use log::info;
+use serde::Serialize;
 use std::{path::PathBuf, process::Command, sync::mpsc, time::Duration};
 use tauri::{AppHandle, Manager, State, Url};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
 
 const FILE_PICKER_TIMEOUT: Duration = Duration::from_secs(300);
+
+#[derive(Serialize)]
+pub struct AboutInfo {
+    version: String,
+    repo: &'static str,
+    authors: Vec<&'static str>,
+    description: &'static str,
+}
+
+#[tauri::command]
+pub fn about_info() -> AboutInfo {
+    AboutInfo {
+        version: SPELEODB_COMPASS_VERSION.to_string(),
+        repo: "https://github.com/OpenSpeleo/speleodb_compass_sidecar",
+        authors: vec!["Jonathan Dekhtiar", "Zachary Heylmun"],
+        description: "Companion app to use SpeleoDB with Compass",
+    }
+}
 
 #[tauri::command]
 pub fn ensure_initialized(app_handle: AppHandle) {
@@ -143,10 +162,11 @@ async fn pick_compass_project_file_path(app_handle: &AppHandle) -> Result<PathBu
         });
 
     // Wait off the async runtime thread so we never block the UI event loop.
-    let file_path = tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(FILE_PICKER_TIMEOUT))
-        .await
-        .map_err(|e| Error::OsCommand(format!("File picker task failed: {e}")))?
-        .map_err(|e| Error::OsCommand(format!("File picker timed out or failed: {e}")))?;
+    let file_path =
+        tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(FILE_PICKER_TIMEOUT))
+            .await
+            .map_err(|e| Error::OsCommand(format!("File picker task failed: {e}")))?
+            .map_err(|e| Error::OsCommand(format!("File picker timed out or failed: {e}")))?;
 
     let Some(file_path) = file_path else {
         return Err(Error::NoProjectSelected);
@@ -181,7 +201,10 @@ async fn import_project_from_path(
 }
 
 #[tauri::command]
-pub async fn import_compass_project(app_handle: AppHandle, project_id: Uuid) -> Result<bool, Error> {
+pub async fn import_compass_project(
+    app_handle: AppHandle,
+    project_id: Uuid,
+) -> Result<bool, Error> {
     let file_path = match pick_compass_project_file_path(&app_handle).await {
         Ok(path) => path,
         Err(Error::NoProjectSelected) => return Ok(false),
