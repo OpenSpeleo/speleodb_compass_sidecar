@@ -38,7 +38,12 @@ pub struct CommitInfo {
     pub message: String,
     pub author_name: String,
     pub dt_since: String,
+    #[serde(default, skip_serializing)]
+    pub tree: Vec<CommitTreeEntry>,
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct CommitTreeEntry {}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum ProjectSaveResult {

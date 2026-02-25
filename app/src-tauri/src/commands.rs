@@ -4,10 +4,12 @@ use crate::{
 };
 use common::{Error, api_types::ProjectSaveResult};
 use log::info;
-use std::process::Command;
+use std::{path::PathBuf, process::Command, sync::mpsc, time::Duration};
 use tauri::{AppHandle, Manager, State, Url};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
+
+const FILE_PICKER_TIMEOUT: Duration = Duration::from_secs(300);
 
 #[tauri::command]
 pub fn ensure_initialized(app_handle: AppHandle) {
@@ -130,23 +132,96 @@ pub async fn save_project(
     app_state.save_active_project(commit_message).await
 }
 
-#[tauri::command]
-pub async fn import_compass_project(app_handle: AppHandle, project_id: Uuid) -> Result<(), Error> {
-    let Some(FilePath::Path(file_path)) = app_handle
+async fn pick_compass_project_file_path(app_handle: &AppHandle) -> Result<PathBuf, Error> {
+    let (tx, rx) = mpsc::channel::<Option<FilePath>>();
+    app_handle
         .dialog()
         .file()
         .add_filter("MAK", &["mak"])
-        .blocking_pick_file()
-    else {
+        .pick_file(move |file_path| {
+            let _ = tx.send(file_path);
+        });
+
+    // Wait off the async runtime thread so we never block the UI event loop.
+    let file_path = tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(FILE_PICKER_TIMEOUT))
+        .await
+        .map_err(|e| Error::OsCommand(format!("File picker task failed: {e}")))?
+        .map_err(|e| Error::OsCommand(format!("File picker timed out or failed: {e}")))?;
+
+    let Some(file_path) = file_path else {
         return Err(Error::NoProjectSelected);
     };
-    info!("Selected MAK file: {}", file_path.display());
-    info!("Importing into Compass project: {:?}", project_id);
-    LocalProject::import_compass_project(project_id, &file_path)?;
-    info!("Successfully imported Compass project from : {file_path:?}");
-    save_project(app_handle, "Imported local project".to_string()).await?;
 
+    match file_path {
+        FilePath::Path(path) => Ok(path),
+        FilePath::Url(url) => url.to_file_path().map_err(|_| {
+            Error::Deserialization("Failed to convert selected file URL to path".into())
+        }),
+    }
+}
+
+async fn import_project_from_path(
+    app_handle: AppHandle,
+    project_id: Uuid,
+    mak_path: PathBuf,
+    commit_message: String,
+    clear_working_copy: bool,
+) -> Result<(), Error> {
+    info!("Selected MAK file: {}", mak_path.display());
+    info!("Importing into Compass project: {:?}", project_id);
+
+    if clear_working_copy {
+        LocalProject::clear_working_copy_compass_artifacts(project_id)?;
+    }
+
+    LocalProject::import_compass_project(project_id, &mak_path)?;
+    info!("Successfully imported Compass project from : {mak_path:?}");
+    save_project(app_handle, commit_message).await?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn import_compass_project(app_handle: AppHandle, project_id: Uuid) -> Result<bool, Error> {
+    let file_path = match pick_compass_project_file_path(&app_handle).await {
+        Ok(path) => path,
+        Err(Error::NoProjectSelected) => return Ok(false),
+        Err(err) => return Err(err),
+    };
+    import_project_from_path(
+        app_handle,
+        project_id,
+        file_path,
+        "Imported local project".to_string(),
+        false,
+    )
+    .await?;
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn pick_compass_project_file(app_handle: AppHandle) -> Result<Option<String>, Error> {
+    match pick_compass_project_file_path(&app_handle).await {
+        Ok(path) => Ok(Some(path.to_string_lossy().to_string())),
+        Err(Error::NoProjectSelected) => Ok(None),
+        Err(err) => Err(err),
+    }
+}
+
+#[tauri::command]
+pub async fn reimport_compass_project(
+    app_handle: AppHandle,
+    project_id: Uuid,
+    mak_path: String,
+    commit_message: String,
+) -> Result<(), Error> {
+    import_project_from_path(
+        app_handle,
+        project_id,
+        PathBuf::from(mak_path),
+        commit_message,
+        true,
+    )
+    .await
 }
 
 #[tauri::command]

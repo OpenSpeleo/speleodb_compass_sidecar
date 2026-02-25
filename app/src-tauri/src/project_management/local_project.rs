@@ -67,6 +67,50 @@ pub struct LocalProject {
 }
 
 impl LocalProject {
+    fn is_compass_artifact(path: &Path) -> bool {
+        if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case(SPELEODB_COMPASS_PROJECT_FILE))
+        {
+            return true;
+        }
+
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| matches!(ext.to_ascii_lowercase().as_str(), "mak" | "dat" | "plt"))
+    }
+
+    fn clear_compass_artifacts_from_dir(path: &Path) -> Result<(), Error> {
+        if !path.exists() {
+            return Ok(());
+        }
+
+        let entries = std::fs::read_dir(path).map_err(|e| Error::FileRead(e.to_string()))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| Error::FileRead(e.to_string()))?;
+            let entry_path = entry.path();
+            let file_type = entry
+                .file_type()
+                .map_err(|e| Error::FileRead(e.to_string()))?;
+            if file_type.is_dir() {
+                Self::clear_compass_artifacts_from_dir(&entry_path)?;
+                continue;
+            }
+            if Self::is_compass_artifact(&entry_path) {
+                std::fs::remove_file(&entry_path).map_err(|e| Error::FileWrite(e.to_string()))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Remove Compass project artifacts from the working copy before re-importing.
+    pub fn clear_working_copy_compass_artifacts(id: Uuid) -> Result<(), Error> {
+        let working_copy_path = compass_project_working_path(id);
+        Self::clear_compass_artifacts_from_dir(&working_copy_path)
+    }
+
     pub fn working_copy_is_dirty(id: Uuid) -> Result<bool, Error> {
         let index_copy = LocalProject::load_index_project(id).ok();
         let working_copy = LocalProject::load_working_project(id).ok();
@@ -185,6 +229,10 @@ impl LocalProject {
         for (file_path, relative_path) in project_file_paths.iter().zip(project_files.iter()) {
             let mut target_path = compass_project_working_path(id);
             target_path.push(relative_path);
+            if let Some(parent_dir) = target_path.parent() {
+                std::fs::create_dir_all(parent_dir)
+                    .map_err(|_| Error::CreateDirectory(parent_dir.to_path_buf()))?;
+            }
             std::fs::copy(file_path, &target_path)
                 .map_err(|_| Error::ProjectImport(file_path.to_owned(), target_path.to_owned()))?;
         }
@@ -326,16 +374,207 @@ impl LocalProject {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::paths::{compass_project_path, compass_project_working_path};
     use serial_test::serial;
-    use std::{path::PathBuf, str::FromStr};
+    use std::path::PathBuf;
+
+    fn fixture_path(file_name: &str) -> PathBuf {
+        PathBuf::from(format!(
+            "{}/assets/test_data/{}",
+            env!("CARGO_MANIFEST_DIR"),
+            file_name
+        ))
+    }
+
+    fn cleanup_project_dir(id: Uuid) {
+        let _ = std::fs::remove_dir_all(compass_project_path(id));
+    }
+
+    fn setup_import_source(id: Uuid, with_dat_files: bool) -> PathBuf {
+        let source_dir = std::env::temp_dir().join(format!("speleodb_import_source_{id}"));
+        let _ = std::fs::remove_dir_all(&source_dir);
+        std::fs::create_dir_all(&source_dir).expect("source dir should be created");
+
+        std::fs::copy(
+            fixture_path("Fulfords.mak"),
+            source_dir.join("Fulfords.mak"),
+        )
+        .expect("test mak should be copied");
+
+        if with_dat_files {
+            std::fs::copy(fixture_path("Fulford.dat"), source_dir.join("FULFORD.DAT"))
+                .expect("FULFORD.DAT should be copied");
+            std::fs::copy(fixture_path("Fulsurf.dat"), source_dir.join("FULSURF.DAT"))
+                .expect("FULSURF.DAT should be copied");
+        }
+
+        source_dir
+    }
 
     #[test]
     #[serial]
     fn test_project_import() {
         let id = Uuid::new_v4();
-        let crate_dir = env!("CARGO_MANIFEST_DIR");
-        let mak_path = PathBuf::from_str(&format!("{}/assets/test_data/Fulfords.mak", crate_dir))
-            .expect("Failed to create path to test .mak file");
-        LocalProject::import_compass_project(id, &mak_path).unwrap();
+        cleanup_project_dir(id);
+        let source_dir = setup_import_source(id, true);
+        let mak_path = source_dir.join("Fulfords.mak");
+
+        let result = LocalProject::import_compass_project(id, &mak_path);
+
+        assert!(result.is_ok(), "import should succeed for valid fixture");
+        cleanup_project_dir(id);
+        let _ = std::fs::remove_dir_all(source_dir);
+    }
+
+    #[test]
+    #[serial]
+    fn test_clear_working_copy_compass_artifacts_removes_only_compass_files() {
+        let id = Uuid::new_v4();
+        cleanup_project_dir(id);
+        let working_copy = compass_project_working_path(id);
+        std::fs::create_dir_all(working_copy.join("nested"))
+            .expect("nested path should be created");
+
+        std::fs::write(working_copy.join("legacy.mak"), "mak").expect("legacy mak created");
+        std::fs::write(working_copy.join("legacy.dat"), "dat").expect("legacy dat created");
+        std::fs::write(working_copy.join("legacy.plt"), "plt").expect("legacy plt created");
+        std::fs::write(working_copy.join(SPELEODB_COMPASS_PROJECT_FILE), "project")
+            .expect("compass.toml created");
+        std::fs::write(working_copy.join("notes.txt"), "notes").expect("notes created");
+        std::fs::write(working_copy.join("nested/keep.md"), "keep").expect("keep created");
+        std::fs::write(working_copy.join("nested/legacy.dat"), "nested dat")
+            .expect("nested dat created");
+
+        LocalProject::clear_working_copy_compass_artifacts(id).expect("cleanup should succeed");
+
+        assert!(
+            !working_copy.join("legacy.mak").exists(),
+            "mak files should be removed"
+        );
+        assert!(
+            !working_copy.join("legacy.dat").exists(),
+            "dat files should be removed"
+        );
+        assert!(
+            !working_copy.join("legacy.plt").exists(),
+            "plt files should be removed"
+        );
+        assert!(
+            !working_copy.join(SPELEODB_COMPASS_PROJECT_FILE).exists(),
+            "compass.toml should be removed"
+        );
+        assert!(
+            !working_copy.join("nested/legacy.dat").exists(),
+            "nested dat files should be removed"
+        );
+        assert!(
+            working_copy.join("notes.txt").exists(),
+            "non-compass files should be kept"
+        );
+        assert!(
+            working_copy.join("nested/keep.md").exists(),
+            "non-compass nested files should be kept"
+        );
+
+        cleanup_project_dir(id);
+    }
+
+    #[test]
+    #[serial]
+    fn test_clear_working_copy_compass_artifacts_is_idempotent() {
+        let id = Uuid::new_v4();
+        cleanup_project_dir(id);
+
+        LocalProject::clear_working_copy_compass_artifacts(id)
+            .expect("cleanup should succeed for missing dir");
+
+        let working_copy = compass_project_working_path(id);
+        std::fs::create_dir_all(&working_copy).expect("working copy should be created");
+        std::fs::write(working_copy.join("keep.txt"), "keep").expect("keep file should be created");
+
+        LocalProject::clear_working_copy_compass_artifacts(id).expect("first cleanup succeeds");
+        LocalProject::clear_working_copy_compass_artifacts(id).expect("second cleanup succeeds");
+
+        assert!(
+            working_copy.join("keep.txt").exists(),
+            "cleanup should not remove unrelated files"
+        );
+
+        cleanup_project_dir(id);
+    }
+
+    #[test]
+    #[serial]
+    fn test_reimport_after_cleanup_writes_new_compass_toml() {
+        let id = Uuid::new_v4();
+        cleanup_project_dir(id);
+
+        let working_copy = compass_project_working_path(id);
+        std::fs::create_dir_all(&working_copy).expect("working copy should be created");
+        std::fs::write(working_copy.join("old.mak"), "old").expect("old mak should be created");
+        std::fs::write(working_copy.join("old.dat"), "old").expect("old dat should be created");
+        std::fs::write(
+            working_copy.join(SPELEODB_COMPASS_PROJECT_FILE),
+            "stale-compass-toml",
+        )
+        .expect("stale compass.toml should be created");
+
+        LocalProject::clear_working_copy_compass_artifacts(id).expect("cleanup should succeed");
+
+        let source_dir = setup_import_source(id, true);
+        let mak_path = source_dir.join("Fulfords.mak");
+        LocalProject::import_compass_project(id, &mak_path).expect("reimport should succeed");
+
+        let compass_toml_path = working_copy.join(SPELEODB_COMPASS_PROJECT_FILE);
+        let compass_toml = std::fs::read_to_string(&compass_toml_path)
+            .expect("new compass.toml should be written");
+
+        assert!(
+            compass_toml.contains("FULFORD.DAT"),
+            "compass.toml should reference imported survey files"
+        );
+        assert!(
+            !working_copy.join("old.mak").exists(),
+            "cleanup should remove stale mak before import"
+        );
+
+        cleanup_project_dir(id);
+        let _ = std::fs::remove_dir_all(source_dir);
+    }
+
+    #[test]
+    #[serial]
+    fn test_import_compass_project_missing_mak_returns_project_not_found() {
+        let id = Uuid::new_v4();
+        cleanup_project_dir(id);
+        let missing_mak_path = std::env::temp_dir().join(format!("missing_import_{id}.mak"));
+
+        let err = LocalProject::import_compass_project(id, &missing_mak_path)
+            .expect_err("missing mak should return an error");
+
+        assert!(
+            matches!(err, Error::ProjectNotFound(path) if path == missing_mak_path),
+            "expected ProjectNotFound for missing mak file"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn test_import_compass_project_missing_referenced_file_returns_error() {
+        let id = Uuid::new_v4();
+        cleanup_project_dir(id);
+        let source_dir = setup_import_source(id, false);
+        let mak_path = source_dir.join("Fulfords.mak");
+
+        let err = LocalProject::import_compass_project(id, &mak_path)
+            .expect_err("missing referenced file should error");
+
+        assert!(
+            matches!(err, Error::ProjectFileNotFound(_)),
+            "expected ProjectFileNotFound when a referenced dat file is missing"
+        );
+
+        cleanup_project_dir(id);
+        let _ = std::fs::remove_dir_all(source_dir);
     }
 }

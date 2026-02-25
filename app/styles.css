@@ -197,6 +197,12 @@ input.invalid:focus {
     outline: 2px solid #fca5a5;
 }
 
+input::placeholder,
+textarea::placeholder {
+    color: #4b5668;
+    opacity: 0.8;
+}
+
 .field-error {
     color: #ef4444;
     font-size: 0.85em;
@@ -222,6 +228,25 @@ button:hover {
 button:active {
     border-color: #396cd8;
     background-color: #0f0f0f69;
+}
+
+/* Project details primary action buttons */
+.project-primary-action-button {
+    background-color: #2563eb;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.project-primary-action-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.project-primary-action-button:not(:disabled) {
+    cursor: pointer;
 }
 
 #greet-input {
