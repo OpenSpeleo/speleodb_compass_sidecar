@@ -61,6 +61,10 @@ impl ProjectStatus {
         &self.info.permission
     }
 
+    pub fn latest_commit(&self) -> Option<&crate::api_types::CommitInfo> {
+        self.info.latest_commit.as_ref()
+    }
+
     pub fn is_dirty(&self) -> bool {
         matches!(
             self.local_status,

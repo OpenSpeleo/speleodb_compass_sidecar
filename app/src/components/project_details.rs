@@ -10,11 +10,13 @@
 
 use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
+use crate::ui_constants::{COLOR_ALARM, COLOR_GOOD, COLOR_WARN, FONT_COLOR_BLUE};
 use common::api_types::ProjectSaveResult;
 use common::ui_state::{LocalProjectStatus, ProjectStatus};
 use log::info;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
+use yew_icons::{Icon, IconData};
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct ProjectDetailsProps {
@@ -153,6 +155,57 @@ pub fn project_details(
     let commit_message = use_state(String::new);
     let commit_message_error = use_state(|| false);
     let show_back_button = !compass_open && (is_readonly || !is_dirty);
+    let show_problem_menu = use_state(|| false);
+    let has_project_data = !matches!(
+        project.local_status(),
+        LocalProjectStatus::EmptyLocal
+            | LocalProjectStatus::RemoteOnly
+            | LocalProjectStatus::Unknown
+    );
+
+    let (status_icon, status_color, status_text) = match project.local_status() {
+        LocalProjectStatus::UpToDate => (
+            IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_CHECK,
+            COLOR_GOOD,
+            "Up to Date",
+        ),
+        LocalProjectStatus::Dirty => (
+            IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_EXCLAMATION,
+            COLOR_WARN,
+            "Unsaved Local Changes",
+        ),
+        LocalProjectStatus::RemoteOnly => (
+            IconData::FONT_AWESOME_SOLID_FILE_ARROW_DOWN,
+            COLOR_GOOD,
+            "Available for Download",
+        ),
+        LocalProjectStatus::Unknown => (
+            IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_CHECK,
+            COLOR_GOOD,
+            "Unknown",
+        ),
+        LocalProjectStatus::EmptyLocal => (
+            IconData::FONT_AWESOME_SOLID_FILE_CIRCLE_PLUS,
+            COLOR_GOOD,
+            "Empty Project",
+        ),
+        LocalProjectStatus::OutOfDate => (
+            IconData::FONT_AWESOME_SOLID_FILE_ARROW_DOWN,
+            FONT_COLOR_BLUE,
+            "Update Available",
+        ),
+        LocalProjectStatus::DirtyAndOutOfDate => (
+            IconData::FONT_AWESOME_SOLID_FACE_SAD_CRY,
+            COLOR_ALARM,
+            "Local Changes & Update Available",
+        ),
+    };
+    let latest_commit_display = project.latest_commit().map(|commit| {
+        format!(
+            "Latest: \"{}\" by {} ({})",
+            commit.message, commit.author_name, commit.dt_since
+        )
+    });
 
     // On mount: Check if we need to show any modals based on project status
     if !*initialized {
@@ -463,12 +516,41 @@ pub fn project_details(
 
             <h2><strong>{"Project: "}</strong>{&project.name()}</h2>
             <p style="color: #6b7280; font-size: 14px;">{format!("ID: {}", project.id())}</p>
+
+            // Project status indicator
+            <div style={format!(
+                "display: flex; flex-direction: column; gap: 4px; padding: 10px 14px; \
+                 background-color: #f9fafb; border-radius: 6px; border-left: 3px solid {}; \
+                 margin: 8px 0 12px 0;",
+                status_color
+            )}>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style={format!("color: {}; display: flex; align-items: center;", status_color)}>
+                        <Icon data={status_icon} />
+                    </span>
+                    <span style={format!("font-weight: 600; color: {};", status_color)}>
+                        {status_text}
+                    </span>
+                </div>
+                {
+                    if let Some(ref text) = latest_commit_display {
+                        html! {
+                            <p style="margin: 2px 0 0 0; font-size: 13px; color: #6b7280;">
+                                {text}
+                            </p>
+                        }
+                    } else {
+                        html! {}
+                    }
+                }
+            </div>
+
             {
-                if !is_readonly {
+                if !is_readonly && !has_project_data {
                     html! {
                         <div style="display: flex; justify-content: center; margin-top: 12px; margin-bottom: 4px;">
                             <button
-                                onclick={on_project_reimport_click}
+                                onclick={on_project_reimport_click.clone()}
                                 disabled={disable_project_action_buttons}
                                 class="project-primary-action-button"
                             >
@@ -945,6 +1027,85 @@ pub fn project_details(
                 }
             }
 
+
+            // "Problem?" menu for reimport when project already has data
+            {
+                if !is_readonly && has_project_data {
+                    let toggle_menu = {
+                        let show_problem_menu = show_problem_menu.clone();
+                        Callback::from(move |_| {
+                            show_problem_menu.set(!*show_problem_menu);
+                        })
+                    };
+                    let on_reimport_click = {
+                        let show_problem_menu = show_problem_menu.clone();
+                        let on_project_reimport_click = on_project_reimport_click.clone();
+                        Callback::from(move |e: MouseEvent| {
+                            show_problem_menu.set(false);
+                            on_project_reimport_click.emit(e);
+                        })
+                    };
+                    html! {
+                        <div style="position: fixed; bottom: 16px; right: 16px;">
+                            <div style="position: relative;">
+                                {
+                                    if *show_problem_menu {
+                                        html! {
+                                            <div style="
+                                                position: absolute;
+                                                bottom: 36px;
+                                                right: 0;
+                                                background: white;
+                                                border: 1px solid #e5e7eb;
+                                                border-radius: 6px;
+                                                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                                                min-width: 200px;
+                                                z-index: 100;
+                                            ">
+                                                <button
+                                                    onclick={on_reimport_click}
+                                                    disabled={disable_project_action_buttons}
+                                                    style="
+                                                        width: 100%;
+                                                        padding: 10px 14px;
+                                                        border: none;
+                                                        background: none;
+                                                        text-align: left;
+                                                        cursor: pointer;
+                                                        font-size: 13px;
+                                                        color: #374151;
+                                                        border-radius: 6px;
+                                                    "
+                                                >
+                                                    {"Re-import from Disk"}
+                                                </button>
+                                            </div>
+                                        }
+                                    } else {
+                                        html! {}
+                                    }
+                                }
+                                <button
+                                    onclick={toggle_menu}
+                                    style="
+                                        background: none;
+                                        border: 1px solid #d1d5db;
+                                        border-radius: 4px;
+                                        padding: 4px 10px;
+                                        font-size: 12px;
+                                        color: #9ca3af;
+                                        cursor: pointer;
+                                    "
+                                >
+                                    {"Problem?"}
+                                </button>
+                            </div>
+                        </div>
+                    }
+                } else {
+                    html! {}
+                }
+            }
 
             // Add CSS for spinner animation
             <style>
