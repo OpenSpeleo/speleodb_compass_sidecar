@@ -143,27 +143,33 @@ impl LocalProject {
                 // Both copies exist, compare them
                 if index_copy == working_copy {
                     // No changes at the map level, now check the files
-                    let index_project = LocalProject::load_index_compass_project(id)?;
-                    // Compass likes to leave projects in invalid states while editing them.
-                    // If the working project fails to load, then some things have been changed but not others.
-                    let working_project = match LocalProject::load_working_copy_compass_project(id)
-                    {
-                        Ok(project) => project,
-                        Err(_) => return Ok(true),
-                    };
-                    if index_project == working_project {
-                        trace!(
-                            "No changes detected between: {:?} and {:?}",
-                            index_project, working_project
-                        );
-                        // No changes detected
-                        Ok(false)
-                    } else {
-                        warn!("Detected changes between loaded compass projects for: {id}");
-                        trace!("Index project: {:#?}", index_project);
-                        trace!("Working project: {:#?}", working_project);
-                        // Changes detected
-                        Ok(true)
+                    let index_result = LocalProject::load_index_compass_project(id);
+                    let working_result = LocalProject::load_working_copy_compass_project(id);
+
+                    match (index_result, working_result) {
+                        (Ok(index_project), Ok(working_project)) => {
+                            if index_project == working_project {
+                                trace!("No changes detected for project {id}");
+                                Ok(false)
+                            } else {
+                                warn!(
+                                    "Detected changes between loaded compass projects for: {id}"
+                                );
+                                Ok(true)
+                            }
+                        }
+                        // Compass likes to leave projects in invalid states while editing.
+                        // If the index parses but the working copy doesn't, something changed.
+                        (Ok(_), Err(_)) => Ok(true),
+                        // Index can't be parsed (e.g. non-UTF-8 survey data). Fall back to
+                        // a raw byte comparison of every file in the project map.
+                        _ => {
+                            warn!(
+                                "Compass project parsing failed for {id}, \
+                                 falling back to byte comparison"
+                            );
+                            index_copy.project_files_differ(id)
+                        }
                     }
                 } else {
                     // Changes detected
@@ -184,6 +190,35 @@ impl LocalProject {
             // Neither copy exists, so not dirty
             Ok(false)
         }
+    }
+
+    /// Compare every file listed in the project map between index and working copy
+    /// by raw bytes. Returns `Ok(true)` if any file differs (i.e. working copy is dirty).
+    fn project_files_differ(&self, id: Uuid) -> Result<bool, Error> {
+        let index_dir = compass_project_index_path(id);
+        let working_dir = compass_project_working_path(id);
+
+        let mut relative_paths: Vec<&str> = Vec::new();
+        if let Some(ref mak) = self.project_map.mak_file {
+            relative_paths.push(mak);
+        }
+        for f in &self.project_map.dat_files {
+            relative_paths.push(f);
+        }
+        for f in &self.project_map.plt_files {
+            relative_paths.push(f);
+        }
+
+        for rel in &relative_paths {
+            let idx_bytes =
+                std::fs::read(index_dir.join(rel)).map_err(|e| Error::FileRead(e.to_string()))?;
+            let wrk_bytes = std::fs::read(working_dir.join(rel))
+                .map_err(|e| Error::FileRead(e.to_string()))?;
+            if idx_bytes != wrk_bytes {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// Import a Compass project from a .mak file into the local working copy.

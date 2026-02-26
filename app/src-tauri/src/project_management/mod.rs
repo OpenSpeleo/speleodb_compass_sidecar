@@ -496,12 +496,65 @@ mod tests {
             Some(test_commit("Test commit", 1)),
         ));
 
-        // Before the fix this would panic via .unwrap(); now it should
-        // fall back to Dirty (safe default to avoid data loss).
+        // The .mak file referenced by compass.toml doesn't exist at all,
+        // so the byte-comparison fallback also fails → assume dirty.
         assert_eq!(
             manager.local_project_status(),
             LocalProjectStatus::Dirty,
             "should assume dirty when dirty check errors"
+        );
+
+        cleanup_project_dir(project_id);
+    }
+
+    #[test]
+    fn test_non_utf8_project_files_use_byte_comparison_fallback() {
+        let project_id = Uuid::new_v4();
+        cleanup_project_dir(project_id);
+
+        let compass_toml = format!(
+            "[speleodb]\nid = \"{project_id}\"\nversion = \"1.0.0\"\n\n\
+             [project]\nmak_file = \"cave.mak\"\ndat_files = [\"SURVEY.DAT\"]\nplt_files = []\n"
+        );
+        let index_path = compass_project_index_path(project_id);
+        let working_path = compass_project_working_path(project_id);
+        std::fs::create_dir_all(&index_path).expect("index dir");
+        std::fs::create_dir_all(&working_path).expect("working dir");
+
+        for dir in [&index_path, &working_path] {
+            std::fs::write(dir.join(SPELEODB_COMPASS_PROJECT_FILE), &compass_toml)
+                .expect("compass.toml");
+            // Non-UTF-8 bytes that will cause compass_data::Project::read to fail
+            std::fs::write(dir.join("cave.mak"), b"SURVEY\r\n\xff\xfe").expect("mak");
+            std::fs::write(dir.join("SURVEY.DAT"), b"\xff\xfe data").expect("dat");
+        }
+
+        SpeleoDbProjectRevision {
+            revision: "abc123".to_string(),
+        }
+        .save_revision_for_project(project_id)
+        .expect("revision file");
+
+        let manager = ProjectManager::initialize_from_info(test_project_info(
+            project_id,
+            Some(test_commit("Test commit", 1)),
+        ));
+
+        // Identical non-UTF-8 files in both index and working copy:
+        // byte comparison should detect they match → UpToDate.
+        assert_eq!(
+            manager.local_project_status(),
+            LocalProjectStatus::UpToDate,
+            "identical non-UTF-8 files should not be flagged as dirty"
+        );
+
+        // Now modify the working copy → should become Dirty.
+        std::fs::write(working_path.join("SURVEY.DAT"), b"\xff\xfe modified")
+            .expect("modify dat");
+        assert_eq!(
+            manager.local_project_status(),
+            LocalProjectStatus::Dirty,
+            "modified non-UTF-8 files should be detected as dirty"
         );
 
         cleanup_project_dir(project_id);
