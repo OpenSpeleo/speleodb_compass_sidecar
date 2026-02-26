@@ -361,7 +361,7 @@ pub fn project_details(
                     }
                     Err(e) => {
                         show_empty_project_modal.set(false);
-                        error_message.set(Some(format!("Failed to select file: {}", e)));
+                        error_message.set(Some(format!("Failed to import Compass project: {}", e)));
                     }
                 }
                 reimporting.set(false);
@@ -417,7 +417,10 @@ pub fn project_details(
                         reimport_flow_state.set(next_reimport_state_after_file_pick(selected_path));
                     }
                     Err(e) => {
-                        error_message.set(Some(format!("Failed to select file: {}", e)));
+                        error_message.set(Some(format!(
+                            "Failed to select Compass project file: {}",
+                            e
+                        )));
                     }
                 }
             });

@@ -111,6 +111,30 @@ impl LocalProject {
         Self::clear_compass_artifacts_from_dir(&working_copy_path)
     }
 
+    fn copy_import_file(source_path: &Path, target_path: &Path) -> Result<(), Error> {
+        std::fs::copy(source_path, target_path).map_err(|e| {
+            let is_permission_error = e.kind() == std::io::ErrorKind::PermissionDenied;
+            let details = format!(
+                "{e} (kind: {:?}, raw_os_error: {:?})",
+                e.kind(),
+                e.raw_os_error()
+            );
+            error!(
+                "Failed to copy {} -> {}: {}",
+                source_path.display(),
+                target_path.display(),
+                details
+            );
+            Error::ProjectImport {
+                src_path: source_path.to_path_buf(),
+                dst_path: target_path.to_path_buf(),
+                details,
+                is_permission_error,
+            }
+        })?;
+        Ok(())
+    }
+
     pub fn working_copy_is_dirty(id: Uuid) -> Result<bool, Error> {
         let index_copy = LocalProject::load_index_project(id).ok();
         let working_copy = LocalProject::load_working_project(id).ok();
@@ -204,8 +228,14 @@ impl LocalProject {
         // Everything looks good, create the new CompassProject
         let mut project_path = compass_project_working_path(id);
 
-        std::fs::create_dir_all(&project_path)
-            .map_err(|_| Error::CreateDirectory(project_path.clone()))?;
+        std::fs::create_dir_all(&project_path).map_err(|e| {
+            error!(
+                "Failed to create working copy directory during import: {} (error: {})",
+                project_path.display(),
+                e
+            );
+            Error::CreateDirectory(project_path.clone())
+        })?;
         let new_project = Self {
             speleodb: SpeleoDb {
                 id,
@@ -219,22 +249,37 @@ impl LocalProject {
         project_path.push(SPELEODB_COMPASS_PROJECT_FILE);
         let serialized_project = toml::to_string_pretty(&new_project)
             .map_err(|e| Error::Serialization(e.to_string()))?;
-        std::fs::write(&project_path, &serialized_project)
-            .map_err(|_| Error::ProjectWrite(project_path.clone()))?;
+        std::fs::write(&project_path, &serialized_project).map_err(|e| {
+            error!(
+                "Failed to write Compass metadata file during import: {} (error: {})",
+                project_path.display(),
+                e
+            );
+            Error::ProjectWrite(project_path.clone())
+        })?;
         // Copy the .mak file and all referenced survey files into the new project directory
         let mut mak_target_path = compass_project_working_path(id);
         mak_target_path.push(mak_path.file_name().unwrap());
-        std::fs::copy(&mak_path, &mak_target_path)
-            .map_err(|_| Error::ProjectImport(mak_path.clone(), mak_target_path.clone()))?;
+        Self::copy_import_file(&mak_path, &mak_target_path)?;
+        info!(
+            "Copying {} referenced survey files for project {}",
+            project_file_paths.len(),
+            id
+        );
         for (file_path, relative_path) in project_file_paths.iter().zip(project_files.iter()) {
             let mut target_path = compass_project_working_path(id);
             target_path.push(relative_path);
             if let Some(parent_dir) = target_path.parent() {
-                std::fs::create_dir_all(parent_dir)
-                    .map_err(|_| Error::CreateDirectory(parent_dir.to_path_buf()))?;
+                std::fs::create_dir_all(parent_dir).map_err(|e| {
+                    error!(
+                        "Failed to create target directory for imported file: {} (error: {})",
+                        parent_dir.display(),
+                        e
+                    );
+                    Error::CreateDirectory(parent_dir.to_path_buf())
+                })?;
             }
-            std::fs::copy(file_path, &target_path)
-                .map_err(|_| Error::ProjectImport(file_path.to_owned(), target_path.to_owned()))?;
+            Self::copy_import_file(file_path, &target_path)?;
         }
         Ok(())
     }
@@ -576,5 +621,35 @@ mod test {
 
         cleanup_project_dir(id);
         let _ = std::fs::remove_dir_all(source_dir);
+    }
+
+    #[test]
+    fn test_copy_import_file_nonexistent_source_returns_project_import_error() {
+        let source = std::env::temp_dir().join("nonexistent_speleodb_test_file.dat");
+        let target = std::env::temp_dir().join("target_speleodb_test_file.dat");
+
+        let err = LocalProject::copy_import_file(&source, &target)
+            .expect_err("copying nonexistent file should fail");
+
+        match err {
+            Error::ProjectImport {
+                src_path,
+                dst_path,
+                details,
+                ..
+            } => {
+                assert_eq!(src_path, source);
+                assert_eq!(dst_path, target);
+                assert!(
+                    details.contains("kind:"),
+                    "details should include error kind, got: {details}"
+                );
+                assert!(
+                    details.contains("raw_os_error:"),
+                    "details should include raw OS error, got: {details}"
+                );
+            }
+            other => panic!("expected ProjectImport error, got: {other:?}"),
+        }
     }
 }
