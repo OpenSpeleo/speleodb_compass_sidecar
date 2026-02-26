@@ -304,14 +304,55 @@ impl AppState {
             .save_local_changes(&api_info, commit_message)
             .await?;
 
-        // Refresh remote metadata after upload so local status compares against
-        // the latest server commit, not stale project info.
-        let updated_project_info = api::project::fetch_project_info(&api_info, project_id).await?;
+        // After a successful upload, sync local state: copy working_copy -> index
+        // and update .revision.txt. We must NOT call update_local_copies here because
+        // it overwrites the working copy, which fails on Windows when Compass holds
+        // file locks on the project files.
+        let old_commit_id = project_manager
+            .latest_remote_commit()
+            .map(|c| c.id.clone());
+        let updated_project_info =
+            Self::fetch_project_info_after_save(&api_info, project_id, old_commit_id.as_deref())
+                .await?;
         let project_manager = ProjectManager::initialize_from_info(updated_project_info.clone());
-        project_manager.update_local_copies(&api_info).await?;
+        project_manager.sync_after_save()?;
         self.set_project_info(updated_project_info);
         self.emit_app_state_change().await;
         Ok(result)
+    }
+
+    /// Fetch project info after a save, retrying briefly if the server
+    /// hasn't yet reflected the new commit (eventual consistency).
+    async fn fetch_project_info_after_save(
+        api_info: &ApiInfo,
+        project_id: uuid::Uuid,
+        old_commit_id: Option<&str>,
+    ) -> Result<ProjectInfo, Error> {
+        const MAX_RETRIES: u32 = 3;
+        const RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
+
+        for attempt in 0..=MAX_RETRIES {
+            let info = api::project::fetch_project_info(api_info, project_id).await?;
+            let new_commit_id = info.latest_commit.as_ref().map(|c| c.id.as_str());
+            if new_commit_id != old_commit_id {
+                return Ok(info);
+            }
+            if attempt < MAX_RETRIES {
+                debug!(
+                    "Server still returning old commit for project {} (attempt {}/{}), retrying",
+                    project_id,
+                    attempt + 1,
+                    MAX_RETRIES
+                );
+                tokio::time::sleep(RETRY_DELAY).await;
+            }
+        }
+        warn!(
+            "Server did not reflect new commit for project {} after {} retries; \
+             proceeding with available data",
+            project_id, MAX_RETRIES
+        );
+        api::project::fetch_project_info(api_info, project_id).await
     }
 
     pub async fn discard_active_project_changes(&self) -> Result<(), Error> {
