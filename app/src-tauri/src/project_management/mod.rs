@@ -13,7 +13,7 @@ use common::{
     api_types::{CommitInfo, ProjectInfo},
     ui_state::{LocalProjectStatus, ProjectSaveResult, ProjectStatus},
 };
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use std::{
     fs::{File, copy, create_dir_all, read_dir},
     path::Path,
@@ -65,6 +65,22 @@ impl ProjectManager {
             !(latest_commit.message == AUTOMATED_PROJECT_CREATION_COMMIT_MESSAGE
                 && latest_commit.tree.is_empty())
         })
+    }
+
+    fn working_copy_is_dirty_or_assume_dirty(&self, context: &str) -> bool {
+        match LocalProject::working_copy_is_dirty(self.id()) {
+            Ok(is_dirty) => is_dirty,
+            Err(e) => {
+                error!(
+                    "Failed to compute working copy dirty state for project '{}' ({}) while {}. Treating project as dirty to avoid data loss. Error: {}",
+                    self.project_info.name,
+                    self.id(),
+                    context,
+                    e
+                );
+                true
+            }
+        }
     }
 
     pub fn project_status(&self) -> ProjectStatus {
@@ -160,14 +176,18 @@ impl ProjectManager {
                         // and check if working copy is dirty
                         if index_revision.revision == latest_server_revision.revision {
                             // Revisions match, now check if working copy is dirty
-                            if LocalProject::working_copy_is_dirty(self.id()).unwrap() {
+                            if self.working_copy_is_dirty_or_assume_dirty(
+                                "comparing equal local and remote revisions",
+                            ) {
                                 return LocalProjectStatus::Dirty;
                             } else {
                                 return LocalProjectStatus::UpToDate;
                             }
                         } else {
                             // Revisions do not match, we're out of date
-                            if LocalProject::working_copy_is_dirty(self.id()).unwrap() {
+                            if self.working_copy_is_dirty_or_assume_dirty(
+                                "comparing different local and remote revisions",
+                            ) {
                                 return LocalProjectStatus::DirtyAndOutOfDate;
                             } else {
                                 return LocalProjectStatus::OutOfDate;
@@ -212,10 +232,6 @@ impl ProjectManager {
             Ok(bytes) => {
                 log::info!("Downloaded ZIP ({} bytes)", bytes.len());
                 unpack_project_zip(self.id(), bytes)?;
-                if let Some(latest_commit) = self.latest_remote_commit() {
-                    SpeleoDbProjectRevision::from(latest_commit)
-                        .save_revision_for_project(self.id())?;
-                };
                 // Copy index to working copy
                 let src = compass_project_index_path(self.id());
                 let dst = compass_project_working_path(self.id());
@@ -228,8 +244,15 @@ impl ProjectManager {
                     );
                     Error::FileWrite(e.to_string())
                 })?;
-                SpeleoDbProjectRevision::from(self.project_info.latest_commit.as_ref().unwrap())
-                    .save_revision_for_project(self.id())?;
+                if let Some(latest_commit) = self.latest_remote_commit() {
+                    SpeleoDbProjectRevision::from(latest_commit)
+                        .save_revision_for_project(self.id())?;
+                } else {
+                    warn!(
+                        "Downloaded project ZIP for project {} but latest commit metadata is missing; skipping local revision update",
+                        self.id()
+                    );
+                }
                 Ok(LocalProjectStatus::UpToDate)
             }
             Err(Error::NoProjectData(_)) => {
@@ -432,6 +455,56 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(temp_root);
+    }
+
+    #[test]
+    fn test_dirty_check_error_assumes_dirty_instead_of_panicking() {
+        let project_id = Uuid::new_v4();
+        cleanup_project_dir(project_id);
+
+        // Both index and working_copy get identical compass.toml referencing
+        // a .mak file that does NOT exist on disk. This makes
+        // working_copy_is_dirty() return Err (cannot load compass project).
+        let compass_toml = format!(
+            "[speleodb]\nid = \"{project_id}\"\nversion = \"1.0.0\"\n\n\
+             [project]\nmak_file = \"ghost.mak\"\ndat_files = []\nplt_files = []\n"
+        );
+        let index_path = compass_project_index_path(project_id);
+        let working_path = compass_project_working_path(project_id);
+        std::fs::create_dir_all(&index_path).expect("index dir");
+        std::fs::create_dir_all(&working_path).expect("working dir");
+        std::fs::write(
+            index_path.join(SPELEODB_COMPASS_PROJECT_FILE),
+            &compass_toml,
+        )
+        .expect("index compass.toml");
+        std::fs::write(
+            working_path.join(SPELEODB_COMPASS_PROJECT_FILE),
+            &compass_toml,
+        )
+        .expect("working compass.toml");
+
+        // Revision matching the server commit so we reach the dirty check
+        SpeleoDbProjectRevision {
+            revision: "abc123".to_string(),
+        }
+        .save_revision_for_project(project_id)
+        .expect("revision file");
+
+        let manager = ProjectManager::initialize_from_info(test_project_info(
+            project_id,
+            Some(test_commit("Test commit", 1)),
+        ));
+
+        // Before the fix this would panic via .unwrap(); now it should
+        // fall back to Dirty (safe default to avoid data loss).
+        assert_eq!(
+            manager.local_project_status(),
+            LocalProjectStatus::Dirty,
+            "should assume dirty when dirty check errors"
+        );
+
+        cleanup_project_dir(project_id);
     }
 
     #[test]
