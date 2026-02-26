@@ -8,4 +8,4 @@ pub use errors::Error;
 #[cfg(debug_assertions)]
 pub const API_BASE_URL: &str = "https://stage.speleodb.org";
 #[cfg(not(debug_assertions))]
-pub const API_BASE_URL: &str = "https://www.speleodb.com";
+pub const API_BASE_URL: &str = "https://www.speleodb.org";

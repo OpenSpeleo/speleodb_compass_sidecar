@@ -7,7 +7,7 @@ use std::{sync::LazyLock, time::Duration};
 #[cfg(debug_assertions)]
 pub const API_BASE_URL: &str = "https://stage.speleodb.org";
 #[cfg(not(debug_assertions))]
-pub const API_BASE_URL: &str = "https://www.speleodb.com";
+pub const API_BASE_URL: &str = "https://www.speleodb.org";
 const API_USER_AGENT: &str = concat!(
     "Tauri/SpeleoDB-Compass-Sidecar/v",
     env!("CARGO_PKG_VERSION")
