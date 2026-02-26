@@ -11,7 +11,7 @@ use crate::{
 };
 use common::Error;
 use compass_data::{Loaded, Project};
-use log::{error, info, trace, warn};
+use log::{debug, error, info, trace};
 use serde::{Deserialize, Serialize};
 use std::{
     io::prelude::*,
@@ -172,28 +172,100 @@ impl LocalProject {
             if let Some(working_copy) = working_copy {
                 // Both copies exist, compare them
                 if index_copy == working_copy {
-                    // No changes at the map level, now check the files
-                    let index_project = LocalProject::load_index_compass_project(id)?;
+                    let mut tracked_files = Vec::new();
+                    if let Some(mak_file) = index_copy.project_map.mak_file.as_ref() {
+                        tracked_files.push(mak_file.as_str());
+                    }
+                    tracked_files
+                        .extend(index_copy.project_map.dat_files.iter().map(String::as_str));
+                    tracked_files
+                        .extend(index_copy.project_map.plt_files.iter().map(String::as_str));
+
+                    let index_root = compass_project_index_path(id);
+                    let working_root = compass_project_working_path(id);
+                    let mut tracked_file_read_failed = false;
+                    for relative_path in tracked_files {
+                        let index_path = index_root.join(relative_path);
+                        let working_path = working_root.join(relative_path);
+                        let (index_bytes, working_bytes) =
+                            match (std::fs::read(&index_path), std::fs::read(&working_path)) {
+                                (Ok(index_bytes), Ok(working_bytes)) => {
+                                    (index_bytes, working_bytes)
+                                }
+                                _ => {
+                                    // Keep the existing parse-based fallback behavior when file reads fail.
+                                    tracked_file_read_failed = true;
+                                    break;
+                                }
+                            };
+                        if index_bytes != working_bytes {
+                            trace!(
+                                "Tracked file differs between index and working copy for project {}: {}",
+                                id, relative_path
+                            );
+                            return Ok(true);
+                        }
+                    }
+                    if !tracked_file_read_failed {
+                        trace!("No tracked-file changes detected for project {id}");
+                        return Ok(false);
+                    }
+
+                    let index_project = LocalProject::load_index_compass_project(id);
                     // Compass likes to leave projects in invalid states while editing them.
                     // If the working project fails to load, then some things have been changed but not others.
-                    let working_project = match LocalProject::load_working_copy_compass_project(id)
-                    {
-                        Ok(project) => project,
-                        Err(_) => return Ok(true),
-                    };
-                    if index_project == working_project {
-                        trace!(
-                            "No changes detected between: {:?} and {:?}",
-                            index_project, working_project
-                        );
-                        // No changes detected
-                        Ok(false)
-                    } else {
-                        warn!("Detected changes between loaded compass projects for: {id}");
-                        trace!("Index project: {:#?}", index_project);
-                        trace!("Working project: {:#?}", working_project);
-                        // Changes detected
-                        Ok(true)
+                    let working_project = LocalProject::load_working_copy_compass_project(id);
+
+                    match (index_project, working_project) {
+                        (Ok(index_project), Ok(working_project)) => {
+                            if index_project == working_project {
+                                trace!(
+                                    "No changes detected between: {:?} and {:?}",
+                                    index_project, working_project
+                                );
+                                // No changes detected
+                                Ok(false)
+                            } else {
+                                debug!(
+                                    "Detected changes between loaded compass projects for: {id}"
+                                );
+                                trace!("Index project: {:#?}", index_project);
+                                trace!("Working project: {:#?}", working_project);
+                                // Changes detected
+                                Ok(true)
+                            }
+                        }
+                        (Err(index_error), Err(working_error)) => {
+                            // Keep the existing semantic-diff logic, but avoid false "dirty" when both
+                            // copies fail to parse in the exact same way (e.g. non-UTF8 survey payload).
+                            if index_error == working_error {
+                                debug!(
+                                    "Index and working copy failed to parse with the same error for project {}. Treating as clean. Error: {}",
+                                    id, index_error
+                                );
+                                Ok(false)
+                            } else {
+                                debug!(
+                                    "Index and working copy parsing errors differ for project {}. Index error: {}. Working error: {}",
+                                    id, index_error, working_error
+                                );
+                                Ok(true)
+                            }
+                        }
+                        (Err(index_error), Ok(_)) => {
+                            debug!(
+                                "Index failed to parse but working copy parsed for project {}. Treating as dirty. Error: {}",
+                                id, index_error
+                            );
+                            Ok(true)
+                        }
+                        (Ok(_), Err(working_error)) => {
+                            debug!(
+                                "Working copy failed to parse but index parsed for project {}. Treating as dirty. Error: {}",
+                                id, working_error
+                            );
+                            Ok(true)
+                        }
                     }
                 } else {
                     // Changes detected
@@ -449,9 +521,11 @@ impl LocalProject {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::paths::{compass_project_path, compass_project_working_path};
+    use crate::paths::{
+        compass_project_index_path, compass_project_path, compass_project_working_path,
+    };
     use serial_test::serial;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     fn fixture_path(file_name: &str) -> PathBuf {
         PathBuf::from(format!(
@@ -483,6 +557,34 @@ mod test {
                 .expect("FULSURF.DAT should be copied");
         }
 
+        source_dir
+    }
+
+    fn copy_dir_recursive(src: &Path, dst: &Path) {
+        std::fs::create_dir_all(dst).expect("destination dir should exist");
+        for entry in std::fs::read_dir(src).expect("source dir should be readable") {
+            let entry = entry.expect("directory entry should be readable");
+            let entry_type = entry.file_type().expect("file type should be available");
+            let src_path = entry.path();
+            let dst_path = dst.join(entry.file_name());
+            if entry_type.is_dir() {
+                copy_dir_recursive(&src_path, &dst_path);
+            } else {
+                std::fs::copy(src_path, dst_path).expect("file should copy");
+            }
+        }
+    }
+
+    fn setup_synced_index_and_working_copy(id: Uuid) -> PathBuf {
+        cleanup_project_dir(id);
+        let source_dir = setup_import_source(id, true);
+        let mak_path = source_dir.join("Fulfords.mak");
+        LocalProject::import_compass_project(id, &mak_path).expect("import should succeed");
+
+        let working_copy = compass_project_working_path(id);
+        let index_copy = compass_project_index_path(id);
+        let _ = std::fs::remove_dir_all(&index_copy);
+        copy_dir_recursive(&working_copy, &index_copy);
         source_dir
     }
 
@@ -612,6 +714,95 @@ mod test {
             !working_copy.join("old.mak").exists(),
             "cleanup should remove stale mak before import"
         );
+
+        cleanup_project_dir(id);
+        let _ = std::fs::remove_dir_all(source_dir);
+    }
+
+    #[test]
+    #[serial]
+    fn test_copy_import_file_includes_io_error_details() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("speleodb_copy_import_{:?}", Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).expect("temp dir should be created");
+        let source = temp_dir.join("missing.dat");
+        let target = temp_dir.join("copied.dat");
+
+        let err = LocalProject::copy_import_file(&source, &target)
+            .expect_err("copy should fail for missing source file");
+
+        match err {
+            Error::ProjectImport(error_source, error_target, details) => {
+                assert_eq!(error_source, source);
+                assert_eq!(error_target, target);
+                assert!(
+                    details.contains("os error"),
+                    "copy error details should include io/os context"
+                );
+            }
+            other => panic!("expected ProjectImport error, got: {other:?}"),
+        }
+
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    #[serial]
+    fn test_working_copy_is_dirty_false_when_tracked_files_are_identical() {
+        let id = Uuid::new_v4();
+        let source_dir = setup_synced_index_and_working_copy(id);
+
+        let is_dirty = LocalProject::working_copy_is_dirty(id)
+            .expect("dirty check should succeed for synced copies");
+        assert!(!is_dirty, "identical tracked files should be clean");
+
+        cleanup_project_dir(id);
+        let _ = std::fs::remove_dir_all(source_dir);
+    }
+
+    #[test]
+    #[serial]
+    fn test_working_copy_is_dirty_true_when_tracked_file_bytes_differ() {
+        let id = Uuid::new_v4();
+        let source_dir = setup_synced_index_and_working_copy(id);
+        let working_project =
+            LocalProject::load_working_project(id).expect("working project metadata should load");
+        let changed_file = working_project
+            .project_map
+            .dat_files
+            .first()
+            .expect("fixture should include tracked dat files");
+        let changed_path = compass_project_working_path(id).join(changed_file);
+        std::fs::write(&changed_path, b"modified-by-test")
+            .expect("tracked file should be writable for test");
+
+        let is_dirty = LocalProject::working_copy_is_dirty(id).expect("dirty check should succeed");
+        assert!(
+            is_dirty,
+            "byte differences in tracked files must be detected"
+        );
+
+        cleanup_project_dir(id);
+        let _ = std::fs::remove_dir_all(source_dir);
+    }
+
+    #[test]
+    #[serial]
+    fn test_working_copy_is_dirty_true_when_tracked_file_is_missing() {
+        let id = Uuid::new_v4();
+        let source_dir = setup_synced_index_and_working_copy(id);
+        let working_project =
+            LocalProject::load_working_project(id).expect("working project metadata should load");
+        let removed_file = working_project
+            .project_map
+            .dat_files
+            .first()
+            .expect("fixture should include tracked dat files");
+        let removed_path = compass_project_working_path(id).join(removed_file);
+        std::fs::remove_file(&removed_path).expect("tracked file should be removable");
+
+        let is_dirty = LocalProject::working_copy_is_dirty(id).expect("dirty check should succeed");
+        assert!(is_dirty, "missing tracked files must be treated as dirty");
 
         cleanup_project_dir(id);
         let _ = std::fs::remove_dir_all(source_dir);

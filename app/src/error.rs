@@ -98,4 +98,34 @@ mod tests {
             "non-permission errors should preserve backend detail"
         );
     }
+
+    #[test]
+    fn permission_detection_matches_known_error_markers() {
+        assert!(is_permission_denied(
+            "Operation not permitted (os error 1) (kind: PermissionDenied)"
+        ));
+        assert!(is_permission_denied("Permission denied (os error 13)"));
+        assert!(!is_permission_denied(
+            "No such file or directory (os error 2)"
+        ));
+    }
+
+    #[test]
+    fn js_string_command_error_is_forwarded() {
+        let error = Error::from(JsValue::from_str("simple command failure"));
+        assert_eq!(
+            error,
+            Error::Command("simple command failure".to_string()),
+            "plain string command errors should be preserved as-is"
+        );
+    }
+
+    #[test]
+    fn unknown_js_error_payload_falls_back_to_generic_message() {
+        let error = Error::from(JsValue::from_f64(42.0));
+        assert_eq!(
+            error,
+            Error::Command("Backend command failed with an unknown error.".to_string())
+        );
+    }
 }
