@@ -394,6 +394,7 @@ mod tests {
             id: "abc123".to_string(),
             message: message.to_string(),
             author_name: "SpeleoDB".to_string(),
+            commit_date: None,
             dt_since: "now".to_string(),
             tree: vec![CommitTreeEntry {}; tree_entries],
         }
