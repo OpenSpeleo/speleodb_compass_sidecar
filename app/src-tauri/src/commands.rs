@@ -3,7 +3,7 @@ use crate::{
     project_management::LocalProject, state::AppState, user_prefs::UserPrefs,
 };
 use common::{Error, api_types::ProjectSaveResult};
-use log::info;
+use log::{error, info};
 use serde::Serialize;
 use std::{path::PathBuf, process::Command, sync::mpsc, time::Duration};
 use tauri::{AppHandle, Manager, State, Url};
@@ -189,14 +189,43 @@ async fn import_project_from_path(
 ) -> Result<(), Error> {
     info!("Selected MAK file: {}", mak_path.display());
     info!("Importing into Compass project: {:?}", project_id);
+    let commit_message_len = commit_message.chars().count();
 
     if clear_working_copy {
-        LocalProject::clear_working_copy_compass_artifacts(project_id)?;
+        info!(
+            "Clearing existing Compass artifacts before import for project {}",
+            project_id
+        );
+        if let Err(e) = LocalProject::clear_working_copy_compass_artifacts(project_id) {
+            error!(
+                "Failed to clear existing Compass artifacts before import for project {}: {}",
+                project_id, e
+            );
+            return Err(e);
+        }
     }
 
-    LocalProject::import_compass_project(project_id, &mak_path)?;
+    if let Err(e) = LocalProject::import_compass_project(project_id, &mak_path) {
+        error!(
+            "Import of Compass project failed for project {} using source {}: {}",
+            project_id,
+            mak_path.display(),
+            e
+        );
+        return Err(e);
+    }
     info!("Successfully imported Compass project from : {mak_path:?}");
-    save_project(app_handle, commit_message).await?;
+    if let Err(e) = save_project(app_handle, commit_message).await {
+        error!(
+            "Imported files but failed to save project {} to SpeleoDB (commit_message_len={}): {}",
+            project_id, commit_message_len, e
+        );
+        return Err(e);
+    }
+    info!(
+        "Successfully imported and saved Compass project {} (commit_message_len={})",
+        project_id, commit_message_len
+    );
     Ok(())
 }
 

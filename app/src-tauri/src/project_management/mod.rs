@@ -13,7 +13,7 @@ use common::{
     api_types::{CommitInfo, ProjectInfo},
     ui_state::{LocalProjectStatus, ProjectSaveResult, ProjectStatus},
 };
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use std::{
     fs::{File, copy, create_dir_all, read_dir},
     path::Path,
@@ -65,6 +65,22 @@ impl ProjectManager {
             !(latest_commit.message == AUTOMATED_PROJECT_CREATION_COMMIT_MESSAGE
                 && latest_commit.tree.is_empty())
         })
+    }
+
+    fn working_copy_is_dirty_or_assume_dirty(&self, context: &str) -> bool {
+        match LocalProject::working_copy_is_dirty(self.id()) {
+            Ok(is_dirty) => is_dirty,
+            Err(e) => {
+                error!(
+                    "Failed to compute working copy dirty state for project '{}' ({}) while {}. Treating project as dirty to avoid data loss. Error: {}",
+                    self.project_info.name,
+                    self.id(),
+                    context,
+                    e
+                );
+                true
+            }
+        }
     }
 
     pub fn project_status(&self) -> ProjectStatus {
@@ -160,14 +176,18 @@ impl ProjectManager {
                         // and check if working copy is dirty
                         if index_revision.revision == latest_server_revision.revision {
                             // Revisions match, now check if working copy is dirty
-                            if LocalProject::working_copy_is_dirty(self.id()).unwrap() {
+                            if self.working_copy_is_dirty_or_assume_dirty(
+                                "comparing equal local and remote revisions",
+                            ) {
                                 return LocalProjectStatus::Dirty;
                             } else {
                                 return LocalProjectStatus::UpToDate;
                             }
                         } else {
                             // Revisions do not match, we're out of date
-                            if LocalProject::working_copy_is_dirty(self.id()).unwrap() {
+                            if self.working_copy_is_dirty_or_assume_dirty(
+                                "comparing different local and remote revisions",
+                            ) {
                                 return LocalProjectStatus::DirtyAndOutOfDate;
                             } else {
                                 return LocalProjectStatus::OutOfDate;
@@ -212,10 +232,6 @@ impl ProjectManager {
             Ok(bytes) => {
                 log::info!("Downloaded ZIP ({} bytes)", bytes.len());
                 unpack_project_zip(self.id(), bytes)?;
-                if let Some(latest_commit) = self.latest_remote_commit() {
-                    SpeleoDbProjectRevision::from(latest_commit)
-                        .save_revision_for_project(self.id())?;
-                };
                 // Copy index to working copy
                 let src = compass_project_index_path(self.id());
                 let dst = compass_project_working_path(self.id());
@@ -228,8 +244,15 @@ impl ProjectManager {
                     );
                     Error::FileWrite(e.to_string())
                 })?;
-                SpeleoDbProjectRevision::from(self.project_info.latest_commit.as_ref().unwrap())
-                    .save_revision_for_project(self.id())?;
+                if let Some(latest_commit) = self.latest_remote_commit() {
+                    SpeleoDbProjectRevision::from(latest_commit)
+                        .save_revision_for_project(self.id())?;
+                } else {
+                    warn!(
+                        "Downloaded project ZIP for project {} but latest commit metadata is missing; skipping local revision update",
+                        self.id()
+                    );
+                }
                 Ok(LocalProjectStatus::UpToDate)
             }
             Err(Error::NoProjectData(_)) => {

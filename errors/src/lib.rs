@@ -24,8 +24,8 @@ pub enum Error {
     ApiInfoRead(PathBuf),
     #[error("Error writing user preference file")]
     ApiInfoWrite(PathBuf),
-    #[error("Error importing project file from: {0} to {1}")]
-    ProjectImport(PathBuf, PathBuf),
+    #[error("Error importing project file from: {0} to {1}: {2}")]
+    ProjectImport(PathBuf, PathBuf, String),
     #[error("Error writing project file")]
     ProjectWrite(PathBuf),
     #[error("Error setting file permissions")]

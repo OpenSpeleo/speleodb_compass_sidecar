@@ -111,6 +111,60 @@ impl LocalProject {
         Self::clear_compass_artifacts_from_dir(&working_copy_path)
     }
 
+    fn copy_import_file(source_path: &Path, target_path: &Path) -> Result<(), Error> {
+        info!(
+            "Copying import file: {} -> {}",
+            source_path.display(),
+            target_path.display()
+        );
+        match std::fs::copy(source_path, target_path) {
+            Ok(bytes_copied) => {
+                info!(
+                    "Copied import file successfully ({} bytes): {} -> {}",
+                    bytes_copied,
+                    source_path.display(),
+                    target_path.display()
+                );
+                Ok(())
+            }
+            Err(e) => {
+                let source_metadata = std::fs::metadata(source_path).ok();
+                let source_size = source_metadata.as_ref().map(|metadata| metadata.len());
+                let source_read_only = source_metadata
+                    .as_ref()
+                    .map(|metadata| metadata.permissions().readonly());
+                let target_parent = target_path.parent();
+                let target_parent_exists = target_parent.is_some_and(Path::exists);
+                let target_parent_display = target_parent
+                    .map(|parent| parent.display().to_string())
+                    .unwrap_or_else(|| "<none>".to_string());
+                let details = format!(
+                    "{e} (kind: {:?}, raw_os_error: {:?})",
+                    e.kind(),
+                    e.raw_os_error()
+                );
+                error!(
+                    "Failed to copy import file. source={}, target={}, source_exists={}, source_size_bytes={:?}, source_read_only={:?}, target_parent={}, target_parent_exists={}, io_error_kind={:?}, io_raw_os_error={:?}, io_error={}",
+                    source_path.display(),
+                    target_path.display(),
+                    source_path.exists(),
+                    source_size,
+                    source_read_only,
+                    target_parent_display,
+                    target_parent_exists,
+                    e.kind(),
+                    e.raw_os_error(),
+                    e
+                );
+                Err(Error::ProjectImport(
+                    source_path.to_path_buf(),
+                    target_path.to_path_buf(),
+                    details,
+                ))
+            }
+        }
+    }
+
     pub fn working_copy_is_dirty(id: Uuid) -> Result<bool, Error> {
         let index_copy = LocalProject::load_index_project(id).ok();
         let working_copy = LocalProject::load_working_project(id).ok();
@@ -204,8 +258,14 @@ impl LocalProject {
         // Everything looks good, create the new CompassProject
         let mut project_path = compass_project_working_path(id);
 
-        std::fs::create_dir_all(&project_path)
-            .map_err(|_| Error::CreateDirectory(project_path.clone()))?;
+        std::fs::create_dir_all(&project_path).map_err(|e| {
+            error!(
+                "Failed to create working copy directory during import: {} (error: {})",
+                project_path.display(),
+                e
+            );
+            Error::CreateDirectory(project_path.clone())
+        })?;
         let new_project = Self {
             speleodb: SpeleoDb {
                 id,
@@ -219,22 +279,37 @@ impl LocalProject {
         project_path.push(SPELEODB_COMPASS_PROJECT_FILE);
         let serialized_project = toml::to_string_pretty(&new_project)
             .map_err(|e| Error::Serialization(e.to_string()))?;
-        std::fs::write(&project_path, &serialized_project)
-            .map_err(|_| Error::ProjectWrite(project_path.clone()))?;
+        std::fs::write(&project_path, &serialized_project).map_err(|e| {
+            error!(
+                "Failed to write Compass metadata file during import: {} (error: {})",
+                project_path.display(),
+                e
+            );
+            Error::ProjectWrite(project_path.clone())
+        })?;
         // Copy the .mak file and all referenced survey files into the new project directory
         let mut mak_target_path = compass_project_working_path(id);
         mak_target_path.push(mak_path.file_name().unwrap());
-        std::fs::copy(&mak_path, &mak_target_path)
-            .map_err(|_| Error::ProjectImport(mak_path.clone(), mak_target_path.clone()))?;
+        Self::copy_import_file(&mak_path, &mak_target_path)?;
+        info!(
+            "Copying {} referenced survey files for project {}",
+            project_file_paths.len(),
+            id
+        );
         for (file_path, relative_path) in project_file_paths.iter().zip(project_files.iter()) {
             let mut target_path = compass_project_working_path(id);
             target_path.push(relative_path);
             if let Some(parent_dir) = target_path.parent() {
-                std::fs::create_dir_all(parent_dir)
-                    .map_err(|_| Error::CreateDirectory(parent_dir.to_path_buf()))?;
+                std::fs::create_dir_all(parent_dir).map_err(|e| {
+                    error!(
+                        "Failed to create target directory for imported file: {} (error: {})",
+                        parent_dir.display(),
+                        e
+                    );
+                    Error::CreateDirectory(parent_dir.to_path_buf())
+                })?;
             }
-            std::fs::copy(file_path, &target_path)
-                .map_err(|_| Error::ProjectImport(file_path.to_owned(), target_path.to_owned()))?;
+            Self::copy_import_file(file_path, &target_path)?;
         }
         Ok(())
     }
