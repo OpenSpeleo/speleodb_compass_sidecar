@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
-members = ["api","app","app/src-tauri", "common", "errors"]
-default-members = ["api","app/src-tauri", "common","errors"]
+members = ["api","app","app/src-tauri", "common"]
+default-members = ["api","app/src-tauri", "common"]
 
 [workspace.dependencies]
 bytes = "1"
