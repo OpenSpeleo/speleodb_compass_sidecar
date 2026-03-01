@@ -1,4 +1,7 @@
-use std::path::Path;
+use std::{
+    path::Path,
+    time::{Duration, Instant},
+};
 
 use common::{
     ApiInfo,
@@ -10,6 +13,9 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::get_api_client;
+
+const PROJECT_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
+const PROJECT_UPLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub async fn create_project(
     api_info: &ApiInfo,
@@ -240,12 +246,39 @@ pub async fn download_project_zip(
     );
     let client = get_api_client();
 
+    let request_started = Instant::now();
     let resp = client
         .get(&url)
+        .timeout(PROJECT_DOWNLOAD_TIMEOUT)
         .header("Authorization", format!("Token {}", oauth))
         .send()
         .await
-        .map_err(|e| Error::NetworkRequest(e.to_string()))?;
+        .map_err(|e| {
+            let elapsed = request_started.elapsed();
+            error!(
+                "Download request failed for project {} after {:?} (timeout={}, connect={}, request={}, body={}): {}",
+                project_id,
+                elapsed,
+                e.is_timeout(),
+                e.is_connect(),
+                e.is_request(),
+                e.is_body(),
+                e
+            );
+            if e.is_timeout() {
+                Error::NetworkRequest(format!(
+                    "Project download timed out after {} seconds.",
+                    PROJECT_DOWNLOAD_TIMEOUT.as_secs()
+                ))
+            } else {
+                Error::NetworkRequest(e.to_string())
+            }
+        })?;
+    info!(
+        "Download request completed for project {} in {:?}",
+        project_id,
+        request_started.elapsed()
+    );
 
     let status = resp.status();
 
@@ -292,13 +325,44 @@ pub async fn upload_project_zip(
 
     info!("Uploading project to: {}", url);
 
+    let request_started = Instant::now();
     let resp = client
         .put(&url)
+        .timeout(PROJECT_UPLOAD_TIMEOUT)
         .header("Authorization", format!("Token {}", oauth))
         .multipart(form)
         .send()
         .await
-        .map_err(|e| Error::NetworkRequest(e.to_string()))?;
+        .map_err(|e| {
+            let elapsed = request_started.elapsed();
+            error!(
+                "Upload request failed for project {} after {:?} (timeout={}, connect={}, request={}, body={}): {}",
+                project_id,
+                elapsed,
+                e.is_timeout(),
+                e.is_connect(),
+                e.is_request(),
+                e.is_body(),
+                e
+            );
+            if e.is_timeout() {
+                warn!(
+                    "Project upload for {} timed out client-side; upstream may record this as HTTP 499",
+                    project_id
+                );
+                Error::NetworkRequest(format!(
+                    "Project upload timed out after {} seconds. The server may log this as HTTP 499 (client closed request).",
+                    PROJECT_UPLOAD_TIMEOUT.as_secs()
+                ))
+            } else {
+                Error::NetworkRequest(e.to_string())
+            }
+        })?;
+    info!(
+        "Upload request completed for project {} in {:?}",
+        project_id,
+        request_started.elapsed()
+    );
 
     let status = resp.status();
 

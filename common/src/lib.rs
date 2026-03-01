@@ -9,3 +9,5 @@ pub use errors::Error;
 pub const API_BASE_URL: &str = "https://stage.speleodb.org";
 #[cfg(not(debug_assertions))]
 pub const API_BASE_URL: &str = "https://www.speleodb.org";
+
+pub const SERVER_TIME_ZONE: &str = "US/Eastern";

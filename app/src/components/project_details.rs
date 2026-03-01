@@ -11,7 +11,8 @@
 use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use crate::ui_constants::{COLOR_ALARM, COLOR_GOOD, COLOR_WARN, FONT_COLOR_BLUE};
-use common::api_types::ProjectSaveResult;
+use common::SERVER_TIME_ZONE;
+use common::api_types::{CommitInfo, ProjectSaveResult};
 use common::ui_state::{LocalProjectStatus, ProjectStatus};
 use log::info;
 use wasm_bindgen_futures::spawn_local;
@@ -84,6 +85,75 @@ mod tests {
     fn project_action_buttons_enabled_when_idle_and_compass_closed() {
         assert!(!should_disable_project_action_buttons(false, false));
     }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn commit_relative_time_is_sanitized_when_in_future() {
+        assert_eq!(normalize_commit_relative_time("in 4 hours"), "just now");
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn commit_relative_time_keeps_past_times() {
+        assert_eq!(
+            normalize_commit_relative_time("2 minutes ago"),
+            "2 minutes ago"
+        );
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn commit_date_candidates_keep_explicit_offset() {
+        let candidates = commit_date_parse_candidates("2026-02-26T01:02:43-05:00");
+        assert_eq!(candidates, vec!["2026-02-26T01:02:43-05:00".to_string()]);
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn commit_date_candidates_add_server_timezone_offsets() {
+        let candidates = commit_date_parse_candidates("2026-02-26T01:02:43");
+        assert!(candidates.contains(&"2026-02-26T01:02:43-05:00".to_string()));
+        assert!(candidates.contains(&"2026-02-26T01:02:43-04:00".to_string()));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn active_processing_overlay_prefers_import_state() {
+        assert_eq!(
+            active_processing_overlay(true, true),
+            Some(ProcessingOverlayKind::Importing)
+        );
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn active_processing_overlay_shows_save_while_uploading() {
+        assert_eq!(
+            active_processing_overlay(false, true),
+            Some(ProcessingOverlayKind::Saving)
+        );
+        assert_eq!(active_processing_overlay(false, false), None);
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn save_completion_state_for_saved_project() {
+        let state = save_completion_state(ProjectSaveResult::Saved);
+        assert!(state.clear_commit_message);
+        assert!(state.clear_commit_message_error);
+        assert!(state.show_upload_success);
+        assert!(!state.show_no_changes_modal);
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn save_completion_state_for_no_changes() {
+        let state = save_completion_state(ProjectSaveResult::NoChanges);
+        assert!(state.clear_commit_message);
+        assert!(state.clear_commit_message_error);
+        assert!(!state.show_upload_success);
+        assert!(state.show_no_changes_modal);
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -114,6 +184,176 @@ fn validate_import_commit_message(message: &str) -> bool {
 
 fn should_disable_project_action_buttons(compass_open: bool, busy: bool) -> bool {
     compass_open || busy
+}
+
+fn normalize_commit_relative_time(relative_time: &str) -> String {
+    let trimmed = relative_time.trim();
+    if trimmed.to_ascii_lowercase().starts_with("in ") {
+        "just now".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn has_explicit_timezone(timestamp: &str) -> bool {
+    let trimmed = timestamp.trim();
+    if trimmed.ends_with('Z') || trimmed.ends_with('z') {
+        return true;
+    }
+    if trimmed.len() >= 6 {
+        let suffix = &trimmed[trimmed.len() - 6..];
+        if (suffix.starts_with('+') || suffix.starts_with('-'))
+            && &suffix[3..4] == ":"
+            && suffix[1..3].chars().all(|c| c.is_ascii_digit())
+            && suffix[4..6].chars().all(|c| c.is_ascii_digit())
+        {
+            return true;
+        }
+    }
+    if trimmed.len() >= 5 {
+        let suffix = &trimmed[trimmed.len() - 5..];
+        if (suffix.starts_with('+') || suffix.starts_with('-'))
+            && suffix[1..].chars().all(|c| c.is_ascii_digit())
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn commit_date_parse_candidates(commit_date: &str) -> Vec<String> {
+    let trimmed = commit_date.trim();
+    if trimmed.is_empty() {
+        return vec![];
+    }
+    if has_explicit_timezone(trimmed) {
+        return vec![trimmed.to_string()];
+    }
+
+    let mut candidates = vec![trimmed.to_string()];
+    if matches!(SERVER_TIME_ZONE, "US/Eastern" | "America/New_York") {
+        candidates.push(format!("{trimmed}-05:00"));
+        candidates.push(format!("{trimmed}-04:00"));
+    }
+    candidates
+}
+
+#[cfg(target_arch = "wasm32")]
+fn format_commit_date_in_local_timezone(commit_date: &str) -> Option<String> {
+    for candidate in commit_date_parse_candidates(commit_date) {
+        let millis = js_sys::Date::parse(&candidate);
+        if !millis.is_finite() {
+            continue;
+        }
+        let parsed_date = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(millis));
+        let local_display =
+            parsed_date.to_locale_string("default", &wasm_bindgen::JsValue::UNDEFINED);
+        let local_display: String = local_display.into();
+        let local_display = local_display.trim();
+        if !local_display.is_empty() {
+            return Some(local_display.to_string());
+        }
+    }
+    None
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn format_commit_date_in_local_timezone(_commit_date: &str) -> Option<String> {
+    None
+}
+
+fn display_commit_time(commit: &CommitInfo) -> String {
+    if let Some(commit_date) = commit.commit_date.as_deref()
+        && let Some(local_display) = format_commit_date_in_local_timezone(commit_date)
+    {
+        return local_display;
+    }
+    normalize_commit_relative_time(&commit.dt_since)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ProcessingOverlayKind {
+    Importing,
+    Saving,
+}
+
+fn active_processing_overlay(reimporting: bool, uploading: bool) -> Option<ProcessingOverlayKind> {
+    if reimporting {
+        Some(ProcessingOverlayKind::Importing)
+    } else if uploading {
+        Some(ProcessingOverlayKind::Saving)
+    } else {
+        None
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SaveCompletionState {
+    clear_commit_message: bool,
+    clear_commit_message_error: bool,
+    show_upload_success: bool,
+    show_no_changes_modal: bool,
+}
+
+fn save_completion_state(upload_result: ProjectSaveResult) -> SaveCompletionState {
+    match upload_result {
+        ProjectSaveResult::Saved => SaveCompletionState {
+            clear_commit_message: true,
+            clear_commit_message_error: true,
+            show_upload_success: true,
+            show_no_changes_modal: false,
+        },
+        ProjectSaveResult::NoChanges => SaveCompletionState {
+            clear_commit_message: true,
+            clear_commit_message_error: true,
+            show_upload_success: false,
+            show_no_changes_modal: true,
+        },
+    }
+}
+
+fn render_processing_overlay(title: &str, message: &str) -> Html {
+    html! {
+        <div class="modal" style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        ">
+            <div class="modal-card" style="
+                background-color: white;
+                border-radius: 12px;
+                padding: 24px;
+                max-width: 500px;
+                width: 90%;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+                border-top: 4px solid #2563eb;
+                text-align: center;
+            ">
+                <h3 style="margin: 0 0 12px 0; font-size: 20px; color: #1f2937;">
+                    {title}
+                </h3>
+                <p style="color: #4b5563; line-height: 1.6; margin-bottom: 20px;">
+                    {message}
+                </p>
+                <div style="
+                    border: 4px solid #e5e7eb;
+                    border-top-color: #3b82f6;
+                    border-radius: 50%;
+                    width: 48px;
+                    height: 48px;
+                    animation: spin 1s linear infinite;
+                    margin: 0 auto;
+                " />
+            </div>
+        </div>
+    }
 }
 
 #[function_component(ProjectDetails)]
@@ -203,7 +443,9 @@ pub fn project_details(
     let latest_commit_display = project.latest_commit().map(|commit| {
         format!(
             "Latest: \"{}\" by {} ({})",
-            commit.message, commit.author_name, commit.dt_since
+            commit.message,
+            commit.author_name,
+            display_commit_time(commit)
         )
     });
 
@@ -304,6 +546,8 @@ pub fn project_details(
             let show_upload_success = show_upload_success.clone();
             let show_no_changes_modal = show_no_changes_modal.clone();
             let upload_error = upload_error.clone();
+            let commit_message = commit_message.clone();
+            let commit_message_error = commit_message_error.clone();
 
             uploading.set(true);
             upload_error.set(None);
@@ -312,14 +556,17 @@ pub fn project_details(
                 // 1. ZIP project
                 uploading.set(true);
                 match SPELEO_DB_CONTROLLER.save_project(project_id, &msg).await {
-                    Ok(upload_result) => match upload_result {
-                        ProjectSaveResult::NoChanges => {
-                            show_no_changes_modal.set(true);
+                    Ok(upload_result) => {
+                        let completion = save_completion_state(upload_result);
+                        if completion.clear_commit_message {
+                            commit_message.set(String::new());
                         }
-                        ProjectSaveResult::Saved => {
-                            show_upload_success.set(true);
+                        if completion.clear_commit_message_error {
+                            commit_message_error.set(false);
                         }
-                    },
+                        show_upload_success.set(completion.show_upload_success);
+                        show_no_changes_modal.set(completion.show_no_changes_modal);
+                    }
                     Err(e) => {
                         upload_error.set(Some(format!("Failed to zip project: {}", e)));
                         uploading.set(false);
@@ -361,7 +608,7 @@ pub fn project_details(
                     }
                     Err(e) => {
                         show_empty_project_modal.set(false);
-                        error_message.set(Some(format!("Failed to select file: {}", e)));
+                        error_message.set(Some(format!("Failed to import Compass project: {}", e)));
                     }
                 }
                 reimporting.set(false);
@@ -417,7 +664,10 @@ pub fn project_details(
                         reimport_flow_state.set(next_reimport_state_after_file_pick(selected_path));
                     }
                     Err(e) => {
-                        error_message.set(Some(format!("Failed to select file: {}", e)));
+                        error_message.set(Some(format!(
+                            "Failed to select Compass project file: {}",
+                            e
+                        )));
                     }
                 }
             });
@@ -978,52 +1228,18 @@ pub fn project_details(
                 }
             }
 
-            // Import processing overlay shown for both import entry points
+            // Processing overlay for long-running import/save operations
             {
-                if *reimporting {
-                    html! {
-                        <div class="modal" style="
-                            position: fixed;
-                            top: 0;
-                            left: 0;
-                            width: 100vw;
-                            height: 100vh;
-                            background-color: rgba(0, 0, 0, 0.5);
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            z-index: 2000;
-                        ">
-                            <div class="modal-card" style="
-                                background-color: white;
-                                border-radius: 12px;
-                                padding: 24px;
-                                max-width: 500px;
-                                width: 90%;
-                                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-                                border-top: 4px solid #2563eb;
-                                text-align: center;
-                            ">
-                                <h3 style="margin: 0 0 12px 0; font-size: 20px; color: #1f2937;">
-                                    {"Importing Project"}
-                                </h3>
-                                <p style="color: #4b5563; line-height: 1.6; margin-bottom: 20px;">
-                                    {"Processing Compass files and syncing the project. This can take a moment."}
-                                </p>
-                                <div style="
-                                    border: 4px solid #e5e7eb;
-                                    border-top-color: #3b82f6;
-                                    border-radius: 50%;
-                                    width: 48px;
-                                    height: 48px;
-                                    animation: spin 1s linear infinite;
-                                    margin: 0 auto;
-                                " />
-                            </div>
-                        </div>
-                    }
-                } else {
-                    html! {}
+                match active_processing_overlay(*reimporting, *uploading) {
+                    Some(ProcessingOverlayKind::Importing) => render_processing_overlay(
+                        "Importing Project",
+                        "Processing Compass files and syncing the project. This can take a moment.",
+                    ),
+                    Some(ProcessingOverlayKind::Saving) => render_processing_overlay(
+                        "Saving Project",
+                        "Uploading your Compass project to SpeleoDB. This can take a moment.",
+                    ),
+                    None => html! {},
                 }
             }
 

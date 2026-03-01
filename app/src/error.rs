@@ -2,7 +2,7 @@ use wasm_bindgen::JsValue;
 
 #[derive(Clone, Eq, PartialEq, Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Command returned Error: {0}")]
+    #[error("{0}")]
     Command(String),
     #[error("Failed to parse JSON: {0}")]
     Serde(String),
@@ -16,6 +16,111 @@ impl From<serde_wasm_bindgen::Error> for Error {
 
 impl From<JsValue> for Error {
     fn from(e: JsValue) -> Self {
-        Self::Command(format!("{:?}", e))
+        log::error!("Raw backend command error payload: {:?}", e);
+
+        if let Some(message) = e.as_string() {
+            return Self::Command(message);
+        }
+
+        let backend_error = serde_wasm_bindgen::from_value::<common::Error>(e.clone());
+        if let Ok(error) = backend_error {
+            return Self::Command(format_backend_error(&error));
+        }
+
+        Self::Command("Backend command failed with an unknown error.".to_string())
+    }
+}
+
+fn format_backend_error(error: &common::Error) -> String {
+    match error {
+        common::Error::ProjectImport {
+            src_path,
+            is_permission_error: true,
+            ..
+        } => {
+            let source_name = src_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(str::to_string)
+                .unwrap_or_else(|| src_path.display().to_string());
+            format!(
+                "Cannot import '{}' because macOS denied file access. \
+                Move/copy the survey folder to an accessible location (for example `~/Documents`) \
+                and try again.",
+                source_name
+            )
+        }
+        _ => error.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn project_import_permission_error_is_humanized() {
+        let backend_error = common::Error::ProjectImport {
+            src_path: PathBuf::from("/tmp/Region_1.DAT"),
+            dst_path: PathBuf::from("/tmp/project/Region_1.DAT"),
+            details: "Operation not permitted (os error 1)".to_string(),
+            is_permission_error: true,
+        };
+
+        let message = format_backend_error(&backend_error);
+        assert!(
+            message.contains("Cannot import"),
+            "permission errors should be translated for users"
+        );
+        assert!(
+            message.contains("macOS denied file access"),
+            "permission errors should explain the root cause"
+        );
+    }
+
+    #[test]
+    fn non_permission_import_error_uses_backend_message() {
+        let backend_error = common::Error::ProjectImport {
+            src_path: PathBuf::from("/tmp/Region_1.DAT"),
+            dst_path: PathBuf::from("/tmp/project/Region_1.DAT"),
+            details: "No such file or directory (os error 2)".to_string(),
+            is_permission_error: false,
+        };
+
+        let message = format_backend_error(&backend_error);
+        assert!(
+            message.contains("Error importing project file"),
+            "non-permission errors should preserve backend detail"
+        );
+    }
+
+    #[test]
+    fn format_backend_error_non_import_errors_use_display() {
+        let error = common::Error::ProjectNotFound(PathBuf::from("/tmp/missing"));
+        let message = format_backend_error(&error);
+        assert!(
+            message.contains("Project not found"),
+            "non-import errors should use the Display impl"
+        );
+    }
+
+    #[test]
+    fn js_string_command_error_is_forwarded() {
+        let error = Error::from(JsValue::from_str("simple command failure"));
+        assert_eq!(
+            error,
+            Error::Command("simple command failure".to_string()),
+            "plain string command errors should be preserved as-is"
+        );
+    }
+
+    #[test]
+    fn unknown_js_error_payload_falls_back_to_generic_message() {
+        let error = Error::from(JsValue::from_f64(42.0));
+        assert_eq!(
+            error,
+            Error::Command("Backend command failed with an unknown error.".to_string())
+        );
     }
 }
