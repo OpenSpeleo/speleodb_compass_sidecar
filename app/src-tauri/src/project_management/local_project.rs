@@ -10,8 +10,7 @@ use crate::{
     project_management::SPELEODB_COMPASS_PROJECT_FILE,
 };
 use common::Error;
-use compass_data::{Loaded, Project};
-use log::{debug, error, info, trace};
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::{
     io::prelude::*,
@@ -50,6 +49,15 @@ impl ProjectMap {
             dat_files,
             plt_files,
         }
+    }
+
+    pub fn tracked_file_paths(&self) -> Vec<&str> {
+        let mut paths = Vec::new();
+        if let Some(mak) = &self.mak_file {
+            paths.push(mak.as_str());
+        }
+        paths.extend(self.dat_files.iter().map(String::as_str));
+        paths
     }
 }
 
@@ -138,116 +146,35 @@ impl LocalProject {
     pub fn working_copy_is_dirty(id: Uuid) -> Result<bool, Error> {
         let index_copy = LocalProject::load_index_project(id).ok();
         let working_copy = LocalProject::load_working_project(id).ok();
-        if let Some(index_copy) = index_copy {
-            if let Some(working_copy) = working_copy {
-                // Both copies exist, compare them
-                if index_copy == working_copy {
-                    let mut tracked_files = Vec::new();
-                    if let Some(mak_file) = index_copy.project_map.mak_file.as_ref() {
-                        tracked_files.push(mak_file.as_str());
-                    }
-                    tracked_files
-                        .extend(index_copy.project_map.dat_files.iter().map(String::as_str));
-                    tracked_files
-                        .extend(index_copy.project_map.plt_files.iter().map(String::as_str));
 
-                    let index_root = compass_project_index_path(id);
-                    let working_root = compass_project_working_path(id);
-                    let mut tracked_file_read_failed = false;
-                    for relative_path in tracked_files {
-                        let index_path = index_root.join(relative_path);
-                        let working_path = working_root.join(relative_path);
-                        let (index_bytes, working_bytes) =
-                            match (std::fs::read(&index_path), std::fs::read(&working_path)) {
-                                (Ok(index_bytes), Ok(working_bytes)) => {
-                                    (index_bytes, working_bytes)
-                                }
-                                _ => {
-                                    tracked_file_read_failed = true;
-                                    break;
-                                }
-                            };
-                        if index_bytes != working_bytes {
-                            trace!(
-                                "Tracked file differs between index and working copy for project {}: {}",
-                                id, relative_path
-                            );
-                            return Ok(true);
-                        }
-                    }
-                    if !tracked_file_read_failed {
-                        trace!("No tracked-file changes detected for project {id}");
-                        return Ok(false);
-                    }
-
-                    let index_project = LocalProject::load_index_compass_project(id);
-                    let working_project = LocalProject::load_working_copy_compass_project(id);
-
-                    match (index_project, working_project) {
-                        (Ok(index_project), Ok(working_project)) => {
-                            if index_project == working_project {
-                                trace!(
-                                    "No changes detected between: {:?} and {:?}",
-                                    index_project, working_project
-                                );
-                                Ok(false)
-                            } else {
-                                debug!(
-                                    "Detected changes between loaded compass projects for: {id}"
-                                );
-                                trace!("Index project: {:#?}", index_project);
-                                trace!("Working project: {:#?}", working_project);
-                                Ok(true)
-                            }
-                        }
-                        (Err(index_error), Err(working_error)) => {
-                            if index_error == working_error {
-                                debug!(
-                                    "Index and working copy failed to parse with the same error for project {}. Treating as clean. Error: {}",
-                                    id, index_error
-                                );
-                                Ok(false)
-                            } else {
-                                debug!(
-                                    "Index and working copy parsing errors differ for project {}. Index error: {}. Working error: {}",
-                                    id, index_error, working_error
-                                );
-                                Ok(true)
-                            }
-                        }
-                        (Err(index_error), Ok(_)) => {
-                            debug!(
-                                "Index failed to parse but working copy parsed for project {}. Treating as dirty. Error: {}",
-                                id, index_error
-                            );
-                            Ok(true)
-                        }
-                        (Ok(_), Err(working_error)) => {
-                            debug!(
-                                "Working copy failed to parse but index parsed for project {}. Treating as dirty. Error: {}",
-                                id, working_error
-                            );
-                            Ok(true)
-                        }
-                    }
-                } else {
-                    // Changes detected
-                    Ok(true)
+        match (index_copy, working_copy) {
+            (Some(index), Some(working)) => {
+                if index != working {
+                    return Ok(true);
                 }
-            } else {
-                // No working copy, so not dirty
-                error!("Index is populated, but local copy doesn't exist");
-                // TODO: Decide if we should just clone the index to working copy here
-                unreachable!(
-                    "Index populated, but working copy doesn't exist when checking for changes"
-                );
+                let index_root = compass_project_index_path(id);
+                let working_root = compass_project_working_path(id);
+                for relative_path in index.project_map.tracked_file_paths() {
+                    let index_bytes = std::fs::read(index_root.join(relative_path));
+                    let working_bytes = std::fs::read(working_root.join(relative_path));
+                    match (index_bytes, working_bytes) {
+                        (Ok(ib), Ok(wb)) if ib != wb => return Ok(true),
+                        (Ok(_), Ok(_)) => {}
+                        (Ok(_), Err(e)) | (Err(e), Ok(_))
+                            if e.kind() == std::io::ErrorKind::NotFound =>
+                        {
+                            return Ok(true)
+                        }
+                        (Err(e), _) | (_, Err(e)) => {
+                            return Err(Error::FileRead(format!("{relative_path}: {e}")))
+                        }
+                    }
+                }
+                Ok(false)
             }
-        } else if working_copy.is_some() {
-            // No index copy, but working copy exists, so dirty
-            Ok(true)
-        } else {
-            // Neither copy exists, so not dirty
-            Ok(false)
+            (Some(_), None) => Ok(false),
+            (None, Some(_)) => Ok(true),
+            (None, None) => Ok(false),
         }
     }
 
@@ -419,27 +346,15 @@ impl LocalProject {
             .map_err(|e| Error::ZipFile(e.to_string()))?;
         let project_dir = compass_project_working_path(id);
 
-        if let Some(mak_file_path) = working_copy.project_map.mak_file.as_ref() {
-            let mak_full_path = project_dir.join(mak_file_path);
+        for relative_path in working_copy.project_map.tracked_file_paths() {
+            let full_path = project_dir.join(relative_path);
             zip_writer
-                .start_file(mak_file_path, options)
+                .start_file(relative_path, options)
                 .map_err(|e| Error::ZipFile(e.to_string()))?;
-            let mak_contents =
-                std::fs::read(&mak_full_path).map_err(|e| Error::FileRead(e.to_string()))?;
+            let contents =
+                std::fs::read(&full_path).map_err(|e| Error::FileRead(e.to_string()))?;
             zip_writer
-                .write_all(&mak_contents)
-                .map_err(|e| Error::ZipFile(e.to_string()))?;
-        }
-
-        for dat_path in working_copy.project_map.dat_files.iter() {
-            let dat_full_path = project_dir.join(dat_path);
-            zip_writer
-                .start_file(dat_path, options)
-                .map_err(|e| Error::ZipFile(e.to_string()))?;
-            let dat_contents =
-                std::fs::read(&dat_full_path).map_err(|e| Error::FileRead(e.to_string()))?;
-            zip_writer
-                .write_all(&dat_contents)
+                .write_all(&contents)
                 .map_err(|e| Error::ZipFile(e.to_string()))?;
         }
 
@@ -449,36 +364,94 @@ impl LocalProject {
         Ok(zip_path)
     }
 
-    fn load_compass_project(path: &Path) -> Result<Project<Loaded>, Error> {
-        let compass_project =
-            Project::read(path).map_err(|e| Error::CompassProject(e.to_string()))?;
-        let loaded_compass_project = compass_project
-            .load_survey_files()
-            .map_err(|e| Error::CompassProject(e.to_string()))?;
-        Ok(loaded_compass_project)
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub enum ValidationIssue {
+    MakParseError(String),
+    UntrackedDatFile(String),
+    OrphanedDatFile(String),
+    MissingDatFile(String),
+    MissingMakFile(String),
+    NoProjectMetadata,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ValidationReport {
+    pub issues: Vec<ValidationIssue>,
+}
+
+impl ValidationReport {
+    pub fn is_valid(&self) -> bool {
+        self.issues.is_empty()
+    }
+}
+
+pub fn validate_working_copy(id: Uuid) -> ValidationReport {
+    let mut issues = Vec::new();
+
+    let local_project = match LocalProject::load_working_project(id) {
+        Ok(p) => p,
+        Err(_) => {
+            issues.push(ValidationIssue::NoProjectMetadata);
+            return ValidationReport { issues };
+        }
+    };
+
+    let working_root = compass_project_working_path(id);
+
+    let mak_file = match &local_project.project_map.mak_file {
+        Some(m) => m.clone(),
+        None => return ValidationReport { issues },
+    };
+
+    let mak_path = working_root.join(&mak_file);
+    if !mak_path.exists() {
+        issues.push(ValidationIssue::MissingMakFile(mak_file));
+        return ValidationReport { issues };
     }
 
-    fn load_index_compass_project(id: Uuid) -> Result<Project<Loaded>, Error> {
-        let local_project = LocalProject::load_index_project(id)?;
-        let mut project_path = compass_project_index_path(id);
-        let mak_file_name = local_project
-            .project_map
-            .mak_file
-            .ok_or(Error::NoProjectData(id))?;
-        project_path.push(&mak_file_name);
-        LocalProject::load_compass_project(&project_path)
+    let mak_dat_files: Vec<String> = match compass_data::Project::read(&mak_path) {
+        Ok(project) => project
+            .survey_files
+            .iter()
+            .map(|f| f.file_path.to_string_lossy().to_string())
+            .collect(),
+        Err(e) => {
+            issues.push(ValidationIssue::MakParseError(e.to_string()));
+            return ValidationReport { issues };
+        }
+    };
+
+    let tracked_dats: std::collections::HashSet<&str> = local_project
+        .project_map
+        .dat_files
+        .iter()
+        .map(String::as_str)
+        .collect();
+
+    let mak_dats: std::collections::HashSet<&str> =
+        mak_dat_files.iter().map(String::as_str).collect();
+
+    for dat in &mak_dats {
+        if !tracked_dats.contains(dat) {
+            issues.push(ValidationIssue::UntrackedDatFile(dat.to_string()));
+        }
     }
 
-    fn load_working_copy_compass_project(id: Uuid) -> Result<Project<Loaded>, Error> {
-        let local_project = LocalProject::load_working_project(id)?;
-        let mut project_path = compass_project_working_path(id);
-        let mak_file_name = local_project
-            .project_map
-            .mak_file
-            .ok_or(Error::NoProjectData(id))?;
-        project_path.push(&mak_file_name);
-        LocalProject::load_compass_project(&project_path)
+    for dat in &tracked_dats {
+        if !mak_dats.contains(dat) {
+            issues.push(ValidationIssue::OrphanedDatFile(dat.to_string()));
+        }
     }
+
+    for dat in tracked_dats.union(&mak_dats) {
+        if !working_root.join(dat).exists() {
+            issues.push(ValidationIssue::MissingDatFile(dat.to_string()));
+        }
+    }
+
+    ValidationReport { issues }
 }
 
 #[cfg(test)]
@@ -879,5 +852,98 @@ mod test {
             }
             other => panic!("expected ProjectImport error, got: {other:?}"),
         }
+    }
+
+    #[test]
+    #[serial]
+    fn test_validate_working_copy_clean_project() {
+        let id = Uuid::new_v4();
+        cleanup_project_dir(id);
+        let source_dir = setup_import_source(id, true);
+        let mak_path = source_dir.join("Fulfords.mak");
+        LocalProject::import_compass_project(id, &mak_path).expect("import should succeed");
+
+        let report = validate_working_copy(id);
+        assert!(
+            report.is_valid(),
+            "freshly imported project should have no issues, got: {:?}",
+            report.issues
+        );
+
+        cleanup_project_dir(id);
+        let _ = std::fs::remove_dir_all(source_dir);
+    }
+
+    #[test]
+    #[serial]
+    fn test_validate_working_copy_untracked_dat_file() {
+        let id = Uuid::new_v4();
+        cleanup_project_dir(id);
+        let source_dir = setup_import_source(id, true);
+        let mak_path = source_dir.join("Fulfords.mak");
+        LocalProject::import_compass_project(id, &mak_path).expect("import should succeed");
+
+        // Remove a dat file from compass.toml tracking but keep it in the .mak
+        let mut project = LocalProject::load_working_project(id).expect("load should succeed");
+        let removed = project.project_map.dat_files.remove(0);
+        let toml = toml::to_string_pretty(&project).expect("serialize");
+        let toml_path =
+            compass_project_working_path(id).join(SPELEODB_COMPASS_PROJECT_FILE);
+        std::fs::write(&toml_path, &toml).expect("write compass.toml");
+
+        let report = validate_working_copy(id);
+        assert!(
+            report.issues.iter().any(|i| matches!(i, ValidationIssue::UntrackedDatFile(f) if f == &removed)),
+            "should detect untracked dat file '{removed}', got: {:?}",
+            report.issues
+        );
+
+        cleanup_project_dir(id);
+        let _ = std::fs::remove_dir_all(source_dir);
+    }
+
+    #[test]
+    #[serial]
+    fn test_validate_working_copy_missing_dat_file() {
+        let id = Uuid::new_v4();
+        cleanup_project_dir(id);
+        let source_dir = setup_import_source(id, true);
+        let mak_path = source_dir.join("Fulfords.mak");
+        LocalProject::import_compass_project(id, &mak_path).expect("import should succeed");
+
+        // Delete a tracked dat file from disk
+        let project = LocalProject::load_working_project(id).expect("load should succeed");
+        let deleted = project.project_map.dat_files.first().expect("has dat files").clone();
+        let deleted_path = compass_project_working_path(id).join(&deleted);
+        std::fs::remove_file(&deleted_path).expect("remove dat file");
+
+        let report = validate_working_copy(id);
+        assert!(
+            report.issues.iter().any(|i| matches!(i, ValidationIssue::MissingDatFile(f) if f == &deleted)),
+            "should detect missing dat file '{deleted}', got: {:?}",
+            report.issues
+        );
+
+        cleanup_project_dir(id);
+        let _ = std::fs::remove_dir_all(source_dir);
+    }
+
+    #[test]
+    #[serial]
+    fn test_validate_working_copy_no_metadata() {
+        let id = Uuid::new_v4();
+        cleanup_project_dir(id);
+
+        let report = validate_working_copy(id);
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|i| matches!(i, ValidationIssue::NoProjectMetadata)),
+            "should report NoProjectMetadata when compass.toml is missing, got: {:?}",
+            report.issues
+        );
+
+        cleanup_project_dir(id);
     }
 }

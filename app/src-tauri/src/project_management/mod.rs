@@ -1,7 +1,12 @@
 mod local_project;
 mod revision;
 
-pub use {local_project::LocalProject, revision::SpeleoDbProjectRevision};
+pub use {
+    local_project::{
+        LocalProject, ValidationIssue, ValidationReport, validate_working_copy,
+    },
+    revision::SpeleoDbProjectRevision,
+};
 
 use crate::paths::{
     compass_project_index_path, compass_project_path, compass_project_working_path,
@@ -492,8 +497,8 @@ mod tests {
         cleanup_project_dir(project_id);
 
         // Both index and working_copy get identical compass.toml referencing
-        // a .mak file that does NOT exist on disk. This makes
-        // working_copy_is_dirty() return Err (cannot load compass project).
+        // a .mak file that does NOT exist on disk. The byte comparison for the
+        // missing file returns NotFound → Ok(true), so the caller sees Dirty.
         let compass_toml = format!(
             "[speleodb]\nid = \"{project_id}\"\nversion = \"1.0.0\"\n\n\
              [project]\nmak_file = \"ghost.mak\"\ndat_files = []\nplt_files = []\n"
@@ -525,8 +530,8 @@ mod tests {
             Some(test_commit("Test commit", 1)),
         ));
 
-        // The .mak file referenced by compass.toml doesn't exist at all,
-        // so the byte-comparison fallback also fails → assume dirty.
+        // The .mak file referenced by compass.toml doesn't exist on disk,
+        // so the byte comparison returns NotFound → Ok(true) → assume dirty.
         assert_eq!(
             manager.local_project_status(),
             LocalProjectStatus::Dirty,
