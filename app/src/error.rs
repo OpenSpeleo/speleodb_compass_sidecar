@@ -104,4 +104,23 @@ mod tests {
             "non-import errors should use the Display impl"
         );
     }
+
+    #[test]
+    fn js_string_command_error_is_forwarded() {
+        let error = Error::from(JsValue::from_str("simple command failure"));
+        assert_eq!(
+            error,
+            Error::Command("simple command failure".to_string()),
+            "plain string command errors should be preserved as-is"
+        );
+    }
+
+    #[test]
+    fn unknown_js_error_payload_falls_back_to_generic_message() {
+        let error = Error::from(JsValue::from_f64(42.0));
+        assert_eq!(
+            error,
+            Error::Command("Backend command failed with an unknown error.".to_string())
+        );
+    }
 }
