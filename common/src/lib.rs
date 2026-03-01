@@ -3,7 +3,8 @@ pub mod api_types;
 pub mod ui_state;
 
 pub use api_info::{ApiInfo, OauthToken};
-pub use errors::Error;
+mod error;
+pub use error::Error;
 
 #[cfg(debug_assertions)]
 pub const API_BASE_URL: &str = "https://stage.speleodb.org";
