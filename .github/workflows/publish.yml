@@ -71,7 +71,7 @@ jobs:
       - name: Install trunk and wasm-pack
         run: cargo binstall trunk wasm-pack
 
-      - uses: tauri-apps/tauri-action@action-v0.6.1
+      - uses: tauri-apps/tauri-action@action-v0.6.2
         env:
           TRUNK_BUILD_RELEASE: "true"
           SENTRY_DSN_SPELEODB_COMPASS: ${{ secrets.SENTRY_DSN_SPELEODB_COMPASS }}
