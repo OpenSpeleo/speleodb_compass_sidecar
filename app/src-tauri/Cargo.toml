@@ -38,7 +38,7 @@ chrono = "0.4"
 compass_data = "0.0.7"
 pretty_env_logger = "0.5"
 semver = { version = "1", features = ["serde"] }
-sentry = "0.46"
+sentry = "0.47"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 zip = "7"
