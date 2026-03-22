@@ -6,7 +6,6 @@ edition = "2024"
 [dependencies]
 # Local dependencies
 common = { path = "../common" }
-errors  = { path = "../errors" }
 # workspace dependencies
 bytes.workspace = true
 log.workspace = true

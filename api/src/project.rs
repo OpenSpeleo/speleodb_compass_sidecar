@@ -4,10 +4,9 @@ use std::{
 };
 
 use common::{
-    ApiInfo,
+    ApiInfo, Error,
     api_types::{ProjectInfo, ProjectSaveResult, ProjectType},
 };
-use errors::Error;
 use log::{error, info, warn};
 use serde::Deserialize;
 use uuid::Uuid;
