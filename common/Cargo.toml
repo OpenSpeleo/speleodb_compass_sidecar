@@ -20,4 +20,4 @@ flexi_logger = "0.31.7"
 
 [dev-dependencies]
 serial_test = "3"
-ctor = "0.6"
+ctor = "0.8"
