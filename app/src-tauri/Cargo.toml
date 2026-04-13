@@ -41,7 +41,7 @@ semver = { version = "1", features = ["serde"] }
 sentry = "0.46"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
-zip = "7"
+zip = "8"
 dirs = "6"
 flexi_logger = "0.31"
 notify = "8"
