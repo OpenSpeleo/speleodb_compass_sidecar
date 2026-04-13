@@ -22,4 +22,4 @@ reqwest = { version = "0.12.24", features = ["json", "rustls-tls", "multipart"] 
 [dev-dependencies]
 serial_test = "3"
 dotenvy = "0.15"
-ctor = "0.6"
+ctor = "0.10"
