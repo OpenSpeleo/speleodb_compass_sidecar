@@ -22,7 +22,7 @@ grep "404" ~/.speleodb_compass/speleodb_compass.log
 
 The download command logs:
 ```
-Downloading project ZIP from: https://www.speleodb.org/api/v1/projects/{project_id}/download/compass_zip/
+Downloading project ZIP from: https://www.speleodb.org/api/v2/projects/{project_id}/download/compass_zip/
 ```
 
 This will show you the exact URL being requested.

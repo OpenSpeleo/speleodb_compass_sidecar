@@ -1,5 +1,9 @@
 pub mod auth;
+mod http;
 pub mod project;
+
+#[cfg(test)]
+mod test_support;
 
 use reqwest::Client;
 use std::{sync::LazyLock, time::Duration};

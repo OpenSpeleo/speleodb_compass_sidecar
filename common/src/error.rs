@@ -43,15 +43,23 @@ pub enum Error {
     EmptyProjectDirectory(uuid::Uuid),
     #[error("Network request error: {0}")]
     NetworkRequest(String),
-    #[error("Api request failed with status code: {0}")]
-    Api(u16),
+    #[error("Unauthorized: {0}")]
+    Unauthorized(String),
+    #[error("Resource not found: {0}")]
+    NotFound(String),
+    #[error("Unprocessable entity: {0}")]
+    Unprocessable(String),
+    #[error("Conflict: {0}")]
+    Conflict(String),
+    #[error("API error {status}: {message}")]
+    Api { status: u16, message: String },
     #[error("File read failed: {0}")]
     FileRead(String),
     #[error("File write failed: {0}")]
     FileWrite(String),
-    #[error("No project data found for : {0}")]
+    #[error("No project data found for project {0}")]
     NoProjectData(Uuid),
-    #[error("Project mutex already locked")]
+    #[error("Project mutex already locked for project {0}")]
     ProjectMutexLocked(Uuid),
     #[error("Zip File Error: {0}")]
     ZipFile(String),
@@ -65,4 +73,28 @@ pub enum Error {
     CompassProject(String),
     #[error("No app handle available")]
     NoAppHandle,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Error;
+    use uuid::Uuid;
+
+    #[test]
+    fn no_project_data_display_includes_project_id() {
+        let id = Uuid::nil();
+        assert_eq!(
+            Error::NoProjectData(id).to_string(),
+            format!("No project data found for project {id}")
+        );
+    }
+
+    #[test]
+    fn project_mutex_locked_display_includes_project_id() {
+        let id = Uuid::nil();
+        assert_eq!(
+            Error::ProjectMutexLocked(id).to_string(),
+            format!("Project mutex already locked for project {id}")
+        );
+    }
 }

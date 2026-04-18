@@ -228,10 +228,12 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "url",
  "uuid",
+ "zip 8.5.1",
 ]
 
 [[package]]

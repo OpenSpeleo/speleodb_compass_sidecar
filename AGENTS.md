@@ -231,17 +231,17 @@ Workspace dependencies defined in root `Cargo.toml`: bytes, log, serde, serde_js
 
 **API (api/src/)**
 - `lib.rs` - Module declarations, global HTTP client (`reqwest`) with 10s timeout
-- `auth.rs` - `authorize_with_token()` and `authorize_with_email()` against SpeleoDB API
-- `project.rs` - `create_project()`, `fetch_project_info()`, `acquire_project_mutex()`, `release_project_mutex()`
+- `http.rs` - Centralized v2 plumbing: `v2_url()`, `authenticated()`, `send_json()`, `send_raw()`, `map_status_to_error()`. Single chokepoint for status-code → typed `Error` mapping (401/403→Unauthorized, 404→NotFound, 422→Unprocessable, 409/423→Conflict, otherwise `Api{status,message}`)
+- `auth.rs` - `authorize_with_token()` and `authorize_with_email()` against `api/v2/user/auth-token/`
+- `project.rs` - `create_project()`, `fetch_project_info()`, `fetch_projects()`, `acquire_project_mutex()` (Conflict→`ProjectMutexLocked`), `release_project_mutex()`, `download_project_zip()` (Unprocessable→`NoProjectData`), `upload_project_zip()` — all under `api/v2/projects/`
+- `test_support.rs` (test-only) - `.env` autoloader, `test_api_info()`, `unauthorized_api_info()`, `fixture_project_id()` (lazy shared OnceCell), `build_minimal_compass_zip()`. See `docs/api-v2.md` for the testing strategy.
 
 **Common (common/src/)**
 - `lib.rs` - Re-exports, conditional `API_BASE_URL` (stage in debug, production in release)
 - `api_info.rs` - `ApiInfo` (instance URL, email, oauth_token), `OauthToken` newtype
 - `api_types.rs` - `ProjectInfo`, `CommitInfo`, `ProjectType` (ARIANE, COMPASS), `ProjectSaveResult`
 - `ui_state.rs` - `UiState`, `LoadingState`, `LocalProjectStatus`, `ProjectStatus`, `Platform`
-
-**Errors (errors/src/)**
-- `lib.rs` - ~30 error variants covering auth, file I/O, project state, network, OS/Compass, serialization
+- `error.rs` - Single `Error` enum covering auth, file I/O, project state, network, OS/Compass, serialization. HTTP-derived variants: `Unauthorized(String)`, `NotFound(String)`, `Unprocessable(String)`, `Conflict(String)`, generic `Api{status,message}` — every variant carries the server-provided message.
 
 ### IPC Communication
 
