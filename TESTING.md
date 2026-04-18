@@ -28,10 +28,10 @@ This project uses environment variables for test credentials, which allows:
    # Test EVERYTHING (Rust tests + WASM UI)
    # All tests use real HTTP requests to your server
    make test
-   
+
    # Or just Rust tests
    make test-rust
-   
+
    # Or directly with cargo
    cargo test --workspace --exclude speleodb-compass-sidecar-ui
    ```
@@ -40,13 +40,13 @@ This project uses environment variables for test credentials, which allows:
    ```bash
    # Test only the Tauri backend
    make test-tauri
-   
+
    # Test only the common crate
    make test-common
-   
+
    # Test only WASM UI
    make test-ui
-   
+
    # Test with output visible
    make test-rust-verbose
    ```
@@ -95,7 +95,7 @@ Push to main/master or PR:
   │  ├─ Setup environment (Node, Rust, wasm-pack, trunk)
   │  ├─ Run `make test`
   │  └─ Report results
-  
+
 Push to main/master with tags:
   ├─ CI Tests workflow runs first
   ├─ If tests pass ✓

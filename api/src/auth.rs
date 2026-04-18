@@ -106,15 +106,14 @@ mod tests {
     // Helper function to ensure test env vars are loaded. Returns true if loaded, false otherwise.
     fn ensure_test_env_vars() -> bool {
         // If env vars are missing, try to reload from .env
-        if std::env::var("TEST_SPELEODB_INSTANCE").is_err()
-            || std::env::var("TEST_SPELEODB_OAUTH").is_err()
+        if (std::env::var("TEST_SPELEODB_INSTANCE").is_err()
+            || std::env::var("TEST_SPELEODB_OAUTH").is_err())
+            && let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR")
         {
-            if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-                let workspace_root = std::path::Path::new(&manifest_dir).parent().unwrap();
-                let env_path = workspace_root.join(".env");
-                if env_path.exists() {
-                    let _ = dotenvy::from_path(&env_path);
-                }
+            let workspace_root = std::path::Path::new(&manifest_dir).parent().unwrap();
+            let env_path = workspace_root.join(".env");
+            if env_path.exists() {
+                let _ = dotenvy::from_path(&env_path);
             }
         }
 

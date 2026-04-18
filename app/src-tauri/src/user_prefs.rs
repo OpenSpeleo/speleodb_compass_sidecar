@@ -198,7 +198,7 @@ mod tests {
         let _ = prefs.save();
 
         // Check file permissions
-        let metadata = std::fs::metadata(&user_prefs_file_path())
+        let metadata = std::fs::metadata(user_prefs_file_path())
             .expect("Should be able to read file metadata");
         let permissions = metadata.permissions();
         let mode = permissions.mode();

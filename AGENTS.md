@@ -7,20 +7,20 @@ correct changes without re-discovering architecture every session.
 
 ## Project Overview
 
-SpeleoDB Compass Sidecar is a Tauri v2 + Yew desktop application that bridges SpeleoDB 
-(cave survey database) with Compass (desktop cave surveying software). It manages project 
+SpeleoDB Compass Sidecar is a Tauri v2 + Yew desktop application that bridges SpeleoDB
+(cave survey database) with Compass (desktop cave surveying software). It manages project
 synchronization, authentication, and launches Compass for editing.
 
 ## Core Principles
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.
 - **No Laziness**: Find root causes. No temporary fixes. Principal Engineer standards
-- **Minimat Impact**: Changes should only touch what's necessary. Avoid introducing bugs 
+- **Minimat Impact**: Changes should only touch what's necessary. Avoid introducing bugs
 or changing unrelated parts of the code.
-- **Readability & Maintainability**: Preserve product behavior while improving 
+- **Readability & Maintainability**: Preserve product behavior while improving
 maintainability.
 - **Performance Conscious**: Be aware of the performance impact of your changes and try
 to minimize the impact on performance.
-- **Refactor as necessary**: Prefer centralized logic over duplicated code, conditionals 
+- **Refactor as necessary**: Prefer centralized logic over duplicated code, conditionals
 or per-call custom checks.
 - **Tests are cheap**: Every behavior should be tested. Untested code is broken code.
 
@@ -125,7 +125,7 @@ Before finishing map viewer work, check:
 ### Do not:
 
 - Duplicate code or logic.
-- Introduce "quick patches" that hinder long term maintainability. 
+- Introduce "quick patches" that hinder long term maintainability.
 - Add expensive computations.
 
 ## Build Commands

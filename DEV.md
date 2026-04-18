@@ -10,7 +10,7 @@ info: downloading create-tauri-app
 ✔ Choose which language to use for your frontend · Rust - (cargo)
 ✔ Choose your UI template · Yew - (https://yew.rs/)
 
-# Windows 
+# Windows
 
 You will need the windows toolchain & linker
 ```sh

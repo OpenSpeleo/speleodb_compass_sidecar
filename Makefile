@@ -1,4 +1,4 @@
-.PHONY: clean test test-rust test-rust-verbose test-tauri test-common test-ui coverage build install lint dev build-tauri build-ui
+.PHONY: clean test test-rust test-rust-verbose test-tauri test-common test-ui lint dev build-tauri build-ui setup
 
 # ============================================================================ #
 # CLEAN COMMANDS
@@ -12,8 +12,12 @@ clean:
 # TEST COMMANDS
 # ============================================================================ #
 
-# Default: Test EVERYTHING (Rust + WASM UI)
-test: test-rust test-ui
+# Default: Test EVERYTHING (lint + Rust + WASM UI)
+test: lint test-rust test-ui
+
+# Check formatting
+lint:
+	cargo fmt --all -- --check
 
 # Run standard Rust tests (backend + common crate)
 test-rust:
@@ -56,6 +60,11 @@ build-ui:
 # ============================================================================ #
 # DEV COMMANDS
 # ============================================================================ #
+
+# Install dev tools and set up git hooks
+setup:
+	cargo install --locked cargo-binstall
+	cargo binstall --locked prek
 
 dev:
 	cd app && \

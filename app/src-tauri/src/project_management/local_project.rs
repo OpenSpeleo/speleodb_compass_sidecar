@@ -163,10 +163,10 @@ impl LocalProject {
                         (Ok(_), Err(e)) | (Err(e), Ok(_))
                             if e.kind() == std::io::ErrorKind::NotFound =>
                         {
-                            return Ok(true)
+                            return Ok(true);
                         }
                         (Err(e), _) | (_, Err(e)) => {
-                            return Err(Error::FileRead(format!("{relative_path}: {e}")))
+                            return Err(Error::FileRead(format!("{relative_path}: {e}")));
                         }
                     }
                 }
@@ -351,8 +351,7 @@ impl LocalProject {
             zip_writer
                 .start_file(relative_path, options)
                 .map_err(|e| Error::ZipFile(e.to_string()))?;
-            let contents =
-                std::fs::read(&full_path).map_err(|e| Error::FileRead(e.to_string()))?;
+            let contents = std::fs::read(&full_path).map_err(|e| Error::FileRead(e.to_string()))?;
             zip_writer
                 .write_all(&contents)
                 .map_err(|e| Error::ZipFile(e.to_string()))?;
@@ -363,99 +362,97 @@ impl LocalProject {
             .map_err(|e| Error::ZipFile(e.to_string()))?;
         Ok(zip_path)
     }
-
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize)]
-pub enum ValidationIssue {
-    MakParseError(String),
-    UntrackedDatFile(String),
-    OrphanedDatFile(String),
-    MissingDatFile(String),
-    MissingMakFile(String),
-    NoProjectMetadata,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize)]
-pub struct ValidationReport {
-    pub issues: Vec<ValidationIssue>,
-}
-
-impl ValidationReport {
-    pub fn is_valid(&self) -> bool {
-        self.issues.is_empty()
-    }
-}
-
-pub fn validate_working_copy(id: Uuid) -> ValidationReport {
-    let mut issues = Vec::new();
-
-    let local_project = match LocalProject::load_working_project(id) {
-        Ok(p) => p,
-        Err(_) => {
-            issues.push(ValidationIssue::NoProjectMetadata);
-            return ValidationReport { issues };
-        }
-    };
-
-    let working_root = compass_project_working_path(id);
-
-    let mak_file = match &local_project.project_map.mak_file {
-        Some(m) => m.clone(),
-        None => return ValidationReport { issues },
-    };
-
-    let mak_path = working_root.join(&mak_file);
-    if !mak_path.exists() {
-        issues.push(ValidationIssue::MissingMakFile(mak_file));
-        return ValidationReport { issues };
-    }
-
-    let mak_dat_files: Vec<String> = match compass_data::Project::read(&mak_path) {
-        Ok(project) => project
-            .survey_files
-            .iter()
-            .map(|f| f.file_path.to_string_lossy().to_string())
-            .collect(),
-        Err(e) => {
-            issues.push(ValidationIssue::MakParseError(e.to_string()));
-            return ValidationReport { issues };
-        }
-    };
-
-    let tracked_dats: std::collections::HashSet<&str> = local_project
-        .project_map
-        .dat_files
-        .iter()
-        .map(String::as_str)
-        .collect();
-
-    let mak_dats: std::collections::HashSet<&str> =
-        mak_dat_files.iter().map(String::as_str).collect();
-
-    for dat in &mak_dats {
-        if !tracked_dats.contains(dat) {
-            issues.push(ValidationIssue::UntrackedDatFile(dat.to_string()));
-        }
-    }
-
-    for dat in &tracked_dats {
-        if !mak_dats.contains(dat) {
-            issues.push(ValidationIssue::OrphanedDatFile(dat.to_string()));
-        }
-    }
-
-    for dat in tracked_dats.union(&mak_dats) {
-        if !working_root.join(dat).exists() {
-            issues.push(ValidationIssue::MissingDatFile(dat.to_string()));
-        }
-    }
-
-    ValidationReport { issues }
 }
 
 #[cfg(test)]
 mod test {
+    #[derive(Clone, Debug, PartialEq)]
+    enum ValidationIssue {
+        MakParseError(String),
+        UntrackedDatFile(String),
+        OrphanedDatFile(String),
+        MissingDatFile(String),
+        MissingMakFile(String),
+        NoProjectMetadata,
+    }
+
+    #[derive(Clone, Debug, PartialEq)]
+    struct ValidationReport {
+        issues: Vec<ValidationIssue>,
+    }
+
+    impl ValidationReport {
+        fn is_valid(&self) -> bool {
+            self.issues.is_empty()
+        }
+    }
+
+    fn validate_working_copy(id: Uuid) -> ValidationReport {
+        let mut issues = Vec::new();
+
+        let local_project = match LocalProject::load_working_project(id) {
+            Ok(p) => p,
+            Err(_) => {
+                issues.push(ValidationIssue::NoProjectMetadata);
+                return ValidationReport { issues };
+            }
+        };
+
+        let working_root = compass_project_working_path(id);
+
+        let mak_file = match &local_project.project_map.mak_file {
+            Some(m) => m.clone(),
+            None => return ValidationReport { issues },
+        };
+
+        let mak_path = working_root.join(&mak_file);
+        if !mak_path.exists() {
+            issues.push(ValidationIssue::MissingMakFile(mak_file));
+            return ValidationReport { issues };
+        }
+
+        let mak_dat_files: Vec<String> = match compass_data::Project::read(&mak_path) {
+            Ok(project) => project
+                .survey_files
+                .iter()
+                .map(|f| f.file_path.to_string_lossy().to_string())
+                .collect(),
+            Err(e) => {
+                issues.push(ValidationIssue::MakParseError(e.to_string()));
+                return ValidationReport { issues };
+            }
+        };
+
+        let tracked_dats: std::collections::HashSet<&str> = local_project
+            .project_map
+            .dat_files
+            .iter()
+            .map(String::as_str)
+            .collect();
+
+        let mak_dats: std::collections::HashSet<&str> =
+            mak_dat_files.iter().map(String::as_str).collect();
+
+        for dat in &mak_dats {
+            if !tracked_dats.contains(dat) {
+                issues.push(ValidationIssue::UntrackedDatFile(dat.to_string()));
+            }
+        }
+
+        for dat in &tracked_dats {
+            if !mak_dats.contains(dat) {
+                issues.push(ValidationIssue::OrphanedDatFile(dat.to_string()));
+            }
+        }
+
+        for dat in tracked_dats.union(&mak_dats) {
+            if !working_root.join(dat).exists() {
+                issues.push(ValidationIssue::MissingDatFile(dat.to_string()));
+            }
+        }
+
+        ValidationReport { issues }
+    }
     use super::*;
     use crate::paths::{
         compass_project_index_path, compass_project_path, compass_project_working_path,
@@ -824,8 +821,7 @@ mod test {
     fn test_copy_import_file_permission_denied_sets_permission_flag_true() {
         use std::os::unix::fs::PermissionsExt;
 
-        let temp_dir =
-            std::env::temp_dir().join(format!("speleodb_perm_test_{}", Uuid::new_v4()));
+        let temp_dir = std::env::temp_dir().join(format!("speleodb_perm_test_{}", Uuid::new_v4()));
         std::fs::create_dir_all(&temp_dir).expect("temp dir");
         let source = temp_dir.join("locked.dat");
         let target = temp_dir.join("target.dat");
@@ -887,13 +883,15 @@ mod test {
         let mut project = LocalProject::load_working_project(id).expect("load should succeed");
         let removed = project.project_map.dat_files.remove(0);
         let toml = toml::to_string_pretty(&project).expect("serialize");
-        let toml_path =
-            compass_project_working_path(id).join(SPELEODB_COMPASS_PROJECT_FILE);
+        let toml_path = compass_project_working_path(id).join(SPELEODB_COMPASS_PROJECT_FILE);
         std::fs::write(&toml_path, &toml).expect("write compass.toml");
 
         let report = validate_working_copy(id);
         assert!(
-            report.issues.iter().any(|i| matches!(i, ValidationIssue::UntrackedDatFile(f) if f == &removed)),
+            report
+                .issues
+                .iter()
+                .any(|i| matches!(i, ValidationIssue::UntrackedDatFile(f) if f == &removed)),
             "should detect untracked dat file '{removed}', got: {:?}",
             report.issues
         );
@@ -913,13 +911,21 @@ mod test {
 
         // Delete a tracked dat file from disk
         let project = LocalProject::load_working_project(id).expect("load should succeed");
-        let deleted = project.project_map.dat_files.first().expect("has dat files").clone();
+        let deleted = project
+            .project_map
+            .dat_files
+            .first()
+            .expect("has dat files")
+            .clone();
         let deleted_path = compass_project_working_path(id).join(&deleted);
         std::fs::remove_file(&deleted_path).expect("remove dat file");
 
         let report = validate_working_copy(id);
         assert!(
-            report.issues.iter().any(|i| matches!(i, ValidationIssue::MissingDatFile(f) if f == &deleted)),
+            report
+                .issues
+                .iter()
+                .any(|i| matches!(i, ValidationIssue::MissingDatFile(f) if f == &deleted)),
             "should detect missing dat file '{deleted}', got: {:?}",
             report.issues
         );

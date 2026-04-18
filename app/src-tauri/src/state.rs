@@ -308,9 +308,7 @@ impl AppState {
         // and update .revision.txt. We must NOT call update_local_copies here because
         // it overwrites the working copy, which fails on Windows when Compass holds
         // file locks on the project files.
-        let old_commit_id = project_manager
-            .latest_remote_commit()
-            .map(|c| c.id.clone());
+        let old_commit_id = project_manager.latest_remote_commit().map(|c| c.id.clone());
         let updated_project_info =
             Self::fetch_project_info_after_save(&api_info, project_id, old_commit_id.as_deref())
                 .await?;
@@ -666,10 +664,10 @@ impl AppState {
         match &mut watcher {
             Ok(w) => {
                 let projects_dir = compass_dir_path();
-                if !projects_dir.exists() {
-                    if let Err(e) = std::fs::create_dir_all(projects_dir) {
-                        error!("Failed to create projects directory for watcher: {}", e);
-                    }
+                if !projects_dir.exists()
+                    && let Err(e) = std::fs::create_dir_all(projects_dir)
+                {
+                    error!("Failed to create projects directory for watcher: {}", e);
                 }
                 if let Err(e) = w.watch(projects_dir, RecursiveMode::Recursive) {
                     error!("Failed to start filesystem watcher: {}", e);

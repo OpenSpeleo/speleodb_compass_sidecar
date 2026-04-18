@@ -1,12 +1,7 @@
 mod local_project;
 mod revision;
 
-pub use {
-    local_project::{
-        LocalProject, ValidationIssue, ValidationReport, validate_working_copy,
-    },
-    revision::SpeleoDbProjectRevision,
-};
+pub use {local_project::LocalProject, revision::SpeleoDbProjectRevision};
 
 use crate::paths::{
     compass_project_index_path, compass_project_path, compass_project_working_path,
@@ -176,8 +171,7 @@ impl ProjectManager {
             Error::FileWrite(e.to_string())
         })?;
         if let Some(latest_commit) = self.latest_remote_commit() {
-            SpeleoDbProjectRevision::from(latest_commit)
-                .save_revision_for_project(self.id())?;
+            SpeleoDbProjectRevision::from(latest_commit).save_revision_for_project(self.id())?;
         } else {
             warn!(
                 "No commit metadata available after save for project {}; \
@@ -583,8 +577,7 @@ mod tests {
         );
 
         // Now modify the working copy → should become Dirty.
-        std::fs::write(working_path.join("SURVEY.DAT"), b"\xff\xfe modified")
-            .expect("modify dat");
+        std::fs::write(working_path.join("SURVEY.DAT"), b"\xff\xfe modified").expect("modify dat");
         assert_eq!(
             manager.local_project_status(),
             LocalProjectStatus::Dirty,
@@ -649,12 +642,12 @@ mod tests {
         let new_commit_id = "new_commit_456";
         let mut commit = test_commit("test save", 1);
         commit.id = new_commit_id.to_string();
-        let manager = ProjectManager::initialize_from_info(test_project_info(
-            project_id,
-            Some(commit),
-        ));
+        let manager =
+            ProjectManager::initialize_from_info(test_project_info(project_id, Some(commit)));
 
-        manager.sync_after_save().expect("sync_after_save should succeed");
+        manager
+            .sync_after_save()
+            .expect("sync_after_save should succeed");
 
         // Index should now mirror the working copy
         assert!(
@@ -706,10 +699,8 @@ mod tests {
         let new_commit_id = "post_save_789";
         let mut commit = test_commit("saved", 1);
         commit.id = new_commit_id.to_string();
-        let manager = ProjectManager::initialize_from_info(test_project_info(
-            project_id,
-            Some(commit),
-        ));
+        let manager =
+            ProjectManager::initialize_from_info(test_project_info(project_id, Some(commit)));
 
         manager.sync_after_save().expect("sync should succeed");
 
