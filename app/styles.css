@@ -131,6 +131,142 @@
     animation: spin 0.8s linear infinite;
 }
 
+@keyframes update-notification-spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.update-notification {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 10000;
+    width: min(360px, calc(100vw - 32px));
+    box-sizing: border-box;
+    padding: 12px;
+    border: 1px solid #93c5fd;
+    border-left: 4px solid #2563eb;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #111827;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28);
+    text-align: left;
+}
+
+.update-notification--error {
+    border-color: #fca5a5;
+    border-left-color: #dc2626;
+}
+
+.update-notification__content {
+    display: grid;
+    grid-template-columns: 24px 1fr 28px;
+    gap: 10px;
+    align-items: start;
+}
+
+.update-notification__status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+}
+
+.update-notification__spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #bfdbfe;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: update-notification-spin 0.8s linear infinite;
+}
+
+.update-notification__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: #2563eb;
+}
+
+.update-notification--error .update-notification__dot {
+    background: #dc2626;
+}
+
+.update-notification__label {
+    margin: 0 0 2px 0;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 18px;
+}
+
+.update-notification__message {
+    color: #374151;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+    overflow-wrap: anywhere;
+}
+
+.update-notification__dismiss {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #4b5563;
+    box-shadow: none;
+    font-size: 16px;
+    line-height: 1;
+}
+
+.update-notification__dismiss:hover {
+    background: #e5e7eb;
+    border-color: transparent;
+}
+
+.update-notification__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.update-notification__actions button {
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    color: #111827;
+    box-shadow: none;
+    font-size: 13px;
+    line-height: 18px;
+}
+
+/* Retry is the primary recovery action — render as a blue CTA. The red
+ * accent on the notification (border-left and status dot) is reserved for
+ * communicating the error state, not for action priority. */
+.update-notification__actions button:first-child {
+    border-color: #2563eb;
+    background: #2563eb;
+    color: #fff;
+}
+
+.update-notification__actions button:first-child:hover {
+    border-color: #1d4ed8;
+    background: #1d4ed8;
+}
+
 @media (max-width: 720px) {
     .auth-form {
         flex-direction: column;

@@ -1,25 +1,20 @@
-name: "publish"
+name: Release
+run-name: "[Release] ${{ github.ref_name }}"
 
 on:
-  push:
-    tags:
-      - "*"
+  workflow_dispatch:
 
 concurrency:
-  group: ${{ github.head_ref || github.run_id }}
-  cancel-in-progress: true
+  group: release-publishing
+  cancel-in-progress: false
+
+permissions:
+  contents: write
 
 # This workflow will trigger on each push to the `release` branch to create or update a GitHub release, build your app, and upload the artifacts to the release.
 
 jobs:
-  test:
-    uses: ./.github/workflows/ci.yml
-    secrets: inherit
-
   publish-tauri:
-    needs: test
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
       matrix:

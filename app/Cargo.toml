@@ -31,3 +31,9 @@ yew = { version = "0.23", features = ["csr"] }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
+# Enable yew's `ssr` feature only for tests so component-rendering tests can
+# render to a string via `LocalServerRenderer` without bloating the
+# production WASM bundle. Cargo's feature unification lets the dev-deps
+# entry add `ssr` on top of the `csr` feature declared above for normal
+# builds.
+yew = { version = "0.23", features = ["ssr"] }

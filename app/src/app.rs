@@ -1,4 +1,5 @@
 use crate::{
+    components::update_notification::UpdateNotificationToast,
     components::{auth_screen::AuthScreen, loading_screen::LoadingScreen, main_layout::MainLayout},
     speleo_db_controller::SPELEO_DB_CONTROLLER,
 };
@@ -36,7 +37,7 @@ pub fn app() -> Html {
     }
 
     let loading_state = ui_state.loading_state.clone();
-    match loading_state {
+    let screen = match loading_state {
         LoadingState::Ready => {
             html! {
                 <MainLayout ui_state={(*ui_state).clone()}/>
@@ -53,5 +54,12 @@ pub fn app() -> Html {
                  <LoadingScreen loading_state={loading_state}/>
             }
         }
+    };
+
+    html! {
+        <>
+            {screen}
+            <UpdateNotificationToast notification={ui_state.update_notification.clone()} />
+        </>
     }
 }

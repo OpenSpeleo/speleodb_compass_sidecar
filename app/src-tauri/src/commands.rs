@@ -1,6 +1,10 @@
 use crate::{
-    SPELEODB_COMPASS_VERSION, paths::compass_project_working_path,
-    project_management::LocalProject, state::AppState, user_prefs::UserPrefs,
+    SPELEODB_COMPASS_VERSION,
+    paths::compass_project_working_path,
+    project_management::LocalProject,
+    self_update::{REPO_URL, open_latest_release_url},
+    state::AppState,
+    user_prefs::UserPrefs,
 };
 use common::{Error, api_types::ProjectSaveResult};
 use log::info;
@@ -24,7 +28,7 @@ pub struct AboutInfo {
 pub fn about_info() -> AboutInfo {
     AboutInfo {
         version: SPELEODB_COMPASS_VERSION.to_string(),
-        repo: "https://github.com/OpenSpeleo/speleodb_compass_sidecar",
+        repo: REPO_URL,
         authors: vec!["Jonathan Dekhtiar", "Zachary Heylmun"],
         description: "Companion app to use SpeleoDB with Compass",
     }
@@ -39,12 +43,36 @@ pub fn ensure_initialized(app_handle: AppHandle) {
     // Tauri IPC bridge is functional — it's now safe to call emit_str().
     app_state.mark_webview_ready();
     app_state.reset_ui_state();
+    AppState::start_startup_update_check(&app_handle);
 
     // Spawn initialization on background task so command returns immediately
     tauri::async_runtime::spawn(async move {
         let app_state = app_handle.state::<AppState>();
         app_state.init_app_state(&app_handle).await;
     });
+}
+
+#[tauri::command]
+pub fn check_for_updates_now(app_handle: AppHandle) -> Result<(), String> {
+    AppState::start_manual_update_check(&app_handle);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn dismiss_update_notification(
+    app_handle: AppHandle,
+    dismissal_key: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn(async move {
+        let app_state = app_handle.state::<AppState>();
+        app_state.dismiss_update_notification(dismissal_key).await;
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_latest_release() -> Result<(), String> {
+    open_latest_release_url()
 }
 
 #[tauri::command]

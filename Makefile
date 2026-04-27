@@ -1,6 +1,16 @@
 .PHONY: clean test test-rust test-rust-verbose test-tauri test-common test-ui lint lint-fmt lint-clippy dev build-tauri build-ui setup
 
 # ============================================================================ #
+# Load .env file
+# ============================================================================ #
+
+ifneq (,$(wildcard .env))
+    include .env
+    export
+endif
+
+
+# ============================================================================ #
 # CLEAN COMMANDS
 # ============================================================================ #
 

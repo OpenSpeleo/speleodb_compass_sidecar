@@ -27,6 +27,30 @@ impl SpeleoDBController {
         let _: () = invoke("ensure_initialized", &()).await.unwrap();
     }
 
+    pub async fn check_for_updates_now(&self) -> Result<(), String> {
+        invoke::<_, ()>("check_for_updates_now", &())
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    pub async fn dismiss_update_notification(&self, dismissal_key: &str) -> Result<(), String> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args<'a> {
+            dismissal_key: &'a str,
+        }
+
+        invoke::<_, ()>("dismiss_update_notification", &Args { dismissal_key })
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    pub async fn open_latest_release(&self) -> Result<(), String> {
+        invoke::<_, ()>("open_latest_release", &())
+            .await
+            .map_err(|e| e.to_string())
+    }
+
     pub async fn authenticate(
         &self,
         email: Option<&str>,

@@ -3,15 +3,18 @@ use chrono::{DateTime, Utc};
 use common::{
     ApiInfo, Error,
     api_types::ProjectInfo,
-    ui_state::{LoadingState, LocalProjectStatus, ProjectSaveResult, ProjectStatus, UiState},
+    ui_state::{
+        LoadingState, LocalProjectStatus, ProjectSaveResult, ProjectStatus, UiState,
+        UpdateNotification,
+    },
 };
 use log::{debug, error, info, trace, warn};
 use notify::{RecursiveMode, Watcher};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{
         Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Duration,
 };
@@ -20,7 +23,6 @@ use tauri::{
     async_runtime::JoinHandle,
     menu::{MenuBuilder, SubmenuBuilder},
 };
-use tauri_plugin_updater::{Update, UpdaterExt};
 use uuid::Uuid;
 
 const PROJECT_INFO_UPDATE_INTERVAL: Duration = Duration::from_secs(120); // update the list of projects status every 2 minutes
@@ -41,6 +43,16 @@ pub struct AppState {
     last_project_update: Mutex<DateTime<Utc>>,
     last_emitted_ui_state: Mutex<UiState>,
     emit_mutex: tokio::sync::Mutex<()>,
+    pub(crate) update_notification: Mutex<Option<UpdateNotification>>,
+    pub(crate) dismissed_update_notification_keys: Mutex<HashSet<String>>,
+    pub(crate) next_update_notification_id: AtomicU64,
+    pub(crate) startup_update_check_started: AtomicBool,
+    pub(crate) update_workflow_running: AtomicBool,
+    /// Set when a manual update check is requested while another workflow is
+    /// already running. The running workflow consumes this flag so that
+    /// no-update completions show the manual `up to date` notification, and
+    /// any leftover signal triggers a follow-up manual check after release.
+    pub(crate) pending_manual_update_check: AtomicBool,
     /// Flag indicating the WebView frontend is ready to receive events.
     /// Set to `true` when the first `ensure_initialized` IPC call arrives from the frontend.
     /// Before this flag is set, `emit_str` calls are skipped to avoid crashing WebView2.
@@ -62,6 +74,12 @@ impl AppState {
             last_project_update: Mutex::new(chrono::Utc::now()),
             last_emitted_ui_state: Mutex::new(UiState::default()),
             emit_mutex: tokio::sync::Mutex::new(()),
+            update_notification: Mutex::new(None),
+            dismissed_update_notification_keys: Mutex::new(HashSet::new()),
+            next_update_notification_id: AtomicU64::new(1),
+            startup_update_check_started: AtomicBool::new(false),
+            update_workflow_running: AtomicBool::new(false),
+            pending_manual_update_check: AtomicBool::new(false),
             webview_ready: AtomicBool::new(false),
         }
     }
@@ -73,7 +91,7 @@ impl AppState {
     /// Mark the WebView frontend as ready to receive events.
     /// Called when the first `ensure_initialized` IPC arrives from the WASM frontend.
     pub fn mark_webview_ready(&self) {
-        self.webview_ready.swap(true, Ordering::SeqCst);
+        self.webview_ready.store(true, Ordering::SeqCst);
     }
 
     /// Check whether the WebView frontend is ready to receive events.
@@ -148,32 +166,54 @@ impl AppState {
     /// Apply the correct menu bar based on the current authentication state.
     /// Called once after initialization reaches a terminal state (Ready / Unauthenticated)
     /// to avoid racing with WebView2 event callbacks during the rapid init sequence.
+    ///
+    /// Failures (menu construction, `set_menu`) are logged rather than
+    /// propagated. We never want a transient menu-API hiccup to take the app
+    /// down while the user is signing in or out.
     fn apply_menu_for_auth_state(&self) {
         let Ok(app_handle) = self.app_handle() else {
             return;
         };
         let has_token = self.api_info().oauth_token().is_some();
-        let help_submenu = SubmenuBuilder::new(&app_handle, "Help")
+        let help_submenu = match SubmenuBuilder::new(&app_handle, "Help")
+            .text("check_for_updates_now", "Check for Updates Now")
             .text("about", "About")
             .build()
-            .unwrap();
-        let menu = if !has_token {
-            MenuBuilder::new(&app_handle)
-                .item(&help_submenu)
-                .build()
-                .unwrap()
+        {
+            Ok(submenu) => submenu,
+            Err(e) => {
+                error!("Failed to build Help submenu: {}", e);
+                return;
+            }
+        };
+        let menu_result = if !has_token {
+            MenuBuilder::new(&app_handle).item(&help_submenu).build()
         } else {
-            let account_submenu = SubmenuBuilder::new(&app_handle, "Account")
+            let account_submenu = match SubmenuBuilder::new(&app_handle, "Account")
                 .text("sign_out", "Sign Out")
                 .build()
-                .unwrap();
+            {
+                Ok(submenu) => submenu,
+                Err(e) => {
+                    error!("Failed to build Account submenu: {}", e);
+                    return;
+                }
+            };
             MenuBuilder::new(&app_handle)
                 .item(&account_submenu)
                 .item(&help_submenu)
                 .build()
-                .unwrap()
         };
-        app_handle.set_menu(menu).unwrap();
+        let menu = match menu_result {
+            Ok(menu) => menu,
+            Err(e) => {
+                error!("Failed to build application menu: {}", e);
+                return;
+            }
+        };
+        if let Err(e) = app_handle.set_menu(menu) {
+            error!("Failed to set application menu: {}", e);
+        }
     }
 
     pub async fn authenticated(&self) -> () {
@@ -426,6 +466,7 @@ impl AppState {
         let active_project_id = self.get_active_project_id();
         let compass_is_open = self.compass_is_open();
         let project_downloading = *self.project_downloading.lock().unwrap();
+        let update_notification = self.update_notification.lock().unwrap().clone();
         let ui_state = UiState::new(
             loading_state.clone(),
             user_email,
@@ -433,6 +474,7 @@ impl AppState {
             active_project_id,
             compass_is_open,
             project_downloading,
+            update_notification,
         );
         // Only send if the state has actually changed
         {
@@ -506,36 +548,6 @@ impl AppState {
         state
     }
 
-    async fn check_for_update(&self) -> Result<Option<Update>, Error> {
-        info!("Checking for app updates");
-        let app_handle = self.app_handle()?;
-        Ok(match app_handle.updater().unwrap().check().await {
-            Ok(update) => update,
-            Err(e) => {
-                warn!("Failed to check for updates: {}", e);
-                None
-            }
-        })
-    }
-
-    async fn update_app(&self, update: Update) -> Result<(), Error> {
-        info!("Updating application");
-        update
-            .download_and_install(
-                |chunk_len, content_len| {
-                    if let Some(content_len) = content_len {
-                        let progress = chunk_len as f64 / content_len as f64;
-                        debug!("Download progress: {:.2}%", progress * 100.0);
-                    }
-                },
-                || info!("Download finished"),
-            )
-            .await
-            .unwrap();
-        let app_handle = self.app_handle().unwrap();
-        app_handle.restart()
-    }
-
     fn load_user_preferences(&self) -> UserPrefs {
         info!("Loading user preferences");
         let user_prefs = UserPrefs::load().unwrap_or_default();
@@ -592,25 +604,7 @@ impl AppState {
     async fn init_internal(&self) -> LoadingState {
         let loading_state = self.loading_state();
         match loading_state {
-            LoadingState::NotStarted => {
-                self.set_loading_state(LoadingState::CheckingForUpdates)
-                    .await
-            }
-            LoadingState::CheckingForUpdates => match self.check_for_update().await {
-                Ok(update) => {
-                    if let Some(update) = update {
-                        let loading_state = self.set_loading_state(LoadingState::Updating).await;
-                        self.update_app(update).await.unwrap();
-                        loading_state
-                    } else {
-                        self.set_loading_state(LoadingState::LoadingPrefs).await
-                    }
-                }
-                Err(e) => {
-                    warn!("Failed to check for updates: {}", e);
-                    self.set_loading_state(LoadingState::Failed(e)).await
-                }
-            },
+            LoadingState::NotStarted => self.set_loading_state(LoadingState::LoadingPrefs).await,
             LoadingState::LoadingPrefs => {
                 let prefs = self.load_user_preferences();
                 if let Some(_token) = prefs.api_info().oauth_token() {

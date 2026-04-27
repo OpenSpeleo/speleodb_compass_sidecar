@@ -77,17 +77,68 @@ impl ProjectStatus {
     }
 }
 
+/// Describes the application's *initialization* progression. Update-check
+/// activity is reported separately via [`UpdateNotification`] so that updater
+/// UX never blocks auth/project loading.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum LoadingState {
     NotStarted,
-    CheckingForUpdates,
-    Updating,
     LoadingPrefs,
     Authenticating,
     LoadingProjects,
     Unauthenticated,
     Ready,
     Failed(Error),
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub enum UpdateNotificationPhase {
+    Checking,
+    Downloading {
+        version: String,
+        progress_percent: Option<u8>,
+    },
+    Installing {
+        version: String,
+    },
+    Relaunching {
+        version: String,
+    },
+    UpToDate {
+        app_name: String,
+    },
+    Failed {
+        message: String,
+    },
+}
+
+impl UpdateNotificationPhase {
+    pub fn dismissal_key_part(&self) -> &'static str {
+        match self {
+            Self::Checking => "checking",
+            Self::Downloading { .. } => "downloading",
+            Self::Installing { .. } => "installing",
+            Self::Relaunching { .. } => "relaunching",
+            Self::UpToDate { .. } => "up-to-date",
+            Self::Failed { .. } => "failed",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct UpdateNotification {
+    pub id: u64,
+    pub phase: UpdateNotificationPhase,
+}
+
+impl UpdateNotification {
+    pub fn new(id: u64, phase: UpdateNotificationPhase) -> Self {
+        Self { id, phase }
+    }
+
+    pub fn dismissal_key(&self) -> String {
+        format!("{}:{}", self.id, self.phase.dismissal_key_part())
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
@@ -106,6 +157,7 @@ pub struct UiState {
     pub selected_project_id: Option<Uuid>,
     pub compass_open: bool,
     pub project_downloading: bool,
+    pub update_notification: Option<UpdateNotification>,
 }
 
 impl UiState {
@@ -116,6 +168,7 @@ impl UiState {
         selected_project: Option<Uuid>,
         compass_open: bool,
         project_downloading: bool,
+        update_notification: Option<UpdateNotification>,
     ) -> Self {
         let platform = if cfg!(target_os = "windows") {
             Platform::Windows
@@ -132,12 +185,73 @@ impl UiState {
             selected_project_id: selected_project,
             compass_open,
             project_downloading,
+            update_notification,
         }
     }
 }
 
 impl Default for UiState {
     fn default() -> Self {
-        Self::new(LoadingState::NotStarted, None, vec![], None, false, false)
+        Self::new(
+            LoadingState::NotStarted,
+            None,
+            vec![],
+            None,
+            false,
+            false,
+            None,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{UpdateNotification, UpdateNotificationPhase};
+
+    #[test]
+    fn downloading_progress_keeps_same_dismissal_key() {
+        let first = UpdateNotification::new(
+            7,
+            UpdateNotificationPhase::Downloading {
+                version: "0.2.0".to_string(),
+                progress_percent: Some(1),
+            },
+        );
+        let second = UpdateNotification::new(
+            7,
+            UpdateNotificationPhase::Downloading {
+                version: "0.2.0".to_string(),
+                progress_percent: Some(42),
+            },
+        );
+
+        assert_eq!(first.dismissal_key(), second.dismissal_key());
+    }
+
+    #[test]
+    fn phase_changes_get_different_dismissal_keys() {
+        let downloading = UpdateNotification::new(
+            7,
+            UpdateNotificationPhase::Downloading {
+                version: "0.2.0".to_string(),
+                progress_percent: Some(100),
+            },
+        );
+        let installing = UpdateNotification::new(
+            7,
+            UpdateNotificationPhase::Installing {
+                version: "0.2.0".to_string(),
+            },
+        );
+
+        assert_ne!(downloading.dismissal_key(), installing.dismissal_key());
+    }
+
+    #[test]
+    fn repeated_manual_checks_get_new_ids() {
+        let first = UpdateNotification::new(1, UpdateNotificationPhase::Checking);
+        let second = UpdateNotification::new(2, UpdateNotificationPhase::Checking);
+
+        assert_ne!(first.dismissal_key(), second.dismissal_key());
     }
 }

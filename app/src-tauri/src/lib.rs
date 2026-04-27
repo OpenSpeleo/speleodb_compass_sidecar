@@ -1,15 +1,16 @@
 mod commands;
 mod paths;
 mod project_management;
+mod self_update;
 mod state;
 mod user_prefs;
 
 use crate::{
     commands::{
-        about_info, auth_request, clear_active_project, create_project, discard_changes,
-        ensure_initialized, import_compass_project, open_project, pick_compass_project_file,
-        reimport_compass_project, release_project_mutex, save_project, set_active_project,
-        sign_out,
+        about_info, auth_request, check_for_updates_now, clear_active_project, create_project,
+        discard_changes, dismiss_update_notification, ensure_initialized, import_compass_project,
+        open_latest_release, open_project, pick_compass_project_file, reimport_compass_project,
+        release_project_mutex, save_project, set_active_project, sign_out,
     },
     paths::{compass_home, ensure_app_dir_exists, init_file_logger},
     state::AppState,
@@ -50,11 +51,14 @@ pub fn run() {
             about_info,
             auth_request,
             clear_active_project,
+            check_for_updates_now,
             create_project,
             discard_changes,
+            dismiss_update_notification,
             ensure_initialized,
             sign_out,
             import_compass_project,
+            open_latest_release,
             pick_compass_project_file,
             reimport_compass_project,
             open_project,
@@ -86,6 +90,10 @@ pub fn run() {
                         .build()
                         .ok();
                     }
+                }
+                "check_for_updates_now" => {
+                    log::info!("Check for updates menu item clicked");
+                    AppState::start_manual_update_check(app_handle);
                 }
                 _ => {}
             });

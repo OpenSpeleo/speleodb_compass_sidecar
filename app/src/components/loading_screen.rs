@@ -52,26 +52,12 @@ pub fn loading_screen(LoadingScreenProps { loading_state }: &LoadingScreenProps)
                     ">
                     {
                         match loading_state {
-                        LoadingState::NotStarted=>
-                            "Initializing...".to_string()
-                        ,
-                        LoadingState::CheckingForUpdates =>
-                            "Checking for updates...".to_string()
-                        ,
-                        LoadingState::Updating=>
-                            "Updating application...".to_string()
-                        ,
-                        LoadingState::LoadingPrefs =>
-                            "Loading user preferences...".to_string()
-                    ,
-                        LoadingState::Authenticating =>
-                            "Authenticating user...".to_string()
-                        ,
-                        LoadingState::LoadingProjects =>
-                            "Loading projects...".to_string()
-                        ,
-                        LoadingState::Failed(e)=> format!("Error: {}", e),
-                        _=>"Starting application...".to_string()
+                            LoadingState::NotStarted => "Initializing...".to_string(),
+                            LoadingState::LoadingPrefs => "Loading user preferences...".to_string(),
+                            LoadingState::Authenticating => "Authenticating user...".to_string(),
+                            LoadingState::LoadingProjects => "Loading projects...".to_string(),
+                            LoadingState::Failed(e) => format!("Error: {}", e),
+                            _ => "Starting application...".to_string(),
                         }
                     }
                     </p>

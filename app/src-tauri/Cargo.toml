@@ -17,6 +17,17 @@ crate-type = ["lib"]
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+# Used in build.rs (under #[cfg(windows)]) to attach the Windows app
+# manifest to *every* linked artifact (bin, examples, benches, AND test
+# exes) instead of only the main bin, which is the gap in tauri-build that
+# causes Tauri-linked test binaries to abort at startup with
+# STATUS_ENTRYPOINT_NOT_FOUND (0xc0000139). Scoped to Windows hosts so
+# non-Windows developers do not pay the compile cost for an unused crate.
+# Already a transitive dep via tauri-winres, so this does not change the
+# lockfile.
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "3"
+
 [dependencies]
 # Local dependencies
 api = { path = "../../api" }

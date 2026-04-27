@@ -1,0 +1,6 @@
+// Windows resource script: bind windows-app-manifest.xml to the EXE as
+// RT_MANIFEST under the well-known CREATEPROCESS_MANIFEST_RESOURCE_ID
+// (1, 24). The Windows loader looks up this exact (id, type) pair at
+// process load time to discover side-by-side assembly dependencies
+// (notably Common Controls v6). See WinUser.h for the constants.
+1 24 "windows-app-manifest.xml"

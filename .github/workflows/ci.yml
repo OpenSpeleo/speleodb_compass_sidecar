@@ -54,6 +54,8 @@ jobs:
         include:
           - platform: "windows-latest"
             args: ""
+          - platform: "macos-latest"
+            args: "--target aarch64-apple-darwin"
 
     runs-on: ${{ matrix.platform }}
 
@@ -109,3 +111,32 @@ jobs:
       - name: Run tests
         run: make test
         shell: bash
+
+  trigger-release:
+    name: Trigger release
+    needs: [test]
+    if: github.event_name == 'push' && github.ref_type == 'branch'
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Fetch latest tags
+        run: git fetch --tags --force
+
+      - name: Dispatch release if commit is tagged
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=$(git tag --points-at HEAD --sort=-version:refname | grep '^v' | head -1)
+          if [ -z "$TAG" ]; then
+            echo "No v* tag on HEAD — skipping release"
+            exit 0
+          fi
+          echo "Found tag $TAG — dispatching release workflow"
+          gh workflow run release.yml --ref "$TAG"

@@ -86,7 +86,9 @@ pub fn init_file_logger(level: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Make sure the directory exists.
     std::fs::create_dir_all(&*COMPASS_HOME_DIR)?;
 
-    use flexi_logger::{Duplicate, FileSpec, Logger, WriteMode};
+    #[cfg(not(test))]
+    use flexi_logger::Duplicate;
+    use flexi_logger::{FileSpec, Logger, WriteMode};
 
     // Configure the logger to write to a single file (append mode) inside COMPASS_HOME_DIR.
     // We choose a fixed basename so logs are aggregated into one file across restarts.
@@ -98,16 +100,22 @@ pub fn init_file_logger(level: &str) -> Result<(), Box<dyn std::error::Error>> {
     // NOTE: flexi_logger is the SOLE global logger. Do NOT call pretty_env_logger::init()
     // or env_logger::init() before this — they would register first and cause flexi_logger
     // to silently fail, resulting in no file logging at all.
-    Logger::try_with_str(level)?
+    let logger = Logger::try_with_str(level)?
         .log_to_file(file_spec)
         .append()
         // Use Direct write mode so every log line is flushed immediately.
         // This ensures log entries survive hard crashes (e.g. 0xc000041d).
-        .write_mode(WriteMode::Direct)
-        // Also duplicate log output to stderr for visibility in the terminal.
-        .duplicate_to_stderr(Duplicate::Info)
-        .format(flexi_logger::detailed_format)
-        .start()?;
+        .write_mode(WriteMode::Direct);
+
+    // Duplicate log output to stderr for visibility while running the app
+    // (`cargo run`, `cargo tauri dev`, packaged binaries). Skip it under
+    // `cargo test` so the production log lines emitted by code under test
+    // do not pollute the test output stream — file logging still happens
+    // and can be tailed from `~/.compass/speleodb_compass.log` if needed.
+    #[cfg(not(test))]
+    let logger = logger.duplicate_to_stderr(Duplicate::Info);
+
+    logger.format(flexi_logger::detailed_format).start()?;
 
     Ok(())
 }
