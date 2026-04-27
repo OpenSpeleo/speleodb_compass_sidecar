@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "SpeleoDB Compass Sidecar",
-  "version": "26.3.21",
+  "version": "26.4.27",
   "identifier": "com.speleodb-compass-sidecar",
   "build": {
     "beforeDevCommand": "trunk serve",
@@ -40,7 +40,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZGNjVFOURFQzExRDk2RTkKUldUcGxoM0IzdWxsYndXL1Ryd0Q5ZmJ0OUFoT0YxQXdRVnhKS3VmOUZ0K09Vbk1FZ2JIcXMzKzAK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlFNThFQjc3NjIyNDA3OUEKUldTYUJ5UmlkK3RZbnJrZVB2VzlKNjkxdS9OUFNXZWV1SHRjN2pWTllDci9Ub2dxMloxVDB2alYK",
       "endpoints": [
         "https://github.com/OpenSpeleo/speleodb_compass_sidecar/releases/latest/download/latest.json"
       ]
