@@ -20,13 +20,13 @@
 
 .container {
     margin: 0 auto;
-    padding-top: 1rem;
-    padding-bottom: 1rem;
+    padding: 1rem 1.5rem;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     text-align: center;
+    box-sizing: border-box;
 }
 
 /* project-list-item styles */

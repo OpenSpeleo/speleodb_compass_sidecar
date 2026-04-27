@@ -53,6 +53,10 @@ impl ProjectStatus {
         &self.info.name
     }
 
+    pub fn modified_date(&self) -> &str {
+        &self.info.modified_date
+    }
+
     pub fn active_mutex(&self) -> &Option<ActiveMutex> {
         &self.info.active_mutex
     }

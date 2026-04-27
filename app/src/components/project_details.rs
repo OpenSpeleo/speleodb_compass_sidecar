@@ -887,7 +887,7 @@ pub fn project_details(
                                         placeholder="Describe your changes (max 255 characters)"
                                         maxlength="255"
                                         style={format!(
-                                            "max-width: 94vw; flex: 1; padding: 8px; border: 1px solid {}; border-radius: 4px; font-family: inherit;",
+                                            "width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid {}; border-radius: 4px; font-family: inherit;",
                                             if *commit_message_error { "#ef4444" } else { "#d1d5db" }
                                         )}
                                     />
@@ -1262,7 +1262,7 @@ pub fn project_details(
                         })
                     };
                     html! {
-                        <div style="position: fixed; bottom: 16px; right: 16px;">
+                        <div style="position: fixed; bottom: 16px; left: 16px;">
                             <div style="position: relative;">
                                 {
                                     if *show_problem_menu {
@@ -1270,7 +1270,7 @@ pub fn project_details(
                                             <div style="
                                                 position: absolute;
                                                 bottom: 36px;
-                                                right: 0;
+                                                left: 0;
                                                 background: white;
                                                 border: 1px solid #e5e7eb;
                                                 border-radius: 6px;

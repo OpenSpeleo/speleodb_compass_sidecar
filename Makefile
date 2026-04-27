@@ -13,7 +13,7 @@ clean:
 # ============================================================================ #
 
 # Default: Test EVERYTHING (lint + Rust + WASM UI)
-test: lint test-rust test-ui
+test: lint test-rust test-ui test-tauri
 
 # Check formatting
 lint:

@@ -31,7 +31,7 @@ pub fn main_layout(&MainLayoutProps { ref ui_state }: &MainLayoutProps) -> Html 
                 justify-content:space-around;
                 align-items:center;flex-direction: row;
                 margin-bottom:24px;
-                width:96vw;
+                width:100%;
             ">
                 <div>
                     <h1 class={classes!("vertically-centered-text")} >{"SpeleoDB Compass Sidecar"}</h1>
