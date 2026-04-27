@@ -7,7 +7,7 @@ pub struct LoadingScreenProps {
 }
 
 #[function_component(LoadingScreen)]
-pub fn loading_screen(&LoadingScreenProps { ref loading_state }: &LoadingScreenProps) -> Html {
+pub fn loading_screen(LoadingScreenProps { loading_state }: &LoadingScreenProps) -> Html {
     html! {
         <div style="
             position: fixed;

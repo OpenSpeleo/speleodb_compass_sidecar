@@ -1,4 +1,4 @@
-.PHONY: clean test test-rust test-rust-verbose test-tauri test-common test-ui lint dev build-tauri build-ui setup
+.PHONY: clean test test-rust test-rust-verbose test-tauri test-common test-ui lint lint-fmt lint-clippy dev build-tauri build-ui setup
 
 # ============================================================================ #
 # CLEAN COMMANDS
@@ -9,15 +9,30 @@ clean:
 	rm -fr target/
 
 # ============================================================================ #
+# LINTING COMMANDS
+# ============================================================================ #
+
+# Run all lint checks (formatting + clippy)
+lint: lint-fmt lint-clippy pre-commit
+
+pre-commit:
+	cargo binstall --locked prek
+	prek run -a
+
+# Check formatting
+lint-fmt:
+	cargo fmt --all -- --check
+
+# Run clippy with warnings denied across the whole workspace
+lint-clippy:
+	cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+# ============================================================================ #
 # TEST COMMANDS
 # ============================================================================ #
 
 # Default: Test EVERYTHING (lint + Rust + WASM UI)
 test: lint test-rust test-ui test-tauri
-
-# Check formatting
-lint:
-	cargo fmt --all -- --check
 
 # Run standard Rust tests (backend + common crate)
 test-rust:

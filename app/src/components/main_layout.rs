@@ -9,7 +9,7 @@ pub struct MainLayoutProps {
 }
 
 #[function_component(MainLayout)]
-pub fn main_layout(&MainLayoutProps { ref ui_state }: &MainLayoutProps) -> Html {
+pub fn main_layout(MainLayoutProps { ui_state }: &MainLayoutProps) -> Html {
     // Disconnect handler: clear OAuth token in prefs and form, reset UI to login
 
     let selected_project_info = if let Some(email) = &ui_state.user_email

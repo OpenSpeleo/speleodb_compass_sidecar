@@ -35,7 +35,7 @@ pub fn app() -> Html {
         });
     }
 
-    let loading_state = (*ui_state).loading_state.clone();
+    let loading_state = ui_state.loading_state.clone();
     match loading_state {
         LoadingState::Ready => {
             html! {

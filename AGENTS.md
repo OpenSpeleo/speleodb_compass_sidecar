@@ -89,7 +89,14 @@ New tests should respects coding existing structures
 
 ## Linter
 
-Check the code with `cargo fmt` for linting problems
+Run `make lint` to validate the codebase. This depends on:
+
+- `make lint-fmt` — `cargo fmt --all -- --check`
+- `make lint-clippy` — `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+
+Clippy runs with `-D warnings` so any clippy lint blocks the lint stage and
+CI. Fix the lint at its root rather than `#[allow(...)]`-annotating it
+unless there is a documented reason.
 
 ## Documentation Expectations for Agents
 

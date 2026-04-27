@@ -11,6 +11,7 @@
 use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use crate::ui_constants::{COLOR_ALARM, COLOR_GOOD, COLOR_WARN, FONT_COLOR_BLUE};
+#[cfg(any(target_arch = "wasm32", test))]
 use common::SERVER_TIME_ZONE;
 use common::api_types::{CommitInfo, ProjectSaveResult};
 use common::ui_state::{LocalProjectStatus, ProjectStatus};
@@ -195,6 +196,11 @@ fn normalize_commit_relative_time(relative_time: &str) -> String {
     }
 }
 
+/// Helper for `commit_date_parse_candidates` / `format_commit_date_in_local_timezone`.
+/// Only consumed on `wasm32` (production) and under `cfg(test)` (tests run on
+/// both targets). Gating prevents a `dead_code` warning on native builds where
+/// neither caller is compiled in.
+#[cfg(any(target_arch = "wasm32", test))]
 fn has_explicit_timezone(timestamp: &str) -> bool {
     let trimmed = timestamp.trim();
     if trimmed.ends_with('Z') || trimmed.ends_with('z') {
@@ -221,6 +227,7 @@ fn has_explicit_timezone(timestamp: &str) -> bool {
     false
 }
 
+#[cfg(any(target_arch = "wasm32", test))]
 fn commit_date_parse_candidates(commit_date: &str) -> Vec<String> {
     let trimmed = commit_date.trim();
     if trimmed.is_empty() {
@@ -477,7 +484,6 @@ pub fn project_details(
     {
         let show_success_modal = show_success_modal.clone();
         let download_complete = download_complete.clone();
-        let is_readonly = is_readonly.clone();
         let show_readonly_modal = show_readonly_modal.clone();
 
         use_effect_with(download_complete.clone(), move |complete| {
@@ -871,80 +877,78 @@ pub fn project_details(
                             </p>
                         </div>
                     }
-                } else {
-                    if is_dirty {
+                } else if is_dirty {
                     // Commit Section (Only if write access)
-                        html! {
-                            <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e5e7eb;">
-                                <h3 style="margin-bottom: 12px;">{"Compass project has changes. Before you can go back, you need to describe and save your work."}</h3>
-                                <div style="margin-bottom: 16px;
-                                display: flex; flex-direction: column;">
-                                    <textarea
-                                        rows="4"
-                                        type="text"
-                                        value={(*commit_message).clone()}
-                                        oninput={onchange_message}
-                                        placeholder="Describe your changes (max 255 characters)"
-                                        maxlength="255"
-                                        style={format!(
-                                            "width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid {}; border-radius: 4px; font-family: inherit;",
-                                            if *commit_message_error { "#ef4444" } else { "#d1d5db" }
-                                        )}
-                                    />
-                                    {
-                                        if *commit_message_error {
-                                            html! {
-                                                <div>
-                                                <p style="color: #ef4444; font-size: 12px; margin-top: 4px;">
-                                                    {"Please, enter a commit message."}
-                                                </p></div>
-                                            }
-                                        } else {
-                                            html! {}
-                                        }
-                                    }
-                                </div>
-                                <div style="display: flex; gap: 12px;">
-                                    <button
-                                        onclick={on_save}
-                                        disabled={!is_dirty || busy}
-                                        style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: disabled ? 0.5 : 1;"
-                                    >
-                                        {if *uploading { "Saving..." } else { "Save Project" }}
-                                    </button>
-                                    <button
-                                        onclick={{
-                                            let show_discard_confirm_modal = show_discard_confirm_modal.clone();
-                                            Callback::from(move |_| show_discard_confirm_modal.set(true))
-                                        }}
-                                        disabled={busy}
-                                        style="background-color: #dc2626; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: disabled ? 0.5 : 1;"
-                                    >
-                                        {if *discarding { "Discarding..." } else { "Discard Changes" }}
-                                    </button>
-                                </div>
+                    html! {
+                        <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e5e7eb;">
+                            <h3 style="margin-bottom: 12px;">{"Compass project has changes. Before you can go back, you need to describe and save your work."}</h3>
+                            <div style="margin-bottom: 16px;
+                            display: flex; flex-direction: column;">
+                                <textarea
+                                    rows="4"
+                                    type="text"
+                                    value={(*commit_message).clone()}
+                                    oninput={onchange_message}
+                                    placeholder="Describe your changes (max 255 characters)"
+                                    maxlength="255"
+                                    style={format!(
+                                        "width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid {}; border-radius: 4px; font-family: inherit;",
+                                        if *commit_message_error { "#ef4444" } else { "#d1d5db" }
+                                    )}
+                                />
                                 {
-                                    if let Some(err) = &*upload_error {
+                                    if *commit_message_error {
                                         html! {
-                                            <div style="margin-top: 12px; color: #dc2626; font-size: 14px; text-align: center;">
-                                                {format!("Error: {}", err)}
-                                            </div>
-                                        }
-                                    } else if let Some(err) = &*discard_error {
-                                        html! {
-                                            <div style="margin-top: 12px; color: #dc2626; font-size: 14px; text-align: center;">
-                                                {format!("Error: {}", err)}
-                                            </div>
+                                            <div>
+                                            <p style="color: #ef4444; font-size: 12px; margin-top: 4px;">
+                                                {"Please, enter a commit message."}
+                                            </p></div>
                                         }
                                     } else {
                                         html! {}
                                     }
                                 }
                             </div>
-                        }
-                    } else {
-                        html!{<></>}
+                            <div style="display: flex; gap: 12px;">
+                                <button
+                                    onclick={on_save}
+                                    disabled={!is_dirty || busy}
+                                    style="background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: disabled ? 0.5 : 1;"
+                                >
+                                    {if *uploading { "Saving..." } else { "Save Project" }}
+                                </button>
+                                <button
+                                    onclick={{
+                                        let show_discard_confirm_modal = show_discard_confirm_modal.clone();
+                                        Callback::from(move |_| show_discard_confirm_modal.set(true))
+                                    }}
+                                    disabled={busy}
+                                    style="background-color: #dc2626; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: disabled ? 0.5 : 1;"
+                                >
+                                    {if *discarding { "Discarding..." } else { "Discard Changes" }}
+                                </button>
+                            </div>
+                            {
+                                if let Some(err) = &*upload_error {
+                                    html! {
+                                        <div style="margin-top: 12px; color: #dc2626; font-size: 14px; text-align: center;">
+                                            {format!("Error: {}", err)}
+                                        </div>
+                                    }
+                                } else if let Some(err) = &*discard_error {
+                                    html! {
+                                        <div style="margin-top: 12px; color: #dc2626; font-size: 14px; text-align: center;">
+                                            {format!("Error: {}", err)}
+                                        </div>
+                                    }
+                                } else {
+                                    html! {}
+                                }
+                            }
+                        </div>
                     }
+                } else {
+                    html!{<></>}
                 }
             }
             {

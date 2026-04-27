@@ -29,7 +29,7 @@ pub fn project_listing_item_layout(
     let font_color_blue = FONT_COLOR_BLUE;
 
     let project_id = project.id();
-    let project_status = project.local_status().clone();
+    let project_status = project.local_status();
     let on_card_click = Callback::from(move |_| {
         spawn_local(async move {
             SPELEO_DB_CONTROLLER

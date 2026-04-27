@@ -1,4 +1,7 @@
 repos:
+  # -------------------------
+  # Generic sanity checks
+  # -------------------------
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
@@ -16,18 +19,66 @@ repos:
       - id: check-docstring-first
       - id: detect-private-key
 
+  # -------------------------
+  # Rust formatting
+  # -------------------------
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+  # -------------------------
+  # Rust linting (clippy)
+  # -------------------------
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --all-targets --all-features -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+  # -------------------------
+  # Rust compile check (fast)
+  # -------------------------
+      - id: cargo-check
+        name: cargo check
+        entry: cargo check --all-targets --all-features
+        language: system
+        pass_filenames: false
+
+  # -------------------------
+  # Optional: tests (usually CI-only, but can be enabled)
+  # -------------------------
+      - id: cargo-test
+        name: cargo test
+        entry: cargo test --workspace --lib
+        language: system
+        pass_filenames: false
+        stages: [manual]  # don’t run on every commit
+
+  # -------------------------
+  # Rust Cleanup
+  # -------------------------
   - repo: https://github.com/AndrejOrsula/pre-commit-cargo
     rev: 0.4.0
     hooks:
-      - id: cargo-fmt
-      # - id: cargo-update
-      - id: cargo-clippy
-        args: ["--all-targets", "--all-features"]
-      - id: cargo-check
-        args: ["--all-targets", "--all-features"]
       - id: cargo-test-doc
         args: ["--all-features"]
       - id: cargo-doc
         args: ["--no-deps", "--document-private-items"]
       - id: cargo-fix
         args: ["--allow-dirty", "--allow-staged"]
+
+  # -------------------------
+  # Frontend (if using Tauri typical stack)
+  # -------------------------
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v9.10.0
+    hooks:
+      - id: eslint
+        additional_dependencies: ["eslint"]
+        files: \.(js|ts|tsx)$

@@ -192,7 +192,7 @@ both `cargo test -p speleodb-compass-sidecar-ui` (native) and
 From repo root:
 
 ```bash
-cargo fmt --all -- --check
+make lint                    # cargo fmt --check + cargo clippy -D warnings
 cargo test -p common
 cargo test -p speleodb-compass-sidecar-ui project_listing
 make test-ui                 # WASM-side via wasm-pack (requires Firefox)
