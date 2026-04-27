@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pre-commit:
+  lint:
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -33,17 +33,25 @@ jobs:
 
       - uses: cargo-bins/cargo-binstall@main
 
-      - name: Install prek
-        run: cargo binstall prek
-
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-          shared-key: ubuntu-pre-commit
+          shared-key: ubuntu-lint
 
-      - name: Run pre-commit hooks
-        run: prek run -a
+      # Install prek as a dedicated step rather than from inside `make lint`
+      # so the Makefile only has to *use* the tool, not provision it.
+      # `--force` is required to bypass the well-known
+      # Swatinem/rust-cache <-> cargo-binstall metadata-vs-binary skew bug
+      # (Swatinem/rust-cache#204): the cache can restore `.crates2.json`
+      # claiming prek is installed without restoring `~/.cargo/bin/prek`,
+      # at which point a plain `cargo binstall` exits 0 without doing
+      # anything and the next `prek` invocation fails ENOENT (exit 127).
+      - name: Install prek
+        run: cargo binstall --no-confirm --force --locked prek
+
+      - name: Run all lint checks
+        run: make lint
 
   test:
     permissions:
@@ -59,7 +67,7 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
 
-    needs: [pre-commit]
+    needs: [lint]
 
     steps:
       - uses: actions/checkout@v6
@@ -138,5 +146,5 @@ jobs:
             echo "No v* tag on HEAD — skipping release"
             exit 0
           fi
-          echo "Found tag $TAG — dispatching release workflow"
-          gh workflow run release.yml --ref "$TAG"
+          echo "Found tag $TAG — dispatching publish workflow"
+          gh workflow run publish.yml --ref "$TAG"

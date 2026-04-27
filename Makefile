@@ -26,7 +26,12 @@ clean:
 lint: lint-fmt lint-clippy pre-commit
 
 pre-commit:
-	cargo binstall --locked prek
+	@command -v prek >/dev/null 2>&1 || { \
+		echo "error: 'prek' is not on PATH."; \
+		echo "       Local devs: run 'make setup' once to install it."; \
+		echo "       CI: install via the 'Install prek' workflow step."; \
+		exit 127; \
+	}
 	prek run -a
 
 # Check formatting
@@ -42,7 +47,7 @@ lint-clippy:
 # ============================================================================ #
 
 # Default: Test EVERYTHING (lint + Rust + WASM UI)
-test: lint test-rust test-ui test-tauri
+test: test-rust test-ui test-tauri
 
 # Run standard Rust tests (backend + common crate)
 test-rust:

@@ -71,10 +71,10 @@ jobs:
           TRUNK_BUILD_RELEASE: "true"
           SENTRY_DSN_SPELEODB_COMPASS: ${{ secrets.SENTRY_DSN_SPELEODB_COMPASS }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Tauri Updater signing
+          # Tauri Updater signing (required for in-app self-update)
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # Apple code signing
+          # -------------------------- Apple code signing -------------------------- #
           # ENABLE_CODE_SIGNING: "true"
           # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -82,6 +82,16 @@ jobs:
           # APPLE_ID: ${{ secrets.APPLE_ID }}
           # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # -------------------------- macOS ad-hoc code signing -------------------------- #
+          # macOS ad-hoc code signing. Pseudo-identity "-" runs `codesign -s -`
+          # so the bundle is locally signed and bypasses the "App is damaged"
+          # Gatekeeper hard-block on Apple Silicon. Users still see the
+          # "unidentified developer" warning and must right-click -> Open the
+          # first time. Replace with a real Developer ID + APPLE_CERTIFICATE /
+          # APPLE_ID / APPLE_TEAM_ID flow once a paid Apple Developer account
+          # is available (then notarization can be enabled too).
+          APPLE_SIGNING_IDENTITY: "-"
+
         with:
           tagName: v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
           releaseName: "App v__VERSION__"
