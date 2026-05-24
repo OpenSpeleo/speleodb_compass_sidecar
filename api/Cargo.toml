@@ -16,7 +16,7 @@ url.workspace = true
 uuid.workspace = true
 
 #Cargo dependencies
-reqwest = { version = "0.12.24", features = ["json", "rustls-tls", "multipart"] }
+reqwest = { version = "0.13.3", features = ["json", "rustls", "multipart"] }
 
 [dev-dependencies]
 # tokio is only used by tests (#[tokio::test], tokio::sync::OnceCell in
@@ -24,6 +24,6 @@ reqwest = { version = "0.12.24", features = ["json", "rustls-tls", "multipart"] 
 tokio.workspace = true
 serial_test = "3"
 dotenvy = "0.15"
-ctor = "0.10"
+ctor = "1.0"
 tempfile = "3"
 zip = "8"

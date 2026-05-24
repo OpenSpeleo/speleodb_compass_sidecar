@@ -46,16 +46,5 @@ Your system is missing dependencies (or they do not exist in $PATH):
 │ wasm32 target │ Run `rustup target add wasm32-unknown-unknown`                    │
 ╰───────────────┴───────────────────────────────────────────────────────────────────╯
 
-Make sure you have installed the prerequisites for your OS: https://tauri.app/start/prerequisites/, then run:
-  cd "SpeleoDB Compass Sidecar"
-  cargo tauri android init
-  cargo tauri ios init
-
 For Desktop development, run:
   cargo tauri dev
-
-For Android development, run:
-  cargo tauri android dev
-
-For iOS development, run:
-  cargo tauri ios dev

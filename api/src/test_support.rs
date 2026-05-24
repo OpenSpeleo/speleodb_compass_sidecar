@@ -28,7 +28,7 @@ use crate::project;
 static FIXTURE_PROJECT: OnceCell<Uuid> = OnceCell::const_new();
 
 /// Load `.env` from the workspace root before any test runs.
-#[ctor::ctor]
+#[ctor::ctor(unsafe)]
 fn load_test_env() {
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
         let workspace_root = std::path::Path::new(&manifest_dir).parent().unwrap();

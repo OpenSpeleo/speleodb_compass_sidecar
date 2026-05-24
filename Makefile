@@ -17,6 +17,7 @@ endif
 clean:
 	rm -fr dist/
 	rm -fr target/
+	rm -rf app/dist/
 
 # ============================================================================ #
 # LINTING COMMANDS
