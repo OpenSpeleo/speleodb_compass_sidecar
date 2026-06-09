@@ -113,6 +113,12 @@ impl AppState {
             match &loading_state {
                 LoadingState::Failed(e) => {
                     warn!("Previous initialization failed with error: {}", e);
+                    // Emit the failure so the frontend can leave the loading
+                    // screen and show the error. Without this, an init failure
+                    // that first occurred while the WebView wasn't ready (its
+                    // emit suppressed by the readiness gate) would never reach
+                    // the UI, stalling the app on the spinner indefinitely.
+                    self.emit_app_state_change().await;
                     self.set_initializing(false);
                     break;
                 }
@@ -621,6 +627,12 @@ impl AppState {
                 Ok(_) => self.set_loading_state(LoadingState::Ready).await,
                 Err(e) => {
                     warn!("Failed to load user projects: {}", e);
+                    // Report to Sentry: this is a hard initialization failure
+                    // (e.g. the server returned a project shape we can't
+                    // decode). It is otherwise only surfaced as a log line and
+                    // a loading-screen error, so without an explicit capture it
+                    // never reaches error tracking.
+                    sentry::capture_error(&e);
                     self.set_loading_state(LoadingState::Failed(e)).await
                 }
             },

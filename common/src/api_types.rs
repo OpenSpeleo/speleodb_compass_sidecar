@@ -55,14 +55,86 @@ pub enum ProjectSaveResult {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[non_exhaustive]
 pub enum ProjectType {
     Ariane,
     Compass,
+    /// Any project type the SpeleoDB server defines that this client does not
+    /// model. New server-side types (e.g. `"OTHER"`) decode here instead of
+    /// failing deserialization of the entire project list. The sidecar ignores
+    /// everything that isn't [`ProjectType::Compass`], so these simply get
+    /// filtered out downstream.
+    #[serde(other)]
+    Other,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Regression: the SpeleoDB v2 API can return project types beyond the
+    /// ones this client knows about (e.g. `"OTHER"`). Because the project list
+    /// is deserialized as a whole `Vec<ProjectInfo>` *before* any filtering, a
+    /// single unknown `type` value used to fail the entire response, which
+    /// stalled app launch on the loading screen. Unknown types must decode to
+    /// `ProjectType::Other` instead of erroring.
+    #[test]
+    fn project_type_deserializes_unknown_value_as_other() {
+        let ty: ProjectType = serde_json::from_str("\"OTHER\"").expect("unknown type must decode");
+        assert_eq!(ty, ProjectType::Other);
+    }
+
+    #[test]
+    fn project_info_with_unknown_type_deserializes() {
+        // The exact offending object captured from the server (a project with
+        // `"type": "OTHER"` plus newly-added fields like `color`/`commit_count`).
+        let json = r##"{
+            "id": "9e12fe62-ad38-471b-a625-7ed9960ab3e4",
+            "country": "US",
+            "visibility": "PRIVATE",
+            "commit_count": 0,
+            "latest_commit": null,
+            "permission": "ADMIN",
+            "active_mutex": null,
+            "created_by": "matt.hansen@karstunderwater.org",
+            "type": "OTHER",
+            "name": "South Pole Cave",
+            "description": "South end of equator pond, Chaz",
+            "color": "#4daf4a",
+            "exclude_geojson": false,
+            "is_active": true,
+            "creation_date": "2026-02-27T10:08:23.160083-05:00",
+            "modified_date": "2026-02-27T10:18:12.889598-05:00",
+            "fork_from": null
+        }"##;
+        let info: ProjectInfo =
+            serde_json::from_str(json).expect("unknown project type must not fail the whole object");
+        assert_eq!(info.project_type, ProjectType::Other);
+        assert_eq!(info.name, "South Pole Cave");
+    }
+
+    #[test]
+    fn mixed_project_list_with_unknown_type_deserializes() {
+        // A list containing a type the client doesn't model must still decode
+        // so the known (COMPASS) projects survive the later filtering step.
+        let json = r#"[
+            {"id":"9e12fe62-ad38-471b-a625-7ed9960ab3e4","country":"US","visibility":"PRIVATE",
+             "latest_commit":null,"permission":"ADMIN","active_mutex":null,"created_by":"a@b.c",
+             "type":"OTHER","name":"Other Project","description":"","exclude_geojson":false,
+             "is_active":true,"creation_date":"2026-01-01T00:00:00Z","modified_date":"2026-01-01T00:00:00Z",
+             "fork_from":null},
+            {"id":"00000000-0000-0000-0000-000000000001","country":"US","visibility":"PRIVATE",
+             "latest_commit":null,"permission":"ADMIN","active_mutex":null,"created_by":"a@b.c",
+             "type":"COMPASS","name":"Compass Project","description":"","exclude_geojson":false,
+             "is_active":true,"creation_date":"2026-01-01T00:00:00Z","modified_date":"2026-01-01T00:00:00Z",
+             "fork_from":null}
+        ]"#;
+        let projects: Vec<ProjectInfo> =
+            serde_json::from_str(json).expect("list with an unknown type must decode");
+        assert_eq!(projects.len(), 2);
+        assert_eq!(projects[0].project_type, ProjectType::Other);
+        assert_eq!(projects[1].project_type, ProjectType::Compass);
+    }
 
     #[test]
     fn commit_info_deserializes_without_commit_date() {
