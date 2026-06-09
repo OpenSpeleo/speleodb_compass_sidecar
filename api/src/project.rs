@@ -86,8 +86,12 @@ pub async fn fetch_projects(api_info: &ApiInfo) -> Result<Vec<ProjectInfo>, Erro
     info!("Fetching projects from server: {url}");
     let req = http::authenticated(get_api_client().get(url), api_info)?;
     let mut projects: Vec<ProjectInfo> = http::send_json(req).await?;
-    projects.retain(|p| p.project_type == ProjectType::Compass);
+    retain_compass_projects(&mut projects);
     Ok(projects)
+}
+
+fn retain_compass_projects(projects: &mut Vec<ProjectInfo>) {
+    projects.retain(|p| p.project_type.is_compass());
 }
 
 pub async fn fetch_project_info(
@@ -201,16 +205,56 @@ mod tests {
         Uuid::new_v4()
     }
 
+    fn project_with_type(project_type: ProjectType) -> ProjectInfo {
+        ProjectInfo {
+            id: Uuid::new_v4(),
+            name: "Test Project".to_string(),
+            description: "Test Description".to_string(),
+            is_active: true,
+            permission: "ADMIN".to_string(),
+            active_mutex: None,
+            country: "US".to_string(),
+            created_by: "tester@example.com".to_string(),
+            creation_date: "2026-01-01T00:00:00Z".to_string(),
+            modified_date: "2026-01-01T00:00:00Z".to_string(),
+            latitude: None,
+            longitude: None,
+            fork_from: None,
+            visibility: "PRIVATE".to_string(),
+            exclude_geojson: false,
+            latest_commit: None,
+            project_type,
+        }
+    }
+
     async fn existing_project_id() -> Uuid {
         fixture_project_id(&test_api_info()).await
     }
 
     // ─── fetch_projects ────────────────────────────────────────────────────
 
+    #[test]
+    fn retain_compass_projects_ignores_unsupported_types() {
+        let compass_id = Uuid::new_v4();
+        let mut compass = project_with_type(ProjectType::Compass);
+        compass.id = compass_id;
+        let mut projects = vec![
+            project_with_type(ProjectType::Ignored),
+            compass,
+            project_with_type(ProjectType::Ignored),
+        ];
+
+        retain_compass_projects(&mut projects);
+
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].id, compass_id);
+        assert_eq!(projects[0].project_type, ProjectType::Compass);
+    }
+
     #[tokio::test]
     #[serial]
     async fn fetch_projects_success_returns_at_least_fixture() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let api_info = test_api_info();
@@ -233,7 +277,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn fetch_projects_unauthorized() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let err = fetch_projects(&unauthorized_api_info())
@@ -259,7 +303,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn fetch_project_info_success() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let api_info = test_api_info();
@@ -273,7 +317,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn fetch_project_info_not_found() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let err = fetch_project_info(&test_api_info(), unknown_project_id())
@@ -288,7 +332,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn fetch_project_info_unauthorized() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let err = fetch_project_info(&unauthorized_api_info(), existing_project_id().await)
@@ -302,7 +346,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn create_project_success() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let api_info = test_api_info();
@@ -324,7 +368,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn create_project_unauthorized() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let err = create_project(
@@ -343,7 +387,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn create_project_invalid_input_returns_unprocessable_or_api_error() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         // Empty name is rejected by the server. Different deployments may
@@ -377,7 +421,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn acquire_and_release_project_mutex_success() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let api_info = test_api_info();
@@ -390,7 +434,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn acquire_project_mutex_not_found() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let err = acquire_project_mutex(&test_api_info(), unknown_project_id())
@@ -405,7 +449,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn acquire_project_mutex_unauthorized() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let err = acquire_project_mutex(&unauthorized_api_info(), existing_project_id().await)
@@ -419,7 +463,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn release_project_mutex_not_found() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let err = release_project_mutex(&test_api_info(), unknown_project_id())
@@ -434,7 +478,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn release_project_mutex_unauthorized() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let err = release_project_mutex(&unauthorized_api_info(), existing_project_id().await)
@@ -448,7 +492,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn download_project_zip_no_data_returns_no_project_data() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         // Use a fresh project (NOT the shared fixture) so we can guarantee
@@ -479,7 +523,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn download_project_zip_not_found() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let err = download_project_zip(&test_api_info(), unknown_project_id())
@@ -494,7 +538,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn download_project_zip_unauthorized() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let err = download_project_zip(&unauthorized_api_info(), existing_project_id().await)
@@ -508,7 +552,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn upload_then_download_project_zip_success() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let api_info = test_api_info();
@@ -549,7 +593,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn upload_project_zip_not_found() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let zip = build_minimal_compass_zip();
@@ -570,7 +614,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn upload_project_zip_unauthorized() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let zip = build_minimal_compass_zip();

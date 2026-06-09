@@ -77,6 +77,18 @@ match http::send_json(req).await {
 }
 ```
 
+## Project type handling
+
+The sidecar is a Compass bridge, so `common::ProjectType` intentionally treats
+only `COMPASS` as supported. SpeleoDB may return other project types in the
+same authenticated list response, including `ARIANE` or `OTHER`; those values
+deserialize into an ignored enum value so one unsupported project cannot fail
+the whole load.
+
+`fetch_projects` filters the decoded list to Compass projects before state and
+UI code see it. Outbound project creation still serializes
+`ProjectType::Compass` as `"COMPASS"`.
+
 ## Testing strategy
 
 All tests in the `api` crate hit a real SpeleoDB instance. There are no
@@ -133,9 +145,14 @@ positives.
 
 Tests early-return when `TEST_SPELEODB_INSTANCE` or `TEST_SPELEODB_OAUTH`
 are unset. CI provides them via secrets; local devs ship them via `.env`
-(see [TESTING.md](../TESTING.md)). Tests that additionally need
-`TEST_SPELEODB_EMAIL`/`TEST_SPELEODB_PASSWORD` skip independently when those
-are unset.
+(see [TESTING.md](../TESTING.md)). When those variables are configured, the
+test harness performs one auth preflight before endpoint tests proceed. If the
+host is unreachable or `TEST_SPELEODB_OAUTH` is rejected, the suite fails once
+with a setup-focused preflight message and the remaining real-HTTP tests skip,
+so the output does not look like many endpoint regressions.
+
+Tests that additionally need `TEST_SPELEODB_EMAIL`/`TEST_SPELEODB_PASSWORD`
+skip independently when those are unset.
 
 ## Performance implications
 

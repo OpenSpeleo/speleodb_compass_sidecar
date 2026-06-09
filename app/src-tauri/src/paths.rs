@@ -18,13 +18,28 @@ const COMPASS_PROJECT_DIR_NAME: &str = "projects";
 /// Lazily-initialized full path to the application directory (home + COMPASS_HOME_DIR_NAME).
 ///
 /// This is a runtime-initialized static because the user's home directory is not known at compile time.
-pub static COMPASS_HOME_DIR: LazyLock<PathBuf> = LazyLock::new(|| match dirs::home_dir() {
-    Some(mut p) => {
-        p.push(COMPASS_HOME_DIR_NAME);
-        p
+pub static COMPASS_HOME_DIR: LazyLock<PathBuf> = LazyLock::new(compass_home_dir);
+
+#[cfg(not(test))]
+fn compass_home_dir() -> PathBuf {
+    match dirs::home_dir() {
+        Some(mut p) => {
+            p.push(COMPASS_HOME_DIR_NAME);
+            p
+        }
+        None => PathBuf::from(COMPASS_HOME_DIR_NAME),
     }
-    None => PathBuf::from(COMPASS_HOME_DIR_NAME),
-});
+}
+
+#[cfg(test)]
+fn compass_home_dir() -> PathBuf {
+    std::env::temp_dir()
+        .join(format!(
+            "speleodb_compass_sidecar_tests_{}",
+            std::process::id()
+        ))
+        .join(COMPASS_HOME_DIR_NAME)
+}
 
 /// Lazily-initialized full path to the compass projects folder (~/.compass/projects).
 static COMPASS_PROJECT_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
