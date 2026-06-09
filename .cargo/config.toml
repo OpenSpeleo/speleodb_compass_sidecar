@@ -1,0 +1,2 @@
+[alias]
+bump-version = "run --package xtask -- bump-version"

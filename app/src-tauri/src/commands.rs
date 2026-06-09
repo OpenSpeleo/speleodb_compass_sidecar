@@ -1,5 +1,4 @@
 use crate::{
-    SPELEODB_COMPASS_VERSION,
     paths::compass_project_working_path,
     project_management::LocalProject,
     self_update::{REPO_URL, open_latest_release_url},
@@ -24,14 +23,18 @@ pub struct AboutInfo {
     description: &'static str,
 }
 
-#[tauri::command]
-pub fn about_info() -> AboutInfo {
+fn about_info_from_package_info(package_info: &tauri::PackageInfo) -> AboutInfo {
     AboutInfo {
-        version: SPELEODB_COMPASS_VERSION.to_string(),
+        version: package_info.version.to_string(),
         repo: REPO_URL,
         authors: vec!["Jonathan Dekhtiar", "Zachary Heylmun"],
         description: "Companion app to use SpeleoDB with Compass",
     }
+}
+
+#[tauri::command]
+pub fn about_info(app_handle: AppHandle) -> AboutInfo {
+    about_info_from_package_info(app_handle.package_info())
 }
 
 #[tauri::command]
@@ -339,4 +342,42 @@ pub async fn create_project(
     app_state.update_local_project(project_info).await?;
     app_state.set_active_project(Some(id)).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::about_info_from_package_info;
+
+    fn tauri_config_version() -> String {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri config parses");
+        config
+            .get("version")
+            .and_then(serde_json::Value::as_str)
+            .expect("tauri config should define version")
+            .to_string()
+    }
+
+    #[test]
+    fn about_info_uses_tauri_package_version() {
+        let configured_version = tauri_config_version();
+        let package_info = tauri::PackageInfo {
+            name: "SpeleoDB Compass Sidecar".to_string(),
+            version: configured_version
+                .parse()
+                .expect("tauri config version should be semver-compatible"),
+            authors: "",
+            description: "",
+            crate_name: "speleodb-compass-sidecar",
+        };
+
+        let info = about_info_from_package_info(&package_info);
+
+        assert_eq!(info.version, configured_version);
+    }
+
+    #[test]
+    fn tauri_config_version_matches_cargo_package_version() {
+        assert_eq!(tauri_config_version(), env!("CARGO_PKG_VERSION"));
+    }
 }

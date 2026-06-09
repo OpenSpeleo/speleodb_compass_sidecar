@@ -15,11 +15,8 @@ use crate::{
     paths::{compass_home, ensure_app_dir_exists, init_file_logger},
     state::AppState,
 };
-use semver::Version;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
-
-const SPELEODB_COMPASS_VERSION: Version = Version::new(1, 0, 0);
 
 /// Whether the `SENTRY_VERIFY` env value requests a synthetic verification
 /// event. Only the exact value "1" enables it.
@@ -52,6 +49,10 @@ pub fn run() {
 
     // Initialize logging
     let _ = init_file_logger("debug");
+    log::info!(
+        "Starting SpeleoDB Compass Sidecar v{}",
+        env!("CARGO_PKG_VERSION")
+    );
 
     if let Ok(path) = std::env::current_dir() {
         log::info!("Current working directory: {}", path.display());

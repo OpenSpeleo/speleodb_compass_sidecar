@@ -317,5 +317,7 @@ Also requires MSYS2 with `base-devel` and `mingw-w64-ucrt-x86_64-toolchain` pack
 
 ## Version Info
 
-- Cargo.toml and tauri.conf.json: `0.1.0`
-- `SPELEODB_COMPASS_VERSION` constant in `lib.rs`: `1.0.0`
+- Root `Cargo.toml` `[workspace.package].version` and
+  `app/src-tauri/tauri.conf.json`
+- `SPELEODB_COMPASS_TOML_VERSION` in `local_project.rs`: `1.0.0`
+  schema marker for local `compass.toml` metadata
