@@ -626,13 +626,10 @@ impl AppState {
             LoadingState::LoadingProjects => match self.load_user_projects().await {
                 Ok(_) => self.set_loading_state(LoadingState::Ready).await,
                 Err(e) => {
-                    warn!("Failed to load user projects: {}", e);
-                    // Report to Sentry: this is a hard initialization failure
-                    // (e.g. the server returned a project shape we can't
-                    // decode). It is otherwise only surfaced as a log line and
-                    // a loading-screen error, so without an explicit capture it
-                    // never reaches error tracking.
-                    sentry::capture_error(&e);
+                    // error! (not warn!) so the SentryLogger forwards this hard
+                    // initialization failure as an event. This is the failure
+                    // that previously stalled launch silently.
+                    error!("Failed to load user projects: {}", e);
                     self.set_loading_state(LoadingState::Failed(e)).await
                 }
             },
