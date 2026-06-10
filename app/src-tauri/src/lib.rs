@@ -21,6 +21,24 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 const SPELEODB_COMPASS_VERSION: Version = Version::new(1, 0, 0);
 
+/// Whether the `SENTRY_VERIFY` env value requests a synthetic verification
+/// event. Only the exact value "1" enables it.
+fn sentry_verify_requested(value: Option<&str>) -> bool {
+    value == Some("1")
+}
+
+/// Emit a synthetic event to confirm the Sentry pipeline end-to-end. Logs at
+/// error! (forwarded to Sentry as an event) when a client is configured, or a
+/// warning explaining that no DSN was compiled in.
+fn emit_sentry_verification_event() {
+    if sentry::Hub::current().client().is_some() {
+        log::error!("SENTRY_VERIFY: synthetic verification event from startup");
+        log::info!("SENTRY_VERIFY: verification event dispatched; check Sentry");
+    } else {
+        log::warn!("SENTRY_VERIFY set, but Sentry is not configured (no DSN compiled in)");
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Ensure the hidden application directory exists in the user's home directory.
@@ -42,6 +60,10 @@ pub fn run() {
     // Log where we are logging to
     if compass_home().exists() {
         log::info!("Application starting. Logging to: {:?}", compass_home());
+    }
+
+    if sentry_verify_requested(std::env::var("SENTRY_VERIFY").ok().as_deref()) {
+        emit_sentry_verification_event();
     }
 
     tauri::Builder::default()
@@ -143,4 +165,18 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sentry_verify_requested;
+
+    #[test]
+    fn sentry_verify_requested_only_for_exactly_one() {
+        assert!(sentry_verify_requested(Some("1")));
+        assert!(!sentry_verify_requested(Some("0")));
+        assert!(!sentry_verify_requested(Some("true")));
+        assert!(!sentry_verify_requested(Some("")));
+        assert!(!sentry_verify_requested(None));
+    }
 }
