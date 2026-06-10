@@ -1,9 +1,14 @@
 use common::Error;
 use std::{
     path::{Path, PathBuf},
-    sync::LazyLock,
+    sync::{LazyLock, OnceLock},
 };
 use uuid::Uuid;
+
+// flexi_logger's LoggerHandle must outlive the program (it owns flush/cleanup).
+// `init_file_logger` previously dropped it; now that we build the logger
+// manually we retain it here for the process lifetime.
+static LOGGER_HANDLE: OnceLock<flexi_logger::LoggerHandle> = OnceLock::new();
 
 /// Name of the hidden application directory inside the user's home directory.
 const COMPASS_HOME_DIR_NAME: &str = ".compass";
@@ -115,7 +120,21 @@ pub fn init_file_logger(level: &str) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(not(test))]
     let logger = logger.duplicate_to_stderr(Duplicate::Info);
 
-    logger.format(flexi_logger::detailed_format).start()?;
+    // Build the flexi logger as a boxed `log::Log` rather than registering it
+    // directly, so we can wrap it. `build()` already calls `log::set_max_level`
+    // (via the LoggerHandle), so we only install the wrapped logger below.
+    let (file_logger, handle) = logger.format(flexi_logger::detailed_format).build()?;
+
+    // Forward every record to Sentry in addition to the file/stderr:
+    // Error -> exception event, Warn/Info -> breadcrumb (sentry-log default
+    // filter). With no Sentry client (no DSN compiled in) this is a no-op
+    // passthrough to the file logger.
+    let sentry_logger = sentry::integrations::log::SentryLogger::with_dest(file_logger);
+    log::set_boxed_logger(Box::new(sentry_logger))?;
+
+    // Retain the flexi handle for the process lifetime (ignored if a prior
+    // init in the same process already set it, e.g. in tests).
+    let _ = LOGGER_HANDLE.set(handle);
 
     Ok(())
 }

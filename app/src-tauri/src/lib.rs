@@ -10,7 +10,7 @@ use crate::{
         about_info, auth_request, check_for_updates_now, clear_active_project, create_project,
         discard_changes, dismiss_update_notification, ensure_initialized, import_compass_project,
         open_latest_release, open_project, pick_compass_project_file, reimport_compass_project,
-        release_project_mutex, save_project, set_active_project, sign_out,
+        release_project_mutex, report_frontend_error, save_project, set_active_project, sign_out,
     },
     paths::{compass_home, ensure_app_dir_exists, init_file_logger},
     state::AppState,
@@ -20,6 +20,24 @@ use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 const SPELEODB_COMPASS_VERSION: Version = Version::new(1, 0, 0);
+
+/// Whether the `SENTRY_VERIFY` env value requests a synthetic verification
+/// event. Only the exact value "1" enables it.
+fn sentry_verify_requested(value: Option<&str>) -> bool {
+    value == Some("1")
+}
+
+/// Emit a synthetic event to confirm the Sentry pipeline end-to-end. Logs at
+/// error! (forwarded to Sentry as an event) when a client is configured, or a
+/// warning explaining that no DSN was compiled in.
+fn emit_sentry_verification_event() {
+    if sentry::Hub::current().client().is_some() {
+        log::error!("SENTRY_VERIFY: synthetic verification event from startup");
+        log::info!("SENTRY_VERIFY: verification event dispatched; check Sentry");
+    } else {
+        log::warn!("SENTRY_VERIFY set, but Sentry is not configured (no DSN compiled in)");
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -44,6 +62,10 @@ pub fn run() {
         log::info!("Application starting. Logging to: {:?}", compass_home());
     }
 
+    if sentry_verify_requested(std::env::var("SENTRY_VERIFY").ok().as_deref()) {
+        emit_sentry_verification_event();
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
@@ -61,6 +83,7 @@ pub fn run() {
             open_latest_release,
             pick_compass_project_file,
             reimport_compass_project,
+            report_frontend_error,
             open_project,
             release_project_mutex,
             set_active_project,
@@ -142,4 +165,18 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sentry_verify_requested;
+
+    #[test]
+    fn sentry_verify_requested_only_for_exactly_one() {
+        assert!(sentry_verify_requested(Some("1")));
+        assert!(!sentry_verify_requested(Some("0")));
+        assert!(!sentry_verify_requested(Some("true")));
+        assert!(!sentry_verify_requested(Some("")));
+        assert!(!sentry_verify_requested(None));
+    }
 }

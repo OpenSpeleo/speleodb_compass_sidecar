@@ -113,6 +113,12 @@ impl AppState {
             match &loading_state {
                 LoadingState::Failed(e) => {
                     warn!("Previous initialization failed with error: {}", e);
+                    // Emit the failure so the frontend can leave the loading
+                    // screen and show the error. Without this, an init failure
+                    // that first occurred while the WebView wasn't ready (its
+                    // emit suppressed by the readiness gate) would never reach
+                    // the UI, stalling the app on the spinner indefinitely.
+                    self.emit_app_state_change().await;
                     self.set_initializing(false);
                     break;
                 }
@@ -584,20 +590,16 @@ impl AppState {
     async fn load_user_projects(&self) -> Result<Vec<ProjectInfo>, Error> {
         info!("Loading user projects");
         let api_info = self.api_info();
-        match api::project::fetch_projects(&api_info).await {
-            Ok(projects) => {
-                self.clear_local_projects();
-                for project in projects.clone() {
-                    self.update_local_project(project).await?;
-                }
-                *self.last_project_update.lock().unwrap() = chrono::Utc::now();
-                Ok(projects)
-            }
-            Err(e) => {
-                warn!("Failed to load user projects: {}", e);
-                Err(e)
-            }
+        // Errors are propagated; both callers (init and the background task)
+        // log the failure themselves, so we don't log it again here to avoid
+        // duplicate Sentry breadcrumbs/events for a single failure.
+        let projects = api::project::fetch_projects(&api_info).await?;
+        self.clear_local_projects();
+        for project in projects.clone() {
+            self.update_local_project(project).await?;
         }
+        *self.last_project_update.lock().unwrap() = chrono::Utc::now();
+        Ok(projects)
     }
 
     /// Advance the loading state machine by one step.
@@ -620,7 +622,10 @@ impl AppState {
             LoadingState::LoadingProjects => match self.load_user_projects().await {
                 Ok(_) => self.set_loading_state(LoadingState::Ready).await,
                 Err(e) => {
-                    warn!("Failed to load user projects: {}", e);
+                    // error! (not warn!) so the SentryLogger forwards this hard
+                    // initialization failure as an event. This is the failure
+                    // that previously stalled launch silently.
+                    error!("Failed to load user projects: {}", e);
                     self.set_loading_state(LoadingState::Failed(e)).await
                 }
             },

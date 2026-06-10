@@ -48,11 +48,42 @@ mod inner {
     extern "C" {
         #[wasm_bindgen(catch,js_namespace = ["window", "__TAURI__", "core"])]
         pub async fn invoke(cmd: &str, args: JsValue) -> Result<JsValue, JsValue>;
+
+        /// Fire-and-forget variant of `invoke`. Dispatches the IPC synchronously
+        /// and returns the JS Promise without awaiting it. Used from the panic
+        /// hook, where the wasm instance is about to abort and async polling is
+        /// unreliable.
+        #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], js_name = "invoke")]
+        pub fn invoke_fire_and_forget(cmd: &str, args: JsValue) -> js_sys::Promise;
     }
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FrontendErrorArgs<'a> {
+    message: String,
+    context: &'a str,
+}
+
+/// Install a panic hook that (1) logs to the browser console as before and
+/// (2) best-effort reports the panic to the backend, which forwards it to
+/// Sentry. The report is fire-and-forget: a wasm panic aborts the instance, so
+/// we dispatch the IPC synchronously and ignore the returned Promise.
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        console_error_panic_hook::hook(info);
+        let args = FrontendErrorArgs {
+            message: info.to_string(),
+            context: "panic",
+        };
+        if let Ok(js) = serde_wasm_bindgen::to_value(&args) {
+            let _ = inner::invoke_fire_and_forget("report_frontend_error", js);
+        }
+    }));
+}
+
 fn main() {
-    console_error_panic_hook::set_once();
+    install_panic_hook();
     wasm_logger::init(wasm_logger::Config::default());
     yew::Renderer::<App>::new().render();
 }
