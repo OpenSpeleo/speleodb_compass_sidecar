@@ -52,6 +52,14 @@ pub fn ensure_initialized(app_handle: AppHandle) {
     });
 }
 
+/// Receive an error report (e.g. a panic) from the WASM frontend and route it
+/// into the backend log pipeline. From there the SentryLogger forwards it to
+/// Sentry as an event. `context` distinguishes the origin (e.g. "panic").
+#[tauri::command]
+pub fn report_frontend_error(message: String, context: String) {
+    log::error!("frontend {context}: {message}");
+}
+
 #[tauri::command]
 pub fn check_for_updates_now(app_handle: AppHandle) -> Result<(), String> {
     AppState::start_manual_update_check(&app_handle);
