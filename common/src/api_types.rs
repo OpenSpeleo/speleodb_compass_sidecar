@@ -107,8 +107,8 @@ mod tests {
             "modified_date": "2026-02-27T10:18:12.889598-05:00",
             "fork_from": null
         }"##;
-        let info: ProjectInfo =
-            serde_json::from_str(json).expect("unknown project type must not fail the whole object");
+        let info: ProjectInfo = serde_json::from_str(json)
+            .expect("unknown project type must not fail the whole object");
         assert_eq!(info.project_type, ProjectType::Other);
         assert_eq!(info.name, "South Pole Cave");
     }
