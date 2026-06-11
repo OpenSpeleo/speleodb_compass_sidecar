@@ -23,9 +23,6 @@ clean:
 # LINTING COMMANDS
 # ============================================================================ #
 
-# Run all lint checks (formatting + clippy)
-lint: lint-fmt lint-clippy pre-commit
-
 pre-commit:
 	@command -v prek >/dev/null 2>&1 || { \
 		echo "error: 'prek' is not on PATH."; \
@@ -34,6 +31,9 @@ pre-commit:
 		exit 127; \
 	}
 	prek run -a
+
+# Run all lint checks (formatting + clippy)
+lint: lint-fmt lint-clippy
 
 # Check formatting
 lint-fmt:
