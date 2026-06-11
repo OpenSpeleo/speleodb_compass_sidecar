@@ -31,7 +31,7 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - uses: cargo-bins/cargo-binstall@main
+      - uses: cargo-bins/cargo-binstall@v1.20.0
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -61,9 +61,7 @@ jobs:
       matrix:
         include:
           - platform: "windows-latest"
-            args: ""
           - platform: "macos-latest"
-            args: "--target aarch64-apple-darwin"
 
     runs-on: ${{ matrix.platform }}
 
@@ -82,10 +80,13 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - uses: cargo-bins/cargo-binstall@main
+      - uses: cargo-bins/cargo-binstall@v1.20.0
 
-      - name: Install trunk and wasm-pack
-        run: cargo binstall trunk wasm-pack
+      - name: Install WASM test tools
+        run: |
+          WASM_BINDGEN_VERSION="$(cargo pkgid -p wasm-bindgen | sed 's/.*@//')"
+          cargo binstall --no-confirm --locked wasm-pack "wasm-bindgen-cli@${WASM_BINDGEN_VERSION}"
+        shell: bash
 
       # Cache Rust dependencies and build artifacts
       - name: Rust cache
@@ -99,9 +100,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
-            dist
+            app/dist
             target/wasm32-unknown-unknown
-          key: ${{ runner.os }}-trunk-test-${{ hashFiles('src/**', 'Cargo.lock', 'index.html', 'styles.css') }}
+          key: ${{ runner.os }}-trunk-test-${{ hashFiles('app/Trunk.toml', 'app/index.html', 'app/styles.css', 'app/src/**', 'app/Cargo.toml', 'Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-trunk-test-
 
@@ -117,7 +118,7 @@ jobs:
         shell: powershell
 
       - name: Run tests
-        run: make test
+        run: make test-rust test-ui-ci
         shell: bash
 
   trigger-release:
