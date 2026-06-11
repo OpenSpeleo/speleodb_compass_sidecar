@@ -19,9 +19,9 @@ use std::{
     time::Duration,
 };
 use tauri::{
-    AppHandle, Emitter, Manager,
+    AppHandle, Emitter, Manager, Runtime,
     async_runtime::JoinHandle,
-    menu::{MenuBuilder, SubmenuBuilder},
+    menu::{Menu, MenuBuilder, Submenu, SubmenuBuilder},
 };
 use uuid::Uuid;
 
@@ -29,6 +29,125 @@ const PROJECT_INFO_UPDATE_INTERVAL: Duration = Duration::from_secs(120); // upda
 
 /// Event key for UI state notifications
 pub const UI_STATE_EVENT: &str = "ui-state-update";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AppMenuSection {
+    Application,
+    Account,
+    Edit,
+    Help,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum EditMenuAction {
+    Cut,
+    Copy,
+    Paste,
+    SelectAll,
+}
+
+const EDIT_MENU_ACTIONS: [EditMenuAction; 4] = [
+    EditMenuAction::Cut,
+    EditMenuAction::Copy,
+    EditMenuAction::Paste,
+    EditMenuAction::SelectAll,
+];
+
+fn app_menu_sections(has_token: bool) -> Vec<AppMenuSection> {
+    if has_token {
+        vec![
+            AppMenuSection::Application,
+            AppMenuSection::Account,
+            AppMenuSection::Edit,
+            AppMenuSection::Help,
+        ]
+    } else {
+        vec![
+            AppMenuSection::Application,
+            AppMenuSection::Edit,
+            AppMenuSection::Help,
+        ]
+    }
+}
+
+fn build_application_submenu<R, M>(manager: &M) -> tauri::Result<Submenu<R>>
+where
+    R: Runtime,
+    M: Manager<R>,
+{
+    SubmenuBuilder::new(manager, "SpeleoDB Compass Sidecar")
+        .quit()
+        .build()
+}
+
+fn build_account_submenu<R, M>(manager: &M) -> tauri::Result<Submenu<R>>
+where
+    R: Runtime,
+    M: Manager<R>,
+{
+    SubmenuBuilder::new(manager, "Account")
+        .text("sign_out", "Sign Out")
+        .build()
+}
+
+fn build_edit_submenu<R, M>(manager: &M) -> tauri::Result<Submenu<R>>
+where
+    R: Runtime,
+    M: Manager<R>,
+{
+    let mut builder = SubmenuBuilder::new(manager, "Edit");
+    for action in EDIT_MENU_ACTIONS {
+        builder = match action {
+            EditMenuAction::Cut => builder.cut(),
+            EditMenuAction::Copy => builder.copy(),
+            EditMenuAction::Paste => builder.paste(),
+            EditMenuAction::SelectAll => builder.select_all(),
+        };
+    }
+    builder.build()
+}
+
+fn build_help_submenu<R, M>(manager: &M) -> tauri::Result<Submenu<R>>
+where
+    R: Runtime,
+    M: Manager<R>,
+{
+    SubmenuBuilder::new(manager, "Help")
+        .text("check_for_updates_now", "Check for Updates Now")
+        .text("about", "About")
+        .build()
+}
+
+fn build_app_menu<R, M>(manager: &M, has_token: bool) -> tauri::Result<Menu<R>>
+where
+    R: Runtime,
+    M: Manager<R>,
+{
+    let mut builder = MenuBuilder::new(manager);
+
+    for section in app_menu_sections(has_token) {
+        match section {
+            AppMenuSection::Application => {
+                let submenu = build_application_submenu(manager)?;
+                builder = builder.item(&submenu);
+            }
+            AppMenuSection::Account => {
+                let submenu = build_account_submenu(manager)?;
+                builder = builder.item(&submenu);
+            }
+            AppMenuSection::Edit => {
+                let submenu = build_edit_submenu(manager)?;
+                builder = builder.item(&submenu);
+            }
+            AppMenuSection::Help => {
+                let submenu = build_help_submenu(manager)?;
+                builder = builder.item(&submenu);
+            }
+        }
+    }
+
+    builder.build()
+}
 
 pub struct AppState {
     app_handle: Mutex<Option<AppHandle>>,
@@ -181,36 +300,7 @@ impl AppState {
             return;
         };
         let has_token = self.api_info().oauth_token().is_some();
-        let help_submenu = match SubmenuBuilder::new(&app_handle, "Help")
-            .text("check_for_updates_now", "Check for Updates Now")
-            .text("about", "About")
-            .build()
-        {
-            Ok(submenu) => submenu,
-            Err(e) => {
-                error!("Failed to build Help submenu: {}", e);
-                return;
-            }
-        };
-        let menu_result = if !has_token {
-            MenuBuilder::new(&app_handle).item(&help_submenu).build()
-        } else {
-            let account_submenu = match SubmenuBuilder::new(&app_handle, "Account")
-                .text("sign_out", "Sign Out")
-                .build()
-            {
-                Ok(submenu) => submenu,
-                Err(e) => {
-                    error!("Failed to build Account submenu: {}", e);
-                    return;
-                }
-            };
-            MenuBuilder::new(&app_handle)
-                .item(&account_submenu)
-                .item(&help_submenu)
-                .build()
-        };
-        let menu = match menu_result {
+        let menu = match build_app_menu(&app_handle, has_token) {
             Ok(menu) => menu,
             Err(e) => {
                 error!("Failed to build application menu: {}", e);
@@ -731,5 +821,48 @@ impl AppState {
 
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AppMenuSection, EDIT_MENU_ACTIONS, EditMenuAction, app_menu_sections};
+
+    #[test]
+    fn unauthenticated_menu_keeps_quit_edit_and_help_actions() {
+        assert_eq!(
+            app_menu_sections(false),
+            vec![
+                AppMenuSection::Application,
+                AppMenuSection::Edit,
+                AppMenuSection::Help
+            ]
+        );
+    }
+
+    #[test]
+    fn authenticated_menu_keeps_quit_account_edit_and_help_actions() {
+        assert_eq!(
+            app_menu_sections(true),
+            vec![
+                AppMenuSection::Application,
+                AppMenuSection::Account,
+                AppMenuSection::Edit,
+                AppMenuSection::Help
+            ]
+        );
+    }
+
+    #[test]
+    fn edit_menu_contains_standard_clipboard_actions() {
+        assert_eq!(
+            EDIT_MENU_ACTIONS,
+            [
+                EditMenuAction::Cut,
+                EditMenuAction::Copy,
+                EditMenuAction::Paste,
+                EditMenuAction::SelectAll
+            ]
+        );
     }
 }
