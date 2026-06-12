@@ -31,6 +31,18 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Cache cargo tools
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/bin/cargo-binstall*
+            ~/.cargo/bin/prek*
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: ${{ runner.os }}-lint-cargo-tools-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-lint-cargo-tools-
+
       - uses: cargo-bins/cargo-binstall@v1.20.0
 
       - name: Rust cache
@@ -48,7 +60,10 @@ jobs:
       # at which point a plain `cargo binstall` exits 0 without doing
       # anything and the next `prek` invocation fails ENOENT (exit 127).
       - name: Install prek
-        run: cargo binstall --no-confirm --force --locked prek
+        run: |
+          if ! command -v prek >/dev/null 2>&1; then
+            cargo binstall --no-confirm --force --locked prek
+          fi
 
       - name: Run all lint checks
         run: make lint
@@ -80,13 +95,36 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Cache cargo tools
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/bin/cargo-binstall*
+            ~/.cargo/bin/wasm-pack*
+            ~/.cargo/bin/wasm-bindgen*
+            ~/.cargo/bin/wasm-bindgen-test-runner*
+            ~/.cargo/bin/wasm2es6js*
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: ${{ runner.os }}-wasm-cargo-tools-${{ hashFiles('Cargo.lock', '.github/workflows/ci.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-wasm-cargo-tools-
+
       - uses: cargo-bins/cargo-binstall@v1.20.0
 
       - name: Install WASM test tools
         run: |
           WASM_BINDGEN_VERSION="$(cargo pkgid -p wasm-bindgen | sed 's/.*@//')"
-          cargo binstall --no-confirm --locked wasm-pack "wasm-bindgen-cli@${WASM_BINDGEN_VERSION}"
+          if ! command -v wasm-pack >/dev/null 2>&1; then
+            cargo binstall --no-confirm --locked wasm-pack
+          fi
+          if ! command -v wasm-bindgen >/dev/null 2>&1 || [ "$(wasm-bindgen --version | awk '{print $2}')" != "${WASM_BINDGEN_VERSION}" ]; then
+            cargo binstall --no-confirm --force --locked "wasm-bindgen-cli@${WASM_BINDGEN_VERSION}"
+          fi
         shell: bash
+
+      - name: Install geckodriver
+        uses: browser-actions/setup-geckodriver@latest
 
       # Cache Rust dependencies and build artifacts
       - name: Rust cache

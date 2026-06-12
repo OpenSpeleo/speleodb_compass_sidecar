@@ -42,6 +42,18 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Cache cargo tools
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/bin/cargo-binstall*
+            ~/.cargo/bin/trunk*
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: ${{ runner.os }}-release-cargo-tools-${{ hashFiles('.github/workflows/publish.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-release-cargo-tools-
+
       # Cache Rust dependencies and build artifacts
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -63,7 +75,10 @@ jobs:
       - uses: cargo-bins/cargo-binstall@v1.20.0
 
       - name: Install trunk
-        run: cargo binstall --no-confirm --locked trunk
+        run: |
+          if ! command -v trunk >/dev/null 2>&1; then
+            cargo binstall --no-confirm --locked trunk
+          fi
 
       - uses: tauri-apps/tauri-action@action-v0.6.2
         env:
