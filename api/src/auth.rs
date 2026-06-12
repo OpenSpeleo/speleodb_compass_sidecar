@@ -167,7 +167,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn authorize_with_token_success() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let instance = test_instance();
@@ -182,7 +182,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn authorize_with_token_invalid_returns_friendly_message() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let instance = test_instance();
@@ -199,7 +199,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn authorize_with_email_success() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let (Ok(email), Ok(password)) = (
@@ -219,7 +219,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn authorize_with_email_invalid_returns_friendly_message() {
-        if !ensure_test_env_vars() {
+        if !ensure_test_env_vars().await {
             return;
         }
         let instance = test_instance();

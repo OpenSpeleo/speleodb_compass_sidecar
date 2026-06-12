@@ -64,13 +64,12 @@ This project uses environment variables for test credentials, which allows:
 The project includes two GitHub Actions workflows:
 
 1. **`.github/workflows/ci.yml`** - Runs tests on every push and pull request
-   - Executes `make test` (all Rust + WASM UI tests)
-   - Runs on Windows (matching the publish environment)
-   - Uses caching for faster builds (Rust, cargo bins, trunk artifacts)
+   - Executes `make test-rust test-ui-ci`
+   - Runs on Windows and macOS
+   - Uses caching for faster Rust and Trunk builds
 
 2. **`.github/workflows/publish.yml`** - Publishes the app
-   - Automatically runs CI tests first (via `needs: test`)
-   - Only publishes if all tests pass
+   - Triggered by the CI workflow when a pushed commit is tagged with `v*`
    - Creates GitHub releases with built artifacts
 
 ### Setting Up Secrets
@@ -92,8 +91,8 @@ If secrets are not set, the workflow will use default placeholder values (tests 
 ```
 Push to main/master or PR:
   ├─ CI Tests workflow runs automatically
-  │  ├─ Setup environment (Node, Rust, wasm-pack, trunk)
-  │  ├─ Run `make test`
+  │  ├─ Setup environment (Node, Rust, wasm-pack, wasm-bindgen-cli)
+  │  ├─ Run `make test-rust test-ui-ci`
   │  └─ Report results
 
 Push to main/master with tags:
@@ -168,16 +167,14 @@ The project includes helpful Makefile targets for common tasks:
 - `make test-tauri` - Run only Tauri backend tests - uses real API
 - `make test-common` - Run only common crate tests
 - `make test-ui` - Run only WASM UI tests (requires wasm-pack)
-- `make check-env` - Verify `.env` file exists
+- `make test-ui-ci` - Run WASM UI tests without installing wasm-bindgen-cli
 
 ### Building
-- `make build` - Build the project (legacy flit)
 - `make build-tauri` - Build the Tauri application
 - `make build-ui` - Build UI for distribution with trunk
 
 ### Development
 - `make dev` - Run development server with hot-reload
-- `make check-env` - Verify `.env` file exists
 - `make clean` - Remove build artifacts
 
 ## Notes

@@ -5,12 +5,12 @@
 //! while the working copy represents the current state of the project on disk.
 
 use crate::{
-    SPELEODB_COMPASS_VERSION,
     paths::{compass_project_index_path, compass_project_working_path},
     project_management::SPELEODB_COMPASS_PROJECT_FILE,
 };
 use common::Error;
 use log::{error, info};
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::{
     io::prelude::*,
@@ -19,17 +19,19 @@ use std::{
 use uuid::Uuid;
 use zip::write::SimpleFileOptions;
 
+const SPELEODB_COMPASS_TOML_VERSION: Version = Version::new(1, 0, 0);
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct SpeleoDb {
     pub id: Uuid,
-    pub version: semver::Version,
+    pub version: Version,
 }
 
 impl Default for SpeleoDb {
     fn default() -> Self {
         Self {
             id: Uuid::new_v4(),
-            version: SPELEODB_COMPASS_VERSION,
+            version: SPELEODB_COMPASS_TOML_VERSION,
         }
     }
 }
@@ -231,7 +233,7 @@ impl LocalProject {
         let new_project = Self {
             speleodb: SpeleoDb {
                 id,
-                version: SPELEODB_COMPASS_VERSION,
+                version: SPELEODB_COMPASS_TOML_VERSION,
             },
             project_map: ProjectMap::import(
                 mak_path.file_name().unwrap().to_string_lossy().to_string(),
@@ -532,6 +534,12 @@ mod test {
         let result = LocalProject::import_compass_project(id, &mak_path);
 
         assert!(result.is_ok(), "import should succeed for valid fixture");
+        let project =
+            LocalProject::load_working_project(id).expect("imported metadata should load");
+        assert_eq!(
+            project.speleodb.version, SPELEODB_COMPASS_TOML_VERSION,
+            "compass.toml metadata version should stay on the fixed schema version"
+        );
         cleanup_project_dir(id);
         let _ = std::fs::remove_dir_all(source_dir);
     }

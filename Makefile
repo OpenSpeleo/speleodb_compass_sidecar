@@ -1,4 +1,4 @@
-.PHONY: clean test test-rust test-rust-verbose test-tauri test-common test-ui lint lint-fmt lint-clippy dev build-tauri build-ui setup
+.PHONY: clean test test-rust test-rust-verbose test-tauri test-common test-ui test-ui-ci lint lint-fmt lint-clippy dev build-tauri build-ui setup
 
 # ============================================================================ #
 # Load .env file
@@ -23,9 +23,6 @@ clean:
 # LINTING COMMANDS
 # ============================================================================ #
 
-# Run all lint checks (formatting + clippy)
-lint: lint-fmt lint-clippy pre-commit
-
 pre-commit:
 	@command -v prek >/dev/null 2>&1 || { \
 		echo "error: 'prek' is not on PATH."; \
@@ -34,6 +31,9 @@ pre-commit:
 		exit 127; \
 	}
 	prek run -a
+
+# Run all lint checks (formatting + clippy)
+lint: lint-fmt lint-clippy
 
 # Check formatting
 lint-fmt:
@@ -73,6 +73,12 @@ test-ui:
 	else \
 		echo "wasm-pack not found, skipping UI tests"; \
 	fi
+
+# Run WASM UI tests in CI after the matching wasm-bindgen-cli is installed.
+test-ui-ci:
+	@command -v wasm-pack >/dev/null 2>&1 || { echo "wasm-pack not found"; exit 127; }
+	@command -v wasm-bindgen >/dev/null 2>&1 || { echo "wasm-bindgen not found"; exit 127; }
+	cd app/src && wasm-pack test --headless --firefox --mode no-install
 
 # ============================================================================ #
 # BUILD COMMANDS

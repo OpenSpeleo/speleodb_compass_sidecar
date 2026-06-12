@@ -13,21 +13,13 @@ updates:
 
   - package-ecosystem: "cargo"
     open-pull-requests-limit: 50
-    directory: "/"
-    # Every weekday
-    schedule:
-      interval: "weekly"
-
-  - package-ecosystem: "cargo"
-    open-pull-requests-limit: 50
-    directory: "src-tauri"
-    # Every weekday
-    schedule:
-      interval: "weekly"
-
-  - package-ecosystem: "cargo"
-    open-pull-requests-limit: 50
-    directory: "common"
+    directories:
+      - "/"
+      - "/api"
+      - "/app"
+      - "/app/src-tauri"
+      - "/common"
+      - "/xtask"
     # Every weekday
     schedule:
       interval: "weekly"

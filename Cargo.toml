@@ -1,7 +1,10 @@
 [workspace]
 resolver = "3"
-members = ["api","app","app/src-tauri", "common"]
+members = ["api","app","app/src-tauri", "common", "xtask"]
 default-members = ["api","app/src-tauri", "common"]
+
+[workspace.package]
+version = "26.6.10"
 
 [workspace.dependencies]
 bytes = "1"

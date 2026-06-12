@@ -42,11 +42,22 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Cache cargo tools
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/bin/cargo-binstall*
+            ~/.cargo/bin/trunk*
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: ${{ runner.os }}-release-cargo-tools-${{ hashFiles('.github/workflows/publish.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-release-cargo-tools-
+
       # Cache Rust dependencies and build artifacts
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "./src-tauri -> target"
           cache-on-failure: true
 
       # Cache cargo binaries (tauri-cli and trunk) - this saves ~25 minutes
@@ -55,16 +66,19 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
-            dist
+            app/dist
             target/wasm32-unknown-unknown
-          key: ${{ runner.os }}-trunk-test-${{ hashFiles('src/**', 'Cargo.lock', 'index.html', 'styles.css') }}
+          key: ${{ runner.os }}-trunk-test-${{ hashFiles('app/Trunk.toml', 'app/index.html', 'app/styles.css', 'app/src/**', 'app/Cargo.toml', 'Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-trunk-test-
 
-      - uses: cargo-bins/cargo-binstall@main
+      - uses: cargo-bins/cargo-binstall@v1.20.0
 
-      - name: Install trunk and wasm-pack
-        run: cargo binstall trunk wasm-pack
+      - name: Install trunk
+        run: |
+          if ! command -v trunk >/dev/null 2>&1; then
+            cargo binstall --no-confirm --locked trunk
+          fi
 
       - uses: tauri-apps/tauri-action@action-v0.6.2
         env:
