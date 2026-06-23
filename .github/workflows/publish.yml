@@ -72,7 +72,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-trunk-test-
 
-      - uses: cargo-bins/cargo-binstall@v1.20.0
+      - uses: cargo-bins/cargo-binstall@v1.20.1
 
       - name: Install trunk
         run: |

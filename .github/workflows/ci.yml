@@ -48,7 +48,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-lint-cargo-tools-
 
-      - uses: cargo-bins/cargo-binstall@v1.20.0
+      - uses: cargo-bins/cargo-binstall@v1.20.1
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -120,7 +120,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-wasm-cargo-tools-
 
-      - uses: cargo-bins/cargo-binstall@v1.20.0
+      - uses: cargo-bins/cargo-binstall@v1.20.1
 
       - name: Install WASM test tools
         run: |
