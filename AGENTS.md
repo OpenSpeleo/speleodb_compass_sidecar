@@ -7,22 +7,27 @@ correct changes without re-discovering architecture every session.
 
 ## Project Overview
 
-SpeleoDB Compass Sidecar is a Tauri v2 + Yew desktop application that bridges SpeleoDB
-(cave survey database) with Compass (desktop cave surveying software). It manages project
-synchronization, authentication, and launches Compass for editing.
+SpeleoDB Compass Sidecar is a Tauri v2 + Yew desktop application that bridges
+SpeleoDB (cave survey database) with Compass (desktop cave surveying software).
+It manages project synchronization, authentication, and launches Compass for
+editing.
 
 ## Core Principles
-- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
-- **No Laziness**: Find root causes. No temporary fixes. Principal Engineer standards
-- **Minimat Impact**: Changes should only touch what's necessary. Avoid introducing bugs
-or changing unrelated parts of the code.
+
+- **Simplicity First**: Make every change as simple as possible. Impact minimal
+  code.
+- **No Laziness**: Find root causes. No temporary fixes. Principal Engineer
+  standards
+- **Minimat Impact**: Changes should only touch what's necessary. Avoid
+  introducing bugs or changing unrelated parts of the code.
 - **Readability & Maintainability**: Preserve product behavior while improving
-maintainability.
-- **Performance Conscious**: Be aware of the performance impact of your changes and try
-to minimize the impact on performance.
-- **Refactor as necessary**: Prefer centralized logic over duplicated code, conditionals
-or per-call custom checks.
-- **Tests are cheap**: Every behavior should be tested. Untested code is broken code.
+  maintainability.
+- **Performance Conscious**: Be aware of the performance impact of your changes
+  and try to minimize the impact on performance.
+- **Refactor as necessary**: Prefer centralized logic over duplicated code,
+  conditionals or per-call custom checks.
+- **Tests are cheap**: Every behavior should be tested. Untested code is broken
+  code.
 
 ## Task Management
 
@@ -33,47 +38,53 @@ or per-call custom checks.
 5. **Document Results**: Add review section to tasks/todo.md"
 6. **Capture Lessons**: Update `tasks/lessons/` after corrections
 7. **Documentation is Key**: Document each feature and design inside `docs/`.
-What is the feature being implemented, the design space and intents and a
-rapid summary of the approach taken with key APIs & concepts.
+   What is the feature being implemented, the design space and intents and a
+   rapid summary of the approach taken with key APIs & concepts.
 
 ## Workflow Orchestration
 
 ### 1. Plan Node Default
+
 - Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
 - If something goes sideways, STOP and re-plan immediately - don't keep pushing
 - Use plan mode for verification steps, not just building
 - Write detailed specs upfront to reduce ambiguity
 
 ### 2. Subagent Strategy
+
 - Use subagents liberally to keep main context window clean
 - Offload research, exploration, and parallel analysis to subagents
 - For complex problems, throw more compute at it via subagents
 - One tack per subagent for focused execution
 
 ### 3. Self-Improvement Loop
+
 - After ANY correction from the user: update `tasks/lessons/` with the pattern
 - Write rules for yourself that prevent the same mistake
 - Ruthlessly iterate on these lessons until mistake rate drops
 - Review lessons at session start for relevant project
 
 ### 4. Verification Before Done
+
 - Never mark a task complete without proving it works
 - Diff behavior between main and your changes when relevant
 - Ask yourself: "Would a staff engineer approve this?"
 - Run tests, check logs, demonstrate correctness
 
 ### 5. Demand Elegance (Balanced)
+
 - For non-trivial changes: pause and ask "is there a more elegant way?"
-- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant
+  solution"
 - Skip this for simple, obvious fixes - don't over-engineer
 - Challenge your own work before presenting it
 
 ### 6. Autonomous Bug Fizing
+
 - When given a bug report: just fix it. Don't ask for hand-holding
 - Point at logs, errors, failing tests - then resolve them
 - Zero context switching required from the user
 - Go fix failing CI tests without being told how
-
 
 ## Testing Requirements
 
@@ -92,16 +103,17 @@ New tests should respects coding existing structures
 Run `make lint` to validate the codebase. This depends on:
 
 - `make lint-fmt` — `cargo fmt --all -- --check`
-- `make lint-clippy` — `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `make lint-clippy` —
+  `cargo clippy --workspace --all-targets --all-features -- -D warnings`
 
-Clippy runs with `-D warnings` so any clippy lint blocks the lint stage and
-CI. Fix the lint at its root rather than `#[allow(...)]`-annotating it
-unless there is a documented reason.
+Clippy runs with `-D warnings` so any clippy lint blocks the lint stage and CI.
+Fix the lint at its root rather than `#[allow(...)]`-annotating it unless there
+is a documented reason.
 
 ## Documentation Expectations for Agents
 
-When changing feature behavior or architecture, update docs under `docs/`
-for the impacted topic:
+When changing feature behavior or architecture, update docs under `docs/` for
+the impacted topic:
 
 - feature intent
 - engineering scope and ownership boundaries
@@ -151,10 +163,10 @@ make build-ui
 # or: cd app && trunk build --release
 ```
 
-
 ## Testing
 
-All tests make **real HTTP requests** - no mocks. Requires `.env` file with valid credentials.
+All tests make **real HTTP requests** - no mocks. Requires `.env` file with
+valid credentials.
 
 ```bash
 # Setup: copy .env.dist to .env and add credentials
@@ -186,73 +198,133 @@ cargo test -- --test-threads=1
 
 Five Cargo workspace members (resolver v3, Rust edition 2024):
 
-- **api/** - SpeleoDB REST API client (auth, project CRUD, mutex acquire/release)
-- **app/** - Yew WASM frontend (`speleodb-compass-sidecar-ui`, components + IPC to backend)
-- **app/src-tauri/** - Tauri backend (`speleodb-compass-sidecar`, commands, state management, Compass integration)
-- **common/** - Shared types (ApiInfo, OauthToken, ProjectInfo, UiState, LoadingState, LocalProjectStatus)
+- **api/** - SpeleoDB REST API client (auth, project CRUD, mutex
+  acquire/release)
+- **app/** - Yew WASM frontend (`speleodb-compass-sidecar-ui`, components + IPC
+  to backend)
+- **app/src-tauri/** - Tauri backend (`speleodb-compass-sidecar`, commands,
+  state management, Compass integration)
+- **common/** - Shared types (ApiInfo, OauthToken, ProjectInfo, UiState,
+  LoadingState, LocalProjectStatus)
 - **errors/** - Single Error enum with ~30 variants, serializable for frontend
 
-Workspace dependencies defined in root `Cargo.toml`: bytes, log, serde, serde_json, thiserror, tokio, toml, url, uuid.
-
-
+Workspace dependencies defined in root `Cargo.toml`: bytes, log, serde,
+serde_json, thiserror, tokio, toml, url, uuid.
 
 ## Architecture
 
 ### Data Flow
 
-1. **Authentication**: Frontend calls `auth_request` command → backend calls api crate → credentials stored in `~/.compass/user_prefs.json` (TOML format, 0o600 permissions on Unix)
+1. **Authentication**: Frontend calls `auth_request` command → backend calls api
+   crate → credentials stored in `~/.compass/user_prefs.json` (TOML format,
+   0o600 permissions on Unix)
 
-2. **Project Sync**: Backend fetches from SpeleoDB API → compares with local `.revision.txt` files → emits LocalProjectStatus (RemoteOnly, EmptyLocal, UpToDate, OutOfDate, Dirty, DirtyAndOutOfDate)
+2. **Project Sync**: Backend fetches from SpeleoDB API → compares with local
+   `.revision.txt` files → emits LocalProjectStatus (RemoteOnly, EmptyLocal,
+   UpToDate, OutOfDate, Dirty, DirtyAndOutOfDate)
 
-3. **Compass Launch**: Backend acquires project mutex via API → launches wcomp32.exe (Windows) → monitors process via sysinfo crate → releases mutex when Compass closes. On macOS/Linux, opens the project folder in the system file explorer instead.
+3. **Compass Launch**: Backend acquires project mutex via API → launches
+   wcomp32.exe (Windows) → monitors process via sysinfo crate → releases mutex
+   when Compass closes. On macOS/Linux, opens the project folder in the system
+   file explorer instead.
 
-4. **Background Tasks**: `AppState` runs a background async task polling every 120s for remote project updates and every 1s for local status changes (including Compass process monitoring on Windows).
+4. **Background Tasks**: `AppState` runs a background async task polling every
+   120s for remote project updates and every 1s for local status changes
+   (including Compass process monitoring on Windows).
 
 ### Key Files
 
 **Backend (app/src-tauri/src/)**
-- `lib.rs` - Tauri app setup: plugins (updater, dialog), command registration, window close prevention if Compass is open, menu with sign-out, Sentry init
-- `commands.rs` - Tauri commands: `about_info`, `auth_request`, `clear_active_project`, `create_project`, `discard_changes`, `ensure_initialized`, `import_compass_project`, `open_project`, `pick_compass_project_file`, `reimport_compass_project`, `release_project_mutex`, `save_project`, `set_active_project`, `sign_out`
-- `state.rs` - `AppState` with Mutex-protected fields (api_info, project_info HashMap, active_project, compass_pid, loading_state), background task, `emit_app_state_change()` to push `UiState` to frontend via `UI_STATE_EVENT`
-- `paths.rs` - Path constants and helpers: `~/.compass/` home dir, `~/.compass/projects/{uuid}/index` and `working_copy` layout, file logger setup
-- `user_prefs.rs` - `UserPrefs` persistence: load/save TOML credentials, env var fallback for tests (`TEST_SPELEODB_INSTANCE`, `TEST_SPELEODB_OAUTH`)
-- `project_management/mod.rs` - `ProjectManager`: local status detection, project download/upload, mutex management
-- `project_management/local_project.rs` - `LocalProject`: Compass file handling (`.MAK`, `.DAT`, `.PLT`), dirty detection (index vs working_copy), ZIP packing, project import via `compass_data` crate
-- `project_management/revision.rs` - `.revision.txt` read/write for tracking synced commit hash
+
+- `lib.rs` - Tauri app setup: plugins (updater, dialog), command registration,
+  window close prevention if Compass is open, menu with sign-out, Sentry init
+- `commands.rs` - Tauri commands: `about_info`, `auth_request`,
+  `clear_active_project`, `create_project`, `discard_changes`,
+  `ensure_initialized`, `import_compass_project`, `open_project`,
+  `pick_compass_project_file`, `reimport_compass_project`,
+  `release_project_mutex`, `save_project`, `set_active_project`, `sign_out`
+- `state.rs` - `AppState` with Mutex-protected fields (api_info, project_info
+  HashMap, active_project, compass_pid, loading_state), background task,
+  `emit_app_state_change()` to push `UiState` to frontend via `UI_STATE_EVENT`
+- `paths.rs` - Path constants and helpers: `~/.compass/` home dir,
+  `~/.compass/projects/{uuid}/index` and `working_copy` layout, file logger
+  setup
+- `user_prefs.rs` - `UserPrefs` persistence: load/save TOML credentials, env var
+  fallback for tests (`TEST_SPELEODB_INSTANCE`, `TEST_SPELEODB_OAUTH`)
+- `project_management/mod.rs` - `ProjectManager`: local status detection,
+  project download/upload, mutex management
+- `project_management/local_project.rs` - `LocalProject`: Compass file handling
+  (`.MAK`, `.DAT`, `.PLT`), dirty detection (index vs working_copy), ZIP
+  packing, project import via `compass_data` crate
+- `project_management/revision.rs` - `.revision.txt` read/write for tracking
+  synced commit hash
 
 **Frontend (app/src/)**
+
 - `main.rs` - WASM entry: panic hook, wasm_logger, renders `App`
-- `app.rs` - Root component: subscribes to `UI_STATE_EVENT`, calls `ensure_initialized()`, routes to AuthScreen / MainLayout / LoadingScreen based on `LoadingState`
-- `speleo_db_controller.rs` - `SpeleoDBController` singleton wrapping Tauri `invoke()` calls with input validation (OAuth = 40 hex chars)
+- `app.rs` - Root component: subscribes to `UI_STATE_EVENT`, calls
+  `ensure_initialized()`, routes to AuthScreen / MainLayout / LoadingScreen
+  based on `LoadingState`
+- `speleo_db_controller.rs` - `SpeleoDBController` singleton wrapping Tauri
+  `invoke()` calls with input validation (OAuth = 40 hex chars)
 - `error.rs` - Frontend `Error` enum (Command, Serde variants)
 - `ui_constants.rs` - Color palette constants (warn, alarm, good, blue, grey)
 - `components/mod.rs` - Module declarations for all components
-- `components/auth_screen.rs` - Login UI with OAuth token and email/password tabs, instance URL dropdown (stage/production)
-- `components/main_layout.rs` - Two-pane authenticated layout: project listing + project details, header with user email and sign-out
-- `components/project_listing.rs` - Scrollable project list from `UiState.project_status`
-- `components/project_listing_item.rs` - Individual project row with status indicator
-- `components/project_details.rs` - Project detail view: open in Compass, download, commit form, read-only indicator, mutex status
-- `components/create_project_modal.rs` - New project form (name, description, country, coordinates)
+- `components/auth_screen.rs` - Login UI with OAuth token and email/password
+  tabs, instance URL dropdown (stage/production)
+- `components/main_layout.rs` - Two-pane authenticated layout: project listing +
+  project details, header with user email and sign-out
+- `components/project_listing.rs` - Scrollable project list from
+  `UiState.project_status`
+- `components/project_listing_item.rs` - Individual project row with status
+  indicator
+- `components/project_details.rs` - Project detail view: open in Compass,
+  download, commit form, read-only indicator, mutex status
+- `components/create_project_modal.rs` - New project form (name, description,
+  country, coordinates)
 - `components/loading_screen.rs` - Loading state display with status text
-- `components/modal.rs` - Generic modal component (Success, Error, Info, Warning, Confirmation types)
+- `components/modal.rs` - Generic modal component (Success, Error, Info,
+  Warning, Confirmation types)
 
 **API (api/src/)**
-- `lib.rs` - Module declarations, global HTTP client (`reqwest`) with 10s timeout
-- `http.rs` - Centralized v2 plumbing: `v2_url()`, `authenticated()`, `send_json()`, `send_raw()`, `map_status_to_error()`. Single chokepoint for status-code → typed `Error` mapping (401/403→Unauthorized, 404→NotFound, 422→Unprocessable, 409/423→Conflict, otherwise `Api{status,message}`)
-- `auth.rs` - `authorize_with_token()` and `authorize_with_email()` against `api/v2/user/auth-token/`
-- `project.rs` - `create_project()`, `fetch_project_info()`, `fetch_projects()`, `acquire_project_mutex()` (Conflict→`ProjectMutexLocked`), `release_project_mutex()`, `download_project_zip()` (Unprocessable→`NoProjectData`), `upload_project_zip()` — all under `api/v2/projects/`
-- `test_support.rs` (test-only) - `.env` autoloader, `test_api_info()`, `unauthorized_api_info()`, `fixture_project_id()` (lazy shared OnceCell), `build_minimal_compass_zip()`. See `docs/api-v2.md` for the testing strategy.
+
+- `lib.rs` - Module declarations, global HTTP client (`reqwest`) with 10s
+  timeout
+- `http.rs` - Centralized v2 plumbing: `v2_url()`, `authenticated()`,
+  `send_json()`, `send_raw()`, `map_status_to_error()`. Single chokepoint for
+  status-code → typed `Error` mapping (401/403→Unauthorized, 404→NotFound,
+  422→Unprocessable, 409/423→Conflict, otherwise `Api{status,message}`)
+- `auth.rs` - `authorize_with_token()` and `authorize_with_email()` against
+  `api/v2/user/auth-token/`
+- `project.rs` - `create_project()`, `fetch_project_info()`, `fetch_projects()`,
+  `acquire_project_mutex()` (Conflict→`ProjectMutexLocked`),
+  `release_project_mutex()`, `download_project_zip()`
+  (Unprocessable→`NoProjectData`), `upload_project_zip()` — all under
+  `api/v2/projects/`
+- `test_support.rs` (test-only) - `.env` autoloader, `test_api_info()`,
+  `unauthorized_api_info()`, `fixture_project_id()` (lazy shared OnceCell),
+  `build_minimal_compass_zip()`. See `docs/api-v2.md` for the testing strategy.
 
 **Common (common/src/)**
-- `lib.rs` - Re-exports, conditional `API_BASE_URL` (stage in debug, production in release)
-- `api_info.rs` - `ApiInfo` (instance URL, email, oauth_token), `OauthToken` newtype
-- `api_types.rs` - `ProjectInfo`, `CommitInfo`, `ProjectType` (ARIANE, COMPASS), `ProjectSaveResult`
-- `ui_state.rs` - `UiState`, `LoadingState`, `LocalProjectStatus`, `ProjectStatus`, `Platform`
-- `error.rs` - Single `Error` enum covering auth, file I/O, project state, network, OS/Compass, serialization. HTTP-derived variants: `Unauthorized(String)`, `NotFound(String)`, `Unprocessable(String)`, `Conflict(String)`, generic `Api{status,message}` — every variant carries the server-provided message.
+
+- `lib.rs` - Re-exports, conditional `API_BASE_URL` (stage in debug, production
+  in release)
+- `api_info.rs` - `ApiInfo` (instance URL, email, oauth_token), `OauthToken`
+  newtype
+- `api_types.rs` - `ProjectInfo`, `CommitInfo`, `ProjectType` (ARIANE, COMPASS),
+  `ProjectSaveResult`
+- `ui_state.rs` - `UiState`, `LoadingState`, `LocalProjectStatus`,
+  `ProjectStatus`, `Platform`
+- `error.rs` - Single `Error` enum covering auth, file I/O, project state,
+  network, OS/Compass, serialization. HTTP-derived variants:
+  `Unauthorized(String)`, `NotFound(String)`, `Unprocessable(String)`,
+  `Conflict(String)`, generic `Api{status,message}` — every variant carries the
+  server-provided message.
 
 ### IPC Communication
 
-- Frontend → Backend: `invoke()` calls via `tauri-sys` (JSON serialized with `serde-wasm-bindgen`)
+- Frontend → Backend: `invoke()` calls via `tauri-sys` (JSON serialized with
+  `serde-wasm-bindgen`)
 - Backend → Frontend: `emit()` events via `UI_STATE_EVENT` ("ui-state-update")
 - Frontend listens with Yew stream subscription in `App` component
 
@@ -307,17 +379,21 @@ cargo install trunk --locked
 cargo install wasm-pack
 ```
 
-Also requires MSYS2 with `base-devel` and `mingw-w64-ucrt-x86_64-toolchain` packages.
+Also requires MSYS2 with `base-devel` and `mingw-w64-ucrt-x86_64-toolchain`
+packages.
 
 ## CI/CD
 
-- `ci.yml` - Runs on push/PR to main, executes `make test` on Windows. Uses cargo-binstall for trunk/wasm-pack.
-- `publish.yml` - Triggered by git tags, depends on CI passing. Builds for macOS (aarch64) and Windows via `tauri-action`. Creates signed GitHub release with updater artifacts.
+- `ci.yml` - Runs on push/PR to main, executes `make test` on Windows. Uses
+  cargo-binstall for trunk/wasm-pack.
+- `publish.yml` - Triggered by git tags, depends on CI passing. Builds for macOS
+  (aarch64) and Windows via `tauri-action`. Creates signed GitHub release with
+  updater artifacts.
 - `dependabot.yml` - Automated dependency updates
 
 ## Version Info
 
 - Root `Cargo.toml` `[workspace.package].version` and
   `app/src-tauri/tauri.conf.json`
-- `SPELEODB_COMPASS_TOML_VERSION` in `local_project.rs`: `1.0.0`
-  schema marker for local `compass.toml` metadata
+- `SPELEODB_COMPASS_TOML_VERSION` in `local_project.rs`: `1.0.0` schema marker
+  for local `compass.toml` metadata

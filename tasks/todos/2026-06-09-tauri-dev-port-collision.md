@@ -9,8 +9,7 @@
 
 ## Review
 
-- Added `cargo run -p xtask -- trunk-serve-dev` as the Tauri
-  `beforeDevCommand`.
+- Added `cargo run -p xtask -- trunk-serve-dev` as the Tauri `beforeDevCommand`.
 - The preflight frees port `1420` only when the listener is clearly Trunk; other
   processes produce an actionable error.
 - Documented the fixed-port development workflow in `docs/tauri-dev.md`.

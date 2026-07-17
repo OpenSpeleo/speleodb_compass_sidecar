@@ -3,22 +3,22 @@
 ## Feature intent
 
 The desktop sidecar talks to a single SpeleoDB instance over HTTPS. Every
-request is now scoped under the `api/v2/` prefix and every JSON response is
-the bare resource itself — no `{data, success, timestamp, url}` envelope.
-Error bodies are now `{"error": "<message>"}` only.
+request is now scoped under the `api/v2/` prefix and every JSON response is the
+bare resource itself — no `{data, success, timestamp, url}` envelope. Error
+bodies are now `{"error": "<message>"}` only.
 
-This document captures **why** the architecture looks the way it does so
-future contributors don't reinvent it.
+This document captures **why** the architecture looks the way it does so future
+contributors don't reinvent it.
 
 ## Engineering scope
 
 The `api` crate is the only place in the workspace that makes outbound HTTP
 calls. Three files own everything:
 
-| File | Responsibility |
-| --- | --- |
-| [api/src/http.rs](../api/src/http.rs) | URL building, auth header injection, request execution, status-code → typed `Error` mapping. **Single source of truth.** |
-| [api/src/auth.rs](../api/src/auth.rs) | `authorize_with_token`, `authorize_with_email`. Translates typed `Error` variants into user-facing strings the UI renders verbatim. |
+| File                                        | Responsibility                                                                                                                                      |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [api/src/http.rs](../api/src/http.rs)       | URL building, auth header injection, request execution, status-code → typed `Error` mapping. **Single source of truth.**                            |
+| [api/src/auth.rs](../api/src/auth.rs)       | `authorize_with_token`, `authorize_with_email`. Translates typed `Error` variants into user-facing strings the UI renders verbatim.                 |
 | [api/src/project.rs](../api/src/project.rs) | All project-scoped endpoints. Each function is ~5 LOC: build URL, attach auth, dispatch through `http::send_json` (or `http::send_raw` for binary). |
 
 ### The `http` module contract
@@ -37,26 +37,25 @@ not JSON) and `upload_project_zip` (only the status code is meaningful;
 
 ### Error model
 
-Defined in [common/src/error.rs](../common/src/error.rs). HTTP-derived
-variants:
+Defined in [common/src/error.rs](../common/src/error.rs). HTTP-derived variants:
 
-| HTTP status | Variant | Domain remap |
-| --- | --- | --- |
-| 401, 403 | `Unauthorized(String)` | — |
-| 404 | `NotFound(String)` | — |
-| 422 | `Unprocessable(String)` | `download_project_zip` → `NoProjectData(uuid)` |
-| 409, 423 | `Conflict(String)` | `acquire_project_mutex` → `ProjectMutexLocked(uuid)` |
+| HTTP status   | Variant                   | Domain remap                                              |
+| ------------- | ------------------------- | --------------------------------------------------------- |
+| 401, 403      | `Unauthorized(String)`    | —                                                         |
+| 404           | `NotFound(String)`        | —                                                         |
+| 422           | `Unprocessable(String)`   | `download_project_zip` → `NoProjectData(uuid)`            |
+| 409, 423      | `Conflict(String)`        | `acquire_project_mutex` → `ProjectMutexLocked(uuid)`      |
 | anything else | `Api { status, message }` | `upload_project_zip` checks `status == 304` → `NoChanges` |
 
-Every variant carries the server-provided `error` string from the JSON body
-when present, with fallback to the raw body text and finally to the HTTP
-status canonical reason. Call sites pattern-match on the typed variant; they
-should not inspect status codes directly.
+Every variant carries the server-provided `error` string from the JSON body when
+present, with fallback to the raw body text and finally to the HTTP status
+canonical reason. Call sites pattern-match on the typed variant; they should not
+inspect status codes directly.
 
 ## Adding a new endpoint
 
-Drop in five lines. No request boilerplate, no wrapper struct, no manual
-status mapping.
+Drop in five lines. No request boilerplate, no wrapper struct, no manual status
+mapping.
 
 ```rust
 pub async fn cancel_project(api_info: &ApiInfo, id: Uuid) -> Result<ProjectInfo, Error> {
@@ -66,8 +65,8 @@ pub async fn cancel_project(api_info: &ApiInfo, id: Uuid) -> Result<ProjectInfo,
 }
 ```
 
-If a status code carries domain meaning beyond the generic mapping (e.g.
-"locked → already-checked-out"), remap inside the endpoint:
+If a status code carries domain meaning beyond the generic mapping (e.g. "locked
+→ already-checked-out"), remap inside the endpoint:
 
 ```rust
 match http::send_json(req).await {
@@ -80,8 +79,8 @@ match http::send_json(req).await {
 ## Project type handling
 
 The sidecar is a Compass bridge, so `common::ProjectType` intentionally treats
-only `COMPASS` as supported. SpeleoDB may return other project types in the
-same authenticated list response, including `ARIANE` or `OTHER`; those values
+only `COMPASS` as supported. SpeleoDB may return other project types in the same
+authenticated list response, including `ARIANE` or `OTHER`; those values
 deserialize into an ignored enum value so one unsupported project cannot fail
 the whole load.
 
@@ -91,26 +90,26 @@ UI code see it. Outbound project creation still serializes
 
 ## Testing strategy
 
-All tests in the `api` crate hit a real SpeleoDB instance. There are no
-mocks; the staging server is the contract. Tests live alongside production
-code in `#[cfg(test)] mod tests` blocks, with shared infrastructure in
+All tests in the `api` crate hit a real SpeleoDB instance. There are no mocks;
+the staging server is the contract. Tests live alongside production code in
+`#[cfg(test)] mod tests` blocks, with shared infrastructure in
 [api/src/test_support.rs](../api/src/test_support.rs).
 
 ### Coverage matrix
 
 Every endpoint is exercised in both success and failure modes:
 
-| Endpoint | Success | Failure modes |
-| --- | --- | --- |
-| `authorize_with_token` | real OAuth token | invalid token → friendly message |
-| `authorize_with_email` | real email/password (skip if vars unset) | wrong creds → friendly message |
-| `fetch_projects` | fixture appears in list | unauthorized; missing token (`NoAuthToken`) |
-| `fetch_project_info` | fixture roundtrip | unknown UUID → `NotFound`; unauthorized |
-| `create_project` | new project created | unauthorized; empty input → `Unprocessable`/4xx |
-| `acquire_project_mutex` | lifecycle on fixture | unknown UUID → `NotFound`; unauthorized |
-| `release_project_mutex` | lifecycle on fixture | unknown UUID → `NotFound`; unauthorized |
-| `download_project_zip` | upload → download lifecycle returns bytes | empty project → `NoProjectData`; unknown UUID → `NotFound`; unauthorized |
-| `upload_project_zip` | upload to fresh project → `Saved` | unknown UUID → `NotFound`; unauthorized; missing local file → `FileRead` |
+| Endpoint                | Success                                   | Failure modes                                                            |
+| ----------------------- | ----------------------------------------- | ------------------------------------------------------------------------ |
+| `authorize_with_token`  | real OAuth token                          | invalid token → friendly message                                         |
+| `authorize_with_email`  | real email/password (skip if vars unset)  | wrong creds → friendly message                                           |
+| `fetch_projects`        | fixture appears in list                   | unauthorized; missing token (`NoAuthToken`)                              |
+| `fetch_project_info`    | fixture roundtrip                         | unknown UUID → `NotFound`; unauthorized                                  |
+| `create_project`        | new project created                       | unauthorized; empty input → `Unprocessable`/4xx                          |
+| `acquire_project_mutex` | lifecycle on fixture                      | unknown UUID → `NotFound`; unauthorized                                  |
+| `release_project_mutex` | lifecycle on fixture                      | unknown UUID → `NotFound`; unauthorized                                  |
+| `download_project_zip`  | upload → download lifecycle returns bytes | empty project → `NoProjectData`; unknown UUID → `NotFound`; unauthorized |
+| `upload_project_zip`    | upload to fresh project → `Saved`         | unknown UUID → `NotFound`; unauthorized; missing local file → `FileRead` |
 
 Plus `http.rs` carries unit tests for `map_status_to_error` (no network).
 
@@ -119,15 +118,15 @@ Plus `http.rs` carries unit tests for `map_status_to_error` (no network).
 Endpoints that need an existing project (read-only ones like
 `fetch_project_info`, plus the acquire/release happy path) call
 `fixture_project_id(&api_info)` from `test_support`. Behind it is a
-`tokio::sync::OnceCell<Uuid>` that creates **one** project per
-`cargo test` invocation, named `sidecar-ci-fixture-<8-hex>`, and reuses it
-for every later call.
+`tokio::sync::OnceCell<Uuid>` that creates **one** project per `cargo test`
+invocation, named `sidecar-ci-fixture-<8-hex>`, and reuses it for every later
+call.
 
-There is no project-delete endpoint server-side. The accepted trade-off is
-that fixture projects accumulate on the staging server. Tests that need
-write/state isolation (`upload_project_zip_success`,
-`download_project_zip_no_data_returns_no_project_data`) create their own
-fresh project per run rather than touching the shared fixture.
+There is no project-delete endpoint server-side. The accepted trade-off is that
+fixture projects accumulate on the staging server. Tests that need write/state
+isolation (`upload_project_zip_success`,
+`download_project_zip_no_data_returns_no_project_data`) create their own fresh
+project per run rather than touching the shared fixture.
 
 Tests that hold the remote mutex must wrap the critical section with
 `with_acquired_project_mutex(...)` so the lock is released before any panic is
@@ -137,33 +136,32 @@ re-raised to the test harness.
 
 Mutex acquire/release operations on the same project ID would race if run in
 parallel. Every async test in `auth.rs` and `project.rs` carries
-`#[serial_test::serial]` to force in-order execution. This keeps the
-fixture's mutex state predictable and avoids "already locked" false
-positives.
+`#[serial_test::serial]` to force in-order execution. This keeps the fixture's
+mutex state predictable and avoids "already locked" false positives.
 
 ### Skipping cleanly
 
-Tests early-return when `TEST_SPELEODB_INSTANCE` or `TEST_SPELEODB_OAUTH`
-are unset. CI provides them via secrets; local devs ship them via `.env`
-(see [TESTING.md](../TESTING.md)). When those variables are configured, the
-test harness performs one auth preflight before endpoint tests proceed. If the
-host is unreachable or `TEST_SPELEODB_OAUTH` is rejected, the suite fails once
-with a setup-focused preflight message and the remaining real-HTTP tests skip,
-so the output does not look like many endpoint regressions.
+Tests early-return when `TEST_SPELEODB_INSTANCE` or `TEST_SPELEODB_OAUTH` are
+unset. CI provides them via secrets; local devs ship them via `.env` (see
+[TESTING.md](../TESTING.md)). When those variables are configured, the test
+harness performs one auth preflight before endpoint tests proceed. If the host
+is unreachable or `TEST_SPELEODB_OAUTH` is rejected, the suite fails once with a
+setup-focused preflight message and the remaining real-HTTP tests skip, so the
+output does not look like many endpoint regressions.
 
-Tests that additionally need `TEST_SPELEODB_EMAIL`/`TEST_SPELEODB_PASSWORD`
-skip independently when those are unset.
+Tests that additionally need `TEST_SPELEODB_EMAIL`/`TEST_SPELEODB_PASSWORD` skip
+independently when those are unset.
 
 ## Performance implications
 
-- `OnceCell` ensures fixture creation happens at most once per test session
-  (one `create_project` POST instead of dozens).
+- `OnceCell` ensures fixture creation happens at most once per test session (one
+  `create_project` POST instead of dozens).
 - Centralized request execution means all retry/timeout policy lives in one
-  place — adjusting `PROJECT_DOWNLOAD_TIMEOUT` or adding a global retry
-  policy is a one-line change.
+  place — adjusting `PROJECT_DOWNLOAD_TIMEOUT` or adding a global retry policy
+  is a one-line change.
 - Response bodies are streamed once; the helper does not buffer twice. The
-  failure path drains the body via `.text()` only because we need it for
-  the error message.
+  failure path drains the body via `.text()` only because we need it for the
+  error message.
 
 ## Verification commands
 

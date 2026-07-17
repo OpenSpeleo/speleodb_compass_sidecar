@@ -35,9 +35,9 @@ Use the Cargo alias to bump both version files together:
 cargo bump-version 27.6.9
 ```
 
-The command updates root `Cargo.toml` and
-`app/src-tauri/tauri.conf.json`. Date-like input with leading zeroes is accepted
-but normalized to SemVer, so `cargo bump-version 27.06.09` writes `27.6.9`.
+The command updates root `Cargo.toml` and `app/src-tauri/tauri.conf.json`.
+Date-like input with leading zeroes is accepted but normalized to SemVer, so
+`cargo bump-version 27.06.09` writes `27.6.9`.
 
 The startup logger prints `env!("CARGO_PKG_VERSION")` after file logging is
 initialized, so `~/.compass/speleodb_compass*.log` records the running software
@@ -50,8 +50,8 @@ version.
 `[speleodb].version` in local `compass.toml` files created during Compass
 project import.
 
-That value is a metadata/schema marker, not the app release version. Only
-change it when the local `compass.toml` format changes in a way that requires
+That value is a metadata/schema marker, not the app release version. Only change
+it when the local `compass.toml` format changes in a way that requires
 version-aware handling.
 
 ## Verification
