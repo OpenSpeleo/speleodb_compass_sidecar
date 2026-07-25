@@ -386,9 +386,11 @@ packages.
 
 - `ci.yml` - Runs on push/PR to main, executes `make test` on Windows. Uses
   cargo-binstall for trunk/wasm-pack.
-- `publish.yml` - Triggered by git tags, depends on CI passing. Builds for macOS
-  (aarch64) and Windows via `tauri-action`. Creates signed GitHub release with
-  updater artifacts.
+- `publish.yml` - Manually dispatched. Builds for macOS (aarch64) and Windows
+  via `tauri-action`. Creates a signed draft GitHub release with updater
+  artifacts. Keep `GITHUB_TOKEN` scoped to the Trunk install step, preserve
+  `cargo binstall --no-confirm --locked trunk`, and run
+  `cargo test -p xtask --test release_workflow` after release workflow changes.
 - `dependabot.yml` - Automated dependency updates
 
 ## Version Info

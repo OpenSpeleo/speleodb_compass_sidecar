@@ -75,6 +75,8 @@ jobs:
       - uses: cargo-bins/cargo-binstall@v1.21.0
 
       - name: Install trunk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if ! command -v trunk >/dev/null 2>&1; then
             cargo binstall --no-confirm --locked trunk

@@ -74,8 +74,22 @@ The project includes two GitHub Actions workflows:
    - Uses caching for faster Rust and Trunk builds
 
 2. **`.github/workflows/publish.yml`** - Publishes the app
-   - Triggered by the CI workflow when a pushed commit is tagged with `v*`
-   - Creates GitHub releases with built artifacts
+   - Triggered manually with `workflow_dispatch`
+   - Creates draft GitHub releases with macOS and Windows artifacts
+   - Authenticates Trunk artifact lookup and keeps its source fallback locked
+
+### Release Workflow Regression Test
+
+The `xtask` integration test verifies the release-tool authentication,
+deterministic Trunk fallback, and current application/cache paths:
+
+```bash
+cargo test -p xtask --test release_workflow
+```
+
+Run it after changing `.github/workflows/publish.yml`. See
+[`docs/release-workflow.md`](docs/release-workflow.md) for the safeguards and
+historical failure symptoms.
 
 ### Setting Up Secrets
 
@@ -102,18 +116,15 @@ Push to main/master or PR:
   │  ├─ Run `make test-rust test-ui-ci`
   │  └─ Report results
 
-Push to main/master with tags:
-  ├─ CI Tests workflow runs first
-  ├─ If tests pass ✓
-  │  └─ Publish workflow runs
-  │     └─ Build and release artifacts
-  └─ If tests fail ✗
-     └─ Publish workflow is skipped
+Manual release dispatch:
+  └─ Publish workflow builds macOS and Windows artifacts
+     └─ Creates or updates a draft GitHub release
 ```
 
 ### Manual Workflow Dispatch
 
-You can also manually trigger the CI workflow from the Actions tab in GitHub.
+You can manually trigger the CI or Release workflow from the Actions tab in
+GitHub.
 
 ## How It Works
 
