@@ -22,7 +22,7 @@ reqwest = { version = "0.13.4", features = ["json", "rustls", "multipart"] }
 # tokio is only used by tests (#[tokio::test], tokio::sync::OnceCell in
 # test_support); the library itself does not depend on it.
 tokio.workspace = true
-serial_test = "3"
+serial_test = "4"
 dotenvy = "0.15"
 ctor = "1.0"
 tempfile = "3"

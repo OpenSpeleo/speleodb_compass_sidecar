@@ -48,7 +48,7 @@ lint-clippy:
 # ============================================================================ #
 
 # Default: Test EVERYTHING (lint + Rust + WASM UI)
-test: test-rust test-ui test-tauri
+test: test-rust test-tauri test-common test-ui
 
 # Run standard Rust tests (backend + common crate)
 test-rust:
@@ -106,7 +106,16 @@ build-ui:
 setup:
 	cargo install --locked cargo-binstall
 	cargo binstall --locked prek
+	cargo binstall --locked cargo-outdated
 
 dev:
 	cd app && \
 	cargo tauri dev
+
+update:
+	cargo update --manifest-path "Cargo.toml"
+	cargo update --manifest-path "api/Cargo.toml"
+	cargo update --manifest-path "app/Cargo.toml"
+	cargo update --manifest-path "common/Cargo.toml"
+	cargo update --manifest-path "xtask/Cargo.toml"
+	cargo outdated --depth 1

@@ -30,10 +30,10 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: lts/*
 
@@ -43,7 +43,7 @@ jobs:
           targets: wasm32-unknown-unknown
 
       - name: Cache cargo tools
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/cargo-binstall*
@@ -63,7 +63,7 @@ jobs:
       # Cache cargo binaries (tauri-cli and trunk) - this saves ~25 minutes
       # Cache Trunk frontend build artifacts
       - name: Cache Trunk build
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             app/dist
@@ -72,7 +72,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-trunk-test-
 
-      - uses: cargo-bins/cargo-binstall@v1.20.0
+      - uses: cargo-bins/cargo-binstall@v1.21.0
 
       - name: Install trunk
         run: |
@@ -80,7 +80,7 @@ jobs:
             cargo binstall --no-confirm --locked trunk
           fi
 
-      - uses: tauri-apps/tauri-action@action-v0.6.2
+      - uses: tauri-apps/tauri-action@action-v1.0.0
         env:
           TRUNK_BUILD_RELEASE: "true"
           SENTRY_DSN_SPELEODB_COMPASS: ${{ secrets.SENTRY_DSN_SPELEODB_COMPASS }}

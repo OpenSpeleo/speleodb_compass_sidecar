@@ -24,7 +24,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install Tauri system dependencies
         run: |
@@ -37,7 +37,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache cargo tools
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/cargo-binstall*
@@ -48,7 +48,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-lint-cargo-tools-
 
-      - uses: cargo-bins/cargo-binstall@v1.20.0
+      - uses: cargo-bins/cargo-binstall@v1.21.0
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -93,10 +93,10 @@ jobs:
     needs: [lint]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: lts/*
 
@@ -106,7 +106,7 @@ jobs:
           targets: wasm32-unknown-unknown
 
       - name: Cache cargo tools
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/cargo-binstall*
@@ -120,7 +120,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-wasm-cargo-tools-
 
-      - uses: cargo-bins/cargo-binstall@v1.20.0
+      - uses: cargo-bins/cargo-binstall@v1.21.0
 
       - name: Install WASM test tools
         run: |
@@ -166,7 +166,7 @@ jobs:
 
       # Cache Trunk frontend build artifacts
       - name: Cache Trunk build
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             app/dist
@@ -199,7 +199,7 @@ jobs:
       actions: write
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
