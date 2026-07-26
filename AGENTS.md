@@ -237,15 +237,19 @@ serde_json, thiserror, tokio, toml, url, uuid.
 **Backend (app/src-tauri/src/)**
 
 - `lib.rs` - Tauri app setup: plugins (updater, dialog), command registration,
-  window close prevention if Compass is open, menu with sign-out, Sentry init
+  window close prevention if Compass is open, native menu event dispatch, Sentry
+  init
+- `macos_menu.rs` - macOS-only cleanup for operating-system menu items injected
+  alongside the application-owned native actions
 - `commands.rs` - Tauri commands: `about_info`, `auth_request`,
   `clear_active_project`, `create_project`, `discard_changes`,
   `ensure_initialized`, `import_compass_project`, `open_project`,
   `pick_compass_project_file`, `reimport_compass_project`,
   `release_project_mutex`, `save_project`, `set_active_project`, `sign_out`
 - `state.rs` - `AppState` with Mutex-protected fields (api_info, project_info
-  HashMap, active_project, compass_pid, loading_state), background task,
-  `emit_app_state_change()` to push `UiState` to frontend via `UI_STATE_EVENT`
+  HashMap, active_project, compass_pid, loading_state), unified desktop menu
+  layout, background task, `emit_app_state_change()` to push `UiState` to
+  frontend via `UI_STATE_EVENT`
 - `paths.rs` - Path constants and helpers: `~/.compass/` home dir,
   `~/.compass/projects/{uuid}/index` and `working_copy` layout, file logger
   setup

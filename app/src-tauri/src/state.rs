@@ -30,92 +30,76 @@ const PROJECT_INFO_UPDATE_INTERVAL: Duration = Duration::from_secs(120); // upda
 /// Event key for UI state notifications
 pub const UI_STATE_EVENT: &str = "ui-state-update";
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum AppMenuSection {
-    Application,
-    Account,
-    Edit,
-    Help,
-}
+pub(crate) const APP_MENU_TITLE: &str = "SpeleoDB Compass Sidecar";
+pub(crate) const ABOUT_MENU_ID: &str = "about";
+pub(crate) const CHECK_FOR_UPDATES_MENU_ID: &str = "check_for_updates_now";
+pub(crate) const SIGN_OUT_MENU_ID: &str = "sign_out";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum EditMenuAction {
+enum AppMenuItem {
+    About,
+    CheckForUpdates,
+    Separator,
+    SignOut,
     Cut,
     Copy,
     Paste,
     SelectAll,
+    Quit,
 }
 
-const EDIT_MENU_ACTIONS: [EditMenuAction; 4] = [
-    EditMenuAction::Cut,
-    EditMenuAction::Copy,
-    EditMenuAction::Paste,
-    EditMenuAction::SelectAll,
-];
+#[derive(Debug, Eq, PartialEq)]
+struct AppMenuLayout {
+    title: &'static str,
+    items: Vec<AppMenuItem>,
+}
 
-fn app_menu_sections(has_token: bool) -> Vec<AppMenuSection> {
+fn app_menu_layout(has_token: bool) -> AppMenuLayout {
+    let mut items = vec![
+        AppMenuItem::About,
+        AppMenuItem::CheckForUpdates,
+        AppMenuItem::Separator,
+    ];
     if has_token {
-        vec![
-            AppMenuSection::Application,
-            AppMenuSection::Account,
-            AppMenuSection::Edit,
-            AppMenuSection::Help,
-        ]
-    } else {
-        vec![
-            AppMenuSection::Application,
-            AppMenuSection::Edit,
-            AppMenuSection::Help,
-        ]
+        items.extend([AppMenuItem::SignOut, AppMenuItem::Separator]);
+    }
+    items.extend([
+        AppMenuItem::Cut,
+        AppMenuItem::Copy,
+        AppMenuItem::Paste,
+        AppMenuItem::SelectAll,
+        AppMenuItem::Separator,
+        AppMenuItem::Quit,
+    ]);
+
+    AppMenuLayout {
+        title: APP_MENU_TITLE,
+        items,
     }
 }
 
-fn build_application_submenu<R, M>(manager: &M) -> tauri::Result<Submenu<R>>
+fn build_application_submenu<R, M>(manager: &M, layout: AppMenuLayout) -> tauri::Result<Submenu<R>>
 where
     R: Runtime,
     M: Manager<R>,
 {
-    SubmenuBuilder::new(manager, "SpeleoDB Compass Sidecar")
-        .quit()
-        .build()
-}
-
-fn build_account_submenu<R, M>(manager: &M) -> tauri::Result<Submenu<R>>
-where
-    R: Runtime,
-    M: Manager<R>,
-{
-    SubmenuBuilder::new(manager, "Account")
-        .text("sign_out", "Sign Out")
-        .build()
-}
-
-fn build_edit_submenu<R, M>(manager: &M) -> tauri::Result<Submenu<R>>
-where
-    R: Runtime,
-    M: Manager<R>,
-{
-    let mut builder = SubmenuBuilder::new(manager, "Edit");
-    for action in EDIT_MENU_ACTIONS {
-        builder = match action {
-            EditMenuAction::Cut => builder.cut(),
-            EditMenuAction::Copy => builder.copy(),
-            EditMenuAction::Paste => builder.paste(),
-            EditMenuAction::SelectAll => builder.select_all(),
+    let mut builder = SubmenuBuilder::new(manager, layout.title);
+    for item in layout.items {
+        builder = match item {
+            AppMenuItem::About => builder.text(ABOUT_MENU_ID, "About"),
+            AppMenuItem::CheckForUpdates => {
+                builder.text(CHECK_FOR_UPDATES_MENU_ID, "Check For Updates Now")
+            }
+            AppMenuItem::Separator => builder.separator(),
+            AppMenuItem::SignOut => builder.text(SIGN_OUT_MENU_ID, "Sign Out"),
+            AppMenuItem::Cut => builder.cut(),
+            AppMenuItem::Copy => builder.copy(),
+            AppMenuItem::Paste => builder.paste(),
+            AppMenuItem::SelectAll => builder.select_all(),
+            AppMenuItem::Quit => builder.quit(),
         };
     }
     builder.build()
-}
-
-fn build_help_submenu<R, M>(manager: &M) -> tauri::Result<Submenu<R>>
-where
-    R: Runtime,
-    M: Manager<R>,
-{
-    SubmenuBuilder::new(manager, "Help")
-        .text("check_for_updates_now", "Check for Updates Now")
-        .text("about", "About")
-        .build()
 }
 
 fn build_app_menu<R, M>(manager: &M, has_token: bool) -> tauri::Result<Menu<R>>
@@ -123,30 +107,8 @@ where
     R: Runtime,
     M: Manager<R>,
 {
-    let mut builder = MenuBuilder::new(manager);
-
-    for section in app_menu_sections(has_token) {
-        match section {
-            AppMenuSection::Application => {
-                let submenu = build_application_submenu(manager)?;
-                builder = builder.item(&submenu);
-            }
-            AppMenuSection::Account => {
-                let submenu = build_account_submenu(manager)?;
-                builder = builder.item(&submenu);
-            }
-            AppMenuSection::Edit => {
-                let submenu = build_edit_submenu(manager)?;
-                builder = builder.item(&submenu);
-            }
-            AppMenuSection::Help => {
-                let submenu = build_help_submenu(manager)?;
-                builder = builder.item(&submenu);
-            }
-        }
-    }
-
-    builder.build()
+    let submenu = build_application_submenu(manager, app_menu_layout(has_token))?;
+    MenuBuilder::new(manager).item(&submenu).build()
 }
 
 pub struct AppState {
@@ -309,7 +271,10 @@ impl AppState {
         };
         if let Err(e) = app_handle.set_menu(menu) {
             error!("Failed to set application menu: {}", e);
+            return;
         }
+        #[cfg(target_os = "macos")]
+        crate::macos_menu::remove_automatic_text_items(&app_handle);
     }
 
     pub async fn authenticated(&self) -> () {
@@ -826,43 +791,70 @@ impl AppState {
 
 #[cfg(test)]
 mod tests {
-    use super::{AppMenuSection, EDIT_MENU_ACTIONS, EditMenuAction, app_menu_sections};
+    use super::{APP_MENU_TITLE, AppMenuItem, AppMenuLayout, app_menu_layout};
 
     #[test]
-    fn unauthenticated_menu_keeps_quit_edit_and_help_actions() {
+    fn application_menu_title_is_space_separated_title_case() {
+        assert_eq!(APP_MENU_TITLE, "SpeleoDB Compass Sidecar");
+        assert!(!APP_MENU_TITLE.contains('-'));
+    }
+
+    #[test]
+    fn unauthenticated_menu_is_one_flat_application_menu() {
         assert_eq!(
-            app_menu_sections(false),
-            vec![
-                AppMenuSection::Application,
-                AppMenuSection::Edit,
-                AppMenuSection::Help
-            ]
+            app_menu_layout(false),
+            AppMenuLayout {
+                title: APP_MENU_TITLE,
+                items: vec![
+                    AppMenuItem::About,
+                    AppMenuItem::CheckForUpdates,
+                    AppMenuItem::Separator,
+                    AppMenuItem::Cut,
+                    AppMenuItem::Copy,
+                    AppMenuItem::Paste,
+                    AppMenuItem::SelectAll,
+                    AppMenuItem::Separator,
+                    AppMenuItem::Quit,
+                ],
+            }
         );
     }
 
     #[test]
-    fn authenticated_menu_keeps_quit_account_edit_and_help_actions() {
+    fn authenticated_menu_adds_only_the_sign_out_group() {
         assert_eq!(
-            app_menu_sections(true),
-            vec![
-                AppMenuSection::Application,
-                AppMenuSection::Account,
-                AppMenuSection::Edit,
-                AppMenuSection::Help
-            ]
+            app_menu_layout(true),
+            AppMenuLayout {
+                title: APP_MENU_TITLE,
+                items: vec![
+                    AppMenuItem::About,
+                    AppMenuItem::CheckForUpdates,
+                    AppMenuItem::Separator,
+                    AppMenuItem::SignOut,
+                    AppMenuItem::Separator,
+                    AppMenuItem::Cut,
+                    AppMenuItem::Copy,
+                    AppMenuItem::Paste,
+                    AppMenuItem::SelectAll,
+                    AppMenuItem::Separator,
+                    AppMenuItem::Quit,
+                ],
+            }
         );
     }
 
     #[test]
-    fn edit_menu_contains_standard_clipboard_actions() {
-        assert_eq!(
-            EDIT_MENU_ACTIONS,
-            [
-                EditMenuAction::Cut,
-                EditMenuAction::Copy,
-                EditMenuAction::Paste,
-                EditMenuAction::SelectAll
-            ]
-        );
+    fn menu_layouts_never_have_empty_or_adjacent_groups() {
+        for has_token in [false, true] {
+            let layout = app_menu_layout(has_token);
+            assert_ne!(layout.items.first(), Some(&AppMenuItem::Separator));
+            assert_ne!(layout.items.last(), Some(&AppMenuItem::Separator));
+            assert!(
+                !layout
+                    .items
+                    .windows(2)
+                    .any(|items| items == [AppMenuItem::Separator, AppMenuItem::Separator])
+            );
+        }
     }
 }

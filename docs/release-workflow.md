@@ -6,8 +6,8 @@ Apple Silicon macOS and Windows, then creates a draft GitHub release.
 
 ## Release tool bootstrap safeguards
 
-The workflow installs Trunk with `cargo-binstall` before running
-`tauri-action`. Preserve all of these safeguards:
+The workflow installs Trunk with `cargo-binstall` before running `tauri-action`.
+Preserve all of these safeguards:
 
 - The `Install trunk` step receives `GITHUB_TOKEN`. `cargo-binstall` queries the
   GitHub API while looking for a prebuilt Trunk archive, and unauthenticated
@@ -37,9 +37,9 @@ without its lockfile. The fresh resolution combined `lightningcss`
 1.0.0-alpha.65 with incompatible `cssparser` versions selected through
 `parcel_selectors`, causing 61 Rust type and trait errors.
 
-The same log also reported that a top-level `src-tauri` directory did not
-exist. That message came from a stale cache workspace and was not the fatal
-error, but the cache configuration has since been corrected.
+The same log also reported that a top-level `src-tauri` directory did not exist.
+That message came from a stale cache workspace and was not the fatal error, but
+the cache configuration has since been corrected.
 
 If this failure returns, check the `Install trunk` step first:
 

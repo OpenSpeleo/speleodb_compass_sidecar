@@ -30,7 +30,7 @@ the two concerns:
 `Downloading` phase silences every percent update for that workflow but a later
 `Installing` or `Failed` phase can still reappear.
 
-A new manual `Check for Updates Now` always allocates a fresh `id`, which
+A new manual `Check For Updates Now` always allocates a fresh `id`, which
 guarantees dismissal of an older workflow's `Failed` notification cannot
 suppress the retry's UI.
 
@@ -56,9 +56,9 @@ manual check so the user always sees feedback.
 Update checks have one of two origins:
 
 - `Startup` — automatic; a no-update outcome silently clears the toast.
-- `Manual` — invoked from `Help → Check for Updates Now` (or the failure toast's
-  `Retry` button); a no-update outcome shows `<AppName> is up to date.` for ~4s
-  before auto-clearing.
+- `Manual` — invoked from `SpeleoDB Compass Sidecar → Check For Updates Now` (or
+  the failure toast's `Retry` button); a no-update outcome shows
+  `<AppName> is up to date.` for ~4s before auto-clearing.
 
 If a manual click arrives while a `Startup` workflow is in flight,
 `pending_manual_update_check` is set. The running workflow consumes the flag in

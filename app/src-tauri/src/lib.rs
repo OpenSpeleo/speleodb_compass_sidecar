@@ -1,4 +1,6 @@
 mod commands;
+#[cfg(target_os = "macos")]
+mod macos_menu;
 mod paths;
 mod project_management;
 mod self_update;
@@ -13,7 +15,7 @@ use crate::{
         release_project_mutex, report_frontend_error, save_project, set_active_project, sign_out,
     },
     paths::{compass_home, ensure_app_dir_exists, init_file_logger},
-    state::AppState,
+    state::{ABOUT_MENU_ID, AppState, CHECK_FOR_UPDATES_MENU_ID, SIGN_OUT_MENU_ID},
 };
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
@@ -38,6 +40,12 @@ fn emit_sentry_verification_event() {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // AppKit reads these defaults while constructing its native menu. Setting
+    // them before Tauri starts prevents macOS from injecting unrelated text
+    // tools next to the predefined clipboard roles.
+    #[cfg(target_os = "macos")]
+    macos_menu::disable_automatic_text_items();
+
     // Ensure the hidden application directory exists in the user's home directory.
     if let Err(e) = ensure_app_dir_exists() {
         eprintln!(
@@ -93,12 +101,12 @@ pub fn run() {
         .manage(AppState::new())
         .setup(|app| {
             app.on_menu_event(move |app_handle, event| match event.id().0.as_str() {
-                "sign_out" => {
+                SIGN_OUT_MENU_ID => {
                     log::info!("Sign out menu item clicked");
                     let app_state = app_handle.state::<AppState>();
                     app_state.sign_out(app_handle).ok();
                 }
-                "about" => {
+                ABOUT_MENU_ID => {
                     log::info!("About menu item clicked");
                     if let Some(window) = app_handle.get_webview_window("about") {
                         window.set_focus().ok();
@@ -115,7 +123,7 @@ pub fn run() {
                         .ok();
                     }
                 }
-                "check_for_updates_now" => {
+                CHECK_FOR_UPDATES_MENU_ID => {
                     log::info!("Check for updates menu item clicked");
                     AppState::start_manual_update_check(app_handle);
                 }
