@@ -407,8 +407,9 @@ packages.
 - `publish.yml` - Manually dispatched. Builds for macOS (aarch64) and Windows
   via `tauri-action`. Creates a signed draft GitHub release with updater
   artifacts. Keep `GITHUB_TOKEN` scoped to the Trunk install step, preserve
-  `cargo binstall --no-confirm --locked trunk`, and run
-  `cargo test -p xtask --test release_workflow` after release workflow changes.
+  `cargo binstall --no-confirm --force --locked trunk`, run its portable guard
+  with `shell: bash`, and run `cargo test -p xtask --test release_workflow`
+  after release workflow changes.
 - `dependabot.yml` - Automated dependency updates
 
 ## Version Info

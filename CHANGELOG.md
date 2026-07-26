@@ -50,6 +50,7 @@
 - Added caching for Cargo tools, Trunk, wasm-pack, wasm-bindgen, and prek.
 - Corrected Trunk cache paths and cache invalidation inputs.
 - Avoided reinstalling cached tools when compatible binaries already exist.
+- Made workflow regression tests reliable on Windows CRLF checkouts.
 - Pinned cargo-binstall Actions usage instead of tracking its moving main
   branch.
 - Expanded Dependabot coverage to every Cargo package in the workspace.

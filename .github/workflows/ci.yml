@@ -122,11 +122,14 @@ jobs:
 
       - uses: cargo-bins/cargo-binstall@v1.21.0
 
+      # `--force` repairs the same metadata-vs-binary cache skew documented for
+      # prek above: `.crates2.json` can claim wasm-pack is installed even when
+      # the separately cached executable is missing.
       - name: Install WASM test tools
         run: |
           WASM_BINDGEN_VERSION="$(cargo pkgid -p wasm-bindgen | sed 's/.*@//')"
           if ! command -v wasm-pack >/dev/null 2>&1; then
-            cargo binstall --no-confirm --locked wasm-pack
+            cargo binstall --no-confirm --force --locked wasm-pack
           fi
           if ! command -v wasm-bindgen >/dev/null 2>&1 || [ "$(wasm-bindgen --version | awk '{print $2}')" != "${WASM_BINDGEN_VERSION}" ]; then
             cargo binstall --no-confirm --force --locked "wasm-bindgen-cli@${WASM_BINDGEN_VERSION}"

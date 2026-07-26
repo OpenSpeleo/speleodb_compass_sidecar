@@ -74,13 +74,17 @@ jobs:
 
       - uses: cargo-bins/cargo-binstall@v1.21.0
 
+      # `--force` repairs Cargo install metadata restored without the matching
+      # executable. Without it, cargo-binstall reports Trunk as installed but
+      # the following Tauri build fails to run `trunk`.
       - name: Install trunk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if ! command -v trunk >/dev/null 2>&1; then
-            cargo binstall --no-confirm --locked trunk
+            cargo binstall --no-confirm --force --locked trunk
           fi
+        shell: bash
 
       - uses: tauri-apps/tauri-action@action-v1.0.0
         env:
