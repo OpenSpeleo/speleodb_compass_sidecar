@@ -271,10 +271,10 @@ impl AppState {
         };
         if let Err(e) = app_handle.set_menu(menu) {
             error!("Failed to set application menu: {}", e);
-            return;
+        } else {
+            #[cfg(target_os = "macos")]
+            crate::macos_menu::remove_automatic_text_items(&app_handle);
         }
-        #[cfg(target_os = "macos")]
-        crate::macos_menu::remove_automatic_text_items(&app_handle);
     }
 
     pub async fn authenticated(&self) -> () {

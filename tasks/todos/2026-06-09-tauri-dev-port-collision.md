@@ -15,3 +15,8 @@
 - Documented the fixed-port development workflow in `docs/tauri-dev.md`.
 - Verified with `cargo test -p xtask` and `make lint`.
 - Cleared the stale local `trunk` process that was listening on port `1420`.
+
+## Windows warning follow-up
+
+- [x] Compile the `lsof` parser and its focused test only on Unix.
+- [x] Verify formatting and the focused `xtask` test suite.

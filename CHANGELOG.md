@@ -25,6 +25,8 @@
   version.
 - Added a development-server preflight that detects stale Trunk processes on
   port 1420.
+- Removed a Windows `xtask` dead-code warning by compiling the Unix listener
+  parser only on Unix.
 - Improved integration-test diagnostics for unreachable servers and invalid
   OAuth credentials.
 - Isolated backend test data from the user’s real ~/.compass directory.

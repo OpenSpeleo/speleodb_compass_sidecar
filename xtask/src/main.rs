@@ -242,6 +242,7 @@ fn terminate_process(pid: u32) -> Result<(), String> {
     exit_status_result(force_status, &format!("taskkill /PID {pid} /T /F"))
 }
 
+#[cfg(unix)]
 fn parse_lsof_listeners(output: &str) -> Vec<PortListener> {
     let mut listeners = BTreeMap::new();
     for line in output.lines().skip(1) {
@@ -417,9 +418,11 @@ fn replace_json_version(input: &str, version: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_trunk_process, normalize_semver, parse_lsof_listeners, replace_json_version,
-        replace_workspace_package_version,
+        is_trunk_process, normalize_semver, replace_json_version, replace_workspace_package_version,
     };
+
+    #[cfg(unix)]
+    use super::parse_lsof_listeners;
 
     #[cfg(windows)]
     use super::{parse_netstat_listener_pids, parse_tasklist_process_name};
@@ -466,6 +469,7 @@ mod tests {
         assert!(!is_trunk_process("trunk-helper"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn parse_lsof_listeners_deduplicates_ipv4_and_ipv6_rows() {
         let input = "\
