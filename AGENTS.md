@@ -122,6 +122,20 @@ the impacted topic:
 
 Do not only document "what changed"; include "why this architecture exists".
 
+## Changelog Maintenance
+
+Keep the `## [Unreleased]` section of `CHANGELOG.md` current throughout
+development. Every change worth mentioning in the next release—including
+user-facing behavior, bug fixes, dependencies, developer tooling, CI/release
+work, and significant documentation changes—must add or update a concise bullet
+under the appropriate heading in the same change. Do not defer changelog updates
+until release preparation.
+
+When cutting a release, move the accumulated entries into the new version
+section and restore an empty `## [Unreleased]` section for subsequent work.
+Preserve previously released sections except when correcting an historical
+error.
+
 ## Performance and Regression Checklist
 
 Before finishing map viewer work, check:
