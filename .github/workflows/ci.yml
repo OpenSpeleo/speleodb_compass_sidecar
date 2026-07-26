@@ -48,7 +48,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-lint-cargo-tools-
 
-      - uses: cargo-bins/cargo-binstall@v1.21.0
+      - uses: cargo-bins/cargo-binstall@v1.21.1
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -120,7 +120,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-wasm-cargo-tools-
 
-      - uses: cargo-bins/cargo-binstall@v1.21.0
+      - uses: cargo-bins/cargo-binstall@v1.21.1
 
       # `--force` repairs the same metadata-vs-binary cache skew documented for
       # prek above: `.crates2.json` can claim wasm-pack is installed even when
