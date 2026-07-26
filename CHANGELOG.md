@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## v26.7.26
+
 ### User-facing fixes
 
 - Fixed the About window showing the hard-coded version v1.0.0.
