@@ -3,7 +3,7 @@
 ## Diagnosis
 
 - [x] Compare the failing runner SHA with the standalone repository's remote
-      `main` SHA.
+      `master` SHA.
 - [x] Confirm the committed publish workflow contains the expected
       `GITHUB_TOKEN` declaration.
 - [x] Reproduce the false failure by evaluating the workflow helper with CRLF
@@ -25,7 +25,7 @@
 
 ## Review
 
-The failing Windows runner checked out the current standalone `main` commit
+The failing Windows runner checked out the current standalone `master` commit
 `0692afe3`, and that commit's publish workflow already contained the expected
 step-scoped `GITHUB_TOKEN`. The failure was therefore not caused by a stale
 checkout or cache.
@@ -39,7 +39,7 @@ LF and CRLF input and confirms the following step is excluded.
 
 Final verification:
 
-- Remote `main`: `0692afe38cccb4e69b0b9e45cf5d7c8243cf0368`, matching the CI log
+- Remote `master`: `0692afe38cccb4e69b0b9e45cf5d7c8243cf0368`, matching the CI log
 - CRLF reproduction before the fix: token assertion false
 - `cargo test -p xtask --test release_workflow`: 4 passed
 - `cargo test -p xtask`: 11 passed

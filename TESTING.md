@@ -110,7 +110,7 @@ may fail if they require real API access).
 ### Workflow Behavior
 
 ```
-Push to main/master or PR:
+Push to master or PR:
   ├─ CI Tests workflow runs automatically
   │  ├─ Setup environment (Node, Rust, wasm-pack, wasm-bindgen-cli)
   │  ├─ Run `make test-rust test-ui-ci`

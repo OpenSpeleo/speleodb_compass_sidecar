@@ -67,7 +67,7 @@ editing.
 ### 4. Verification Before Done
 
 - Never mark a task complete without proving it works
-- Diff behavior between main and your changes when relevant
+- Diff behavior between master and your changes when relevant
 - Ask yourself: "Would a staff engineer approve this?"
 - Run tests, check logs, demonstrate correctness
 
@@ -402,7 +402,7 @@ packages.
 
 ## CI/CD
 
-- `ci.yml` - Runs on push/PR to main, executes `make test` on Windows. Uses
+- `ci.yml` - Runs on push/PR to master, executes `make test` on Windows. Uses
   cargo-binstall for trunk/wasm-pack.
 - `publish.yml` - Manually dispatched. Builds for macOS (aarch64) and Windows
   via `tauri-action`. Creates a signed draft GitHub release with updater
