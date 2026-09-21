@@ -39,7 +39,8 @@ LF and CRLF input and confirms the following step is excluded.
 
 Final verification:
 
-- Remote `master`: `0692afe38cccb4e69b0b9e45cf5d7c8243cf0368`, matching the CI log
+- Remote `master`: `0692afe38cccb4e69b0b9e45cf5d7c8243cf0368`, matching the CI
+  log
 - CRLF reproduction before the fix: token assertion false
 - `cargo test -p xtask --test release_workflow`: 4 passed
 - `cargo test -p xtask`: 11 passed
