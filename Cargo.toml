@@ -4,7 +4,7 @@ members = ["api","app","app/src-tauri", "common", "xtask"]
 default-members = ["api","app/src-tauri", "common"]
 
 [workspace.package]
-version = "26.9.22"
+version = "26.9.23"
 
 [workspace.dependencies]
 bytes = "1"

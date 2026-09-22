@@ -215,7 +215,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "api"
-version = "26.9.22"
+version = "26.9.23"
 dependencies = [
  "bytes",
  "common",
@@ -699,7 +699,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "26.9.22"
+version = "26.9.23"
 dependencies = [
  "bytes",
  "ctor 1.0.13",
@@ -4936,7 +4936,7 @@ dependencies = [
 
 [[package]]
 name = "speleodb-compass-sidecar"
-version = "26.9.22"
+version = "26.9.23"
 dependencies = [
  "api",
  "bytes",
@@ -4974,7 +4974,7 @@ dependencies = [
 
 [[package]]
 name = "speleodb-compass-sidecar-ui"
-version = "26.9.22"
+version = "26.9.23"
 dependencies = [
  "common",
  "console_error_panic_hook",
@@ -7149,7 +7149,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "26.9.22"
+version = "26.9.23"
 dependencies = [
  "serde_json",
  "toml 1.1.6+spec-1.1.0",

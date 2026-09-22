@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## v26.9.23
+
 ### Dependencies
 
 - Fix compilation with Sentry 0.49 by using the `ClientOptions` builder API.
