@@ -29,14 +29,32 @@ editing.
 - **Tests are cheap**: Every behavior should be tested. Untested code is broken
   code.
 
+## Temporary agent files
+
+Keep agent plans, task lists, TODO tracking, progress notes, review notes, and
+scratch lessons outside the repository tree, including all submodules. Use a
+unique task directory under `/tmp/` (for example, create one with
+`mktemp -d /tmp/speleodb-task.XXXXXX`) or another OS temporary directory whose
+resolved path is outside every checkout.
+
+Never create or update these working files inside the checkout, even in ignored
+directories such as `tasks/`, `todos/`, or `plans/`. Never stage or commit them.
+Existing tracked task and lesson files are historical references; do not append
+new work to them. Keep durable product and architecture documentation in
+`docs/`, without embedding task checklists or linking to temporary files. Before
+an authorized commit, inspect the staged filenames and exclude all agent working
+files.
+
 ## Task Management
 
-1. **Plan First**: Write plan to `tasks/todos/` with checkable items
+1. **Plan First**: Write `plan.md` in the external temporary task directory with
+   checkable items
 2. **Verify Plan**: Check in before starting implementation
 3. **Track Progress**: Mark items complete as you go
 4. **Explain Changes**: High-level summary at each step
-5. **Document Results**: Add review section to tasks/todo.md"
-6. **Capture Lessons**: Update `tasks/lessons/` after corrections
+5. **Document Results**: Add a review section to that temporary `plan.md`
+6. **Capture Lessons**: Update `lessons.md` in the external temporary task
+   directory after corrections
 7. **Documentation is Key**: Document each feature and design inside `docs/`.
    What is the feature being implemented, the design space and intents and a
    rapid summary of the approach taken with key APIs & concepts.
@@ -59,7 +77,8 @@ editing.
 
 ### 3. Self-Improvement Loop
 
-- After ANY correction from the user: update `tasks/lessons/` with the pattern
+- After ANY correction from the user: record the pattern in `lessons.md` in the
+  external temporary task directory
 - Write rules for yourself that prevent the same mistake
 - Ruthlessly iterate on these lessons until mistake rate drops
 - Review lessons at session start for relevant project
