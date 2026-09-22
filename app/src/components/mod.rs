@@ -1,5 +1,6 @@
 pub mod auth_screen;
 pub mod create_project_modal;
+pub mod import_selector;
 pub mod loading_screen;
 pub mod main_layout;
 pub mod modal;

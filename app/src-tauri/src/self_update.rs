@@ -331,6 +331,23 @@ impl AppState {
         }
     }
 
+    async fn begin_update_installation(
+        &self,
+        id: u64,
+        version: String,
+    ) -> tokio::sync::MutexGuard<'_, ()> {
+        // Windows installation exits the process directly, bypassing the
+        // normal close guard. Keep the project gate through installation and
+        // restart so neither an import nor a save can be interrupted.
+        let operation = self.project_operations.lock().await;
+        self.publish_update_notification(Some(UpdateNotification::new(
+            id,
+            UpdateNotificationPhase::Installing { version },
+        )))
+        .await;
+        operation
+    }
+
     async fn run_update_check_inner(
         &self,
         app_handle: AppHandle,
@@ -444,13 +461,7 @@ impl AppState {
             .await
             .map_err(|e| e.to_string())?;
 
-        self.publish_update_notification(Some(UpdateNotification::new(
-            id,
-            UpdateNotificationPhase::Installing {
-                version: version.clone(),
-            },
-        )))
-        .await;
+        let _operation = self.begin_update_installation(id, version.clone()).await;
 
         // On Windows, `update.install` extracts and launches the bundled
         // installer, then calls `std::process::exit(0)` from inside the
@@ -586,6 +597,33 @@ mod tests {
                 version: "0.2.0".to_string(),
             },
         )
+    }
+
+    #[tokio::test]
+    async fn update_installation_waits_for_import_and_blocks_new_project_work() {
+        use std::{future::Future, task::Poll};
+
+        let state = AppState::new();
+        let import = state.try_project_operation().unwrap();
+        let mut installation = Box::pin(state.begin_update_installation(1, "0.2.0".into()));
+        std::future::poll_fn(|context| {
+            assert!(installation.as_mut().poll(context).is_pending());
+            Poll::Ready(())
+        })
+        .await;
+        assert!(state.update_notification.lock().unwrap().is_none());
+
+        drop(import);
+        let installation = installation.await;
+        assert_eq!(
+            *state.update_notification.lock().unwrap(),
+            Some(installing_notification(1))
+        );
+        assert!(state.try_project_operation().is_err());
+
+        // An installer failure drops the guard and allows normal recovery.
+        drop(installation);
+        assert!(state.try_project_operation().is_ok());
     }
 
     #[test]

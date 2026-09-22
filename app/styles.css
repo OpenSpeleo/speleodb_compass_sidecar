@@ -388,3 +388,553 @@ button:active {
 #greet-input {
     margin-right: 5px;
 }
+
+/* The initial-import dialog is a native modal, with an independently scrolling
+ * section list. Its header and confirmation stay visible at desktop zoom. */
+.import-selector {
+    width: min(680px, calc(100vw - 40px));
+    max-width: none;
+    max-height: calc(100dvh - 48px);
+    margin: auto;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-radius: 22px;
+    background: #fff;
+    color: #17263d;
+    box-shadow: 0 28px 90px rgba(2, 12, 32, 0.28);
+    text-align: left;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-top: 12px;
+    scroll-padding-bottom: 100px;
+    box-sizing: border-box;
+}
+
+.import-selector[open] {
+    display: flex;
+    flex-direction: column;
+    animation: import-selector-appear 160ms ease-out;
+}
+
+.import-selector::backdrop {
+    background: rgba(10, 20, 39, 0.52);
+    backdrop-filter: blur(4px);
+}
+
+.import-selector__header {
+    padding: 26px 28px 18px;
+    flex-shrink: 0;
+}
+
+.import-selector__eyebrow {
+    margin-bottom: 9px;
+    color: #546d96;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.16em;
+    line-height: 14px;
+}
+
+.import-selector h2 {
+    margin: 0 0 9px;
+    font-size: 25px;
+    font-weight: 650;
+    letter-spacing: -0.04em;
+    line-height: 1.2;
+}
+
+.import-selector h2:focus {
+    outline: none;
+}
+
+.import-selector__header > p {
+    margin: 0;
+    color: #59697e;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.import-selector__source {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 18px;
+    padding: 11px 13px;
+    border: 1px solid #e7ecf4;
+    border-radius: 11px;
+    background: #f8fafd;
+}
+
+.import-selector__source > div {
+    flex: 1;
+    min-width: 0;
+}
+
+.import-selector__source strong,
+.import-selector__source div > span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 20px;
+}
+
+.import-selector__source strong {
+    font-size: 13px;
+    font-weight: 650;
+}
+
+.import-selector__source div > span {
+    color: #617087;
+    font-size: 11px;
+}
+
+.import-selector__file-icon {
+    display: grid;
+    width: 32px;
+    height: 36px;
+    place-items: center;
+    border: 1px solid #d8e2f1;
+    border-radius: 7px;
+    background: white;
+    color: #426598;
+    font-size: 22px;
+}
+
+.import-selector button,
+.import-selector input {
+    font: inherit;
+    box-shadow: none;
+}
+
+.import-selector button:focus-visible,
+.import-selector input:focus-visible,
+.import-selector summary:focus-visible {
+    outline: 3px solid #80b0ff;
+    outline-offset: 3px;
+}
+
+.import-selector button:disabled {
+    opacity: 0.42;
+    cursor: default;
+}
+
+.import-selector .import-selector__text-button {
+    padding: 4px 2px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: #255eae;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.import-selector .import-selector__text-button:not(:disabled):hover {
+    color: #123f82;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.import-selector__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    padding: 0 28px 15px;
+    flex-shrink: 0;
+}
+
+.import-selector__search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 100px;
+    height: 36px;
+    padding: 0 11px;
+    border: 1px solid #dbe2ec;
+    border-radius: 8px;
+    color: #718198;
+    background: white;
+}
+
+.import-selector__search:focus-within {
+    border-color: #4283df;
+    outline: 3px solid #e1edff;
+}
+
+.import-selector__search input {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #20334c;
+    font-size: 12px;
+}
+
+.import-selector__search input:focus-visible {
+    outline: none;
+}
+
+.import-selector__search input::placeholder {
+    color: #627086;
+    opacity: 1;
+}
+
+.import-selector__bulk {
+    display: flex;
+    gap: 9px;
+    align-items: center;
+    color: #b6c0ce;
+}
+
+.import-selector__list {
+    min-height: 90px;
+    max-height: 40vh;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #c7d3e3 transparent;
+    border-top: 1px solid #e6ebf2;
+    border-bottom: 1px solid #e6ebf2;
+}
+
+.import-selector__row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    min-height: 66px;
+    padding: 13px 28px;
+    border-bottom: 1px solid #edf0f5;
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.import-selector__row:last-child {
+    border-bottom: 0;
+}
+
+.import-selector__row--selected {
+    background: #f8fbff;
+}
+
+.import-selector__row:hover {
+    background: #f2f6fc;
+}
+
+.import-selector__row > input[type="checkbox"] {
+    width: 17px;
+    height: 17px;
+    margin: 3px 0 0;
+    padding: 0;
+    flex-shrink: 0;
+    accent-color: #2b6ac3;
+    cursor: pointer;
+}
+
+.import-selector__row > input[type="checkbox"]:disabled {
+    cursor: default;
+}
+
+.import-selector__row-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.import-selector__row label {
+    display: block;
+    cursor: pointer;
+}
+
+.import-selector__row label strong {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+}
+
+.import-selector__path {
+    display: block;
+    color: #607188;
+    font-size: 11px;
+    line-height: 18px;
+    overflow-wrap: anywhere;
+}
+
+.import-selector__badge {
+    margin-top: 1px;
+    padding: 1px 7px;
+    border: 1px solid #d5e2f3;
+    border-radius: 5px;
+    color: #496c9c;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.import-selector__dependency {
+    color: #4e719f;
+    font-size: 11px;
+    line-height: 18px;
+    overflow-wrap: anywhere;
+}
+
+.import-selector__dependency summary {
+    cursor: pointer;
+    width: fit-content;
+    max-width: 100%;
+}
+
+.import-selector__dependency ul {
+    padding-left: 17px;
+    margin: 5px 0 0;
+    color: #607188;
+}
+
+.import-selector__summary {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 12px 28px;
+    flex-shrink: 0;
+    font-size: 11px;
+    line-height: 17px;
+}
+
+.import-selector__summary strong {
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+.import-selector__summary span {
+    color: #606e82;
+}
+
+.import-selector__footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 17px 28px 21px;
+    background: #f8fafd;
+    border-top: 1px solid #edf0f5;
+    flex-shrink: 0;
+}
+
+.import-selector__footnote {
+    max-width: 180px;
+    color: #617087;
+    font-size: 11px;
+    line-height: 17px;
+}
+
+.import-selector__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.import-selector .import-selector__primary,
+.import-selector .import-selector__secondary {
+    padding: 9px 15px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 18px;
+    white-space: nowrap;
+}
+
+.import-selector .import-selector__primary {
+    color: #fff;
+    border: 1px solid #2464bd;
+    background: #286bc7;
+    box-shadow: 0 1px 2px rgba(10, 50, 110, 0.12);
+}
+
+.import-selector .import-selector__primary:not(:disabled):hover {
+    background: #205db0;
+}
+
+.import-selector .import-selector__secondary {
+    color: #44556e;
+    border: 1px solid #dae1ec;
+    background: #fff;
+}
+
+.import-selector .import-selector__secondary:not(:disabled):hover {
+    background: #eef2f8;
+}
+
+.import-selector__loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 260px;
+    padding: 24px 36px;
+    text-align: center;
+}
+
+.import-selector__loading h3 {
+    margin: 18px 0 6px;
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.import-selector__loading p {
+    margin: 0;
+    color: #63738b;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+.import-selector__spinner {
+    width: 26px;
+    height: 26px;
+    border: 2px solid #dce7f7;
+    border-top-color: #3779d0;
+    border-radius: 50%;
+    animation: update-notification-spin 850ms linear infinite;
+    flex-shrink: 0;
+}
+
+.import-selector__spinner--small {
+    width: 14px;
+    height: 14px;
+}
+
+.import-selector__progress {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: #536b8f;
+    font-size: 11px;
+    line-height: 16px;
+}
+
+.import-selector__notice,
+.import-selector__error {
+    margin: 0 28px 15px;
+    padding: 11px 13px;
+    border: 1px solid #e4d9be;
+    border-radius: 9px;
+    background: #fffaf0;
+    color: #796033;
+    font-size: 12px;
+    line-height: 18px;
+    overflow-wrap: anywhere;
+}
+
+.import-selector__error {
+    background: #fff4f3;
+    border-color: #f1d0ca;
+    color: #a04a3e;
+}
+
+.import-selector__notice p,
+.import-selector__error p {
+    margin: 4px 0 0;
+}
+
+.import-selector__no-results {
+    padding: 40px 24px;
+    text-align: center;
+    font-size: 13px;
+    color: #63738b;
+}
+
+.import-selector__no-results p {
+    margin: 6px 0;
+    font-size: 12px;
+}
+
+.import-selector__sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+.initial-import-result {
+    margin: 16px 0;
+    padding: 14px 16px;
+    border: 1px solid #b8ddcc;
+    border-radius: 10px;
+    background: #f0faf5;
+    color: #285e48;
+    text-align: left;
+    font-size: 13px;
+    line-height: 21px;
+    overflow-wrap: anywhere;
+}
+
+.initial-import-result--warning {
+    border-color: #ead4a9;
+    background: #fff9ed;
+    color: #805c25;
+}
+
+@keyframes import-selector-appear {
+    from { opacity: 0; transform: translateY(5px) scale(0.995); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 560px), (max-height: 620px) {
+    .import-selector { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); border-radius: 15px; }
+    .import-selector__header { padding: 18px 18px 12px; }
+    .import-selector h2 { font-size: 21px; }
+    .import-selector__source { margin-top: 12px; }
+    .import-selector__toolbar { padding: 0 18px 12px; gap: 10px; }
+    .import-selector__row { padding: 11px 18px; }
+    .import-selector__footer { padding: 12px 18px; flex-wrap: wrap; }
+    .import-selector__footnote { display: none; }
+    .import-selector__actions { margin-left: auto; }
+    .import-selector__summary { padding: 9px 18px; flex-wrap: wrap; gap: 2px 8px; }
+    .import-selector__notice, .import-selector__error { margin: 0 18px 12px; }
+    .import-selector__bulk { gap: 5px; }
+    .import-selector__loading { min-height: 140px; padding: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .import-selector[open], .import-selector__spinner { animation: none; }
+    .import-selector button, .import-selector input { transition: none; }
+}
+
+/* At high zoom, header + messages may themselves be taller than the usable
+ * window. Let the entire sheet scroll, with its actions pinned in view. This
+ * also keeps long validation errors and full-project notices reachable. */
+@media (max-height: 620px) {
+    .import-selector[open] {
+        display: block;
+    }
+
+    .import-selector__source {
+        margin-top: 10px;
+        padding-top: 7px;
+        padding-bottom: 7px;
+    }
+
+    .import-selector__list {
+        min-height: 0;
+        max-height: none;
+        overflow: visible;
+    }
+
+    .import-selector__footer {
+        box-shadow: 0 -5px 14px rgba(25, 46, 77, 0.06);
+    }
+}

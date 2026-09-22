@@ -19,6 +19,8 @@ pub struct ModalProps {
     #[prop_or_default]
     pub primary_button_text: Option<String>,
     #[prop_or_default]
+    pub primary_button_id: Option<String>,
+    #[prop_or_default]
     pub on_primary_action: Callback<()>,
     #[prop_or_default]
     pub show_close_button: bool,
@@ -106,6 +108,7 @@ pub fn modal(props: &ModalProps) -> Html {
                         if let Some(btn_text) = &props.primary_button_text {
                             html! {
                                 <button
+                                    id={props.primary_button_id.clone()}
                                     onclick={primary_action_handler}
                                     style={format!("
                                         padding: 8px 16px;

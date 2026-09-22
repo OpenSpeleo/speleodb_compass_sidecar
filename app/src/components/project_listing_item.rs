@@ -1,6 +1,6 @@
 use common::ui_state::ProjectStatus;
 use wasm_bindgen_futures::spawn_local;
-use yew::{Callback, Html, Properties, classes, function_component, html};
+use yew::{Callback, Html, Properties, classes, function_component, html, use_state};
 use yew_icons::{Icon, IconData};
 
 use crate::{
@@ -30,14 +30,19 @@ pub fn project_listing_item_layout(
 
     let project_id = project.id();
     let project_status = project.local_status();
-    let on_card_click = Callback::from(move |_| {
-        spawn_local(async move {
-            SPELEO_DB_CONTROLLER
-                .set_active_project(project_id)
-                .await
-                .unwrap();
-        });
-    });
+    let navigation_error = use_state(|| None::<String>);
+    let on_card_click = {
+        let navigation_error = navigation_error.clone();
+        Callback::from(move |_| {
+            navigation_error.set(None);
+            let navigation_error = navigation_error.clone();
+            spawn_local(async move {
+                if let Err(error) = SPELEO_DB_CONTROLLER.set_active_project(project_id).await {
+                    navigation_error.set(Some(format!("Could not open this project: {error}")));
+                }
+            });
+        })
+    };
     let project_permission = project.permission();
     let permission_color = match project_permission {
         "ADMIN" => color_warn,
@@ -94,6 +99,7 @@ pub fn project_listing_item_layout(
         }
     };
     return html! {
+        <>
         <div class={classes!("project-card")} onclick={on_card_click}>
             <span style={format!("padding: 4px 8px; border-radius: 4px; font-size: 12px; display:flex; gap: 12px; color: {};",icon_color)}>
                 <Icon data={icon_data}></Icon>
@@ -112,5 +118,9 @@ pub fn project_listing_item_layout(
                 </span>
             </div>
         </div>
+        if let Some(error) = &*navigation_error {
+            <p role="alert" style="margin: 0; color: #fecaca; font-size: 13px; text-align: left;">{error}</p>
+        }
+        </>
     };
 }

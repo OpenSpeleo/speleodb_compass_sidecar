@@ -105,6 +105,7 @@ fn transfer(source: &mut impl Read, target: &mut impl Write) -> std::io::Result<
 struct SurveySource {
     snapshot: Snapshot,
     destination: String,
+    encoding: &'static Encoding,
 }
 
 #[derive(Debug)]
@@ -223,12 +224,14 @@ pub fn analyze(path: &Path) -> Result<AnalyzedImport, Error> {
         sources.push(SurveySource {
             snapshot,
             destination,
+            encoding: text_encoding(&bytes),
         });
     }
     let (mut sections, unresolved_link) = build_sections(
         &records,
         &sources,
         &inventories,
+        mak_encoding,
         full_import_reason.is_none(),
     );
     if let Some(reason) = unresolved_link {
@@ -1079,13 +1082,31 @@ fn parse_dat_parameters(line: &str) -> Result<bool, String> {
     Ok(backsights)
 }
 
+/// Keep both identities: Unicode exports may share names across encodings,
+/// while an otherwise-ASCII legacy file can accidentally also be valid UTF-8.
+/// Matching the original bytes prevents unrelated comments from hiding a link.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum StationKey {
+    Decoded(String),
+    OriginalBytes(Vec<u8>),
+}
+
+fn station_keys(name: &str, encoding: &'static Encoding) -> [StationKey; 2] {
+    let (bytes, _, _) = encoding.encode(name);
+    [
+        StationKey::Decoded(name.to_string()),
+        StationKey::OriginalBytes(bytes.into_owned()),
+    ]
+}
+
 fn build_sections(
     records: &[Record],
     sources: &[SurveySource],
     inventories: &[BTreeSet<String>],
+    mak_encoding: &'static Encoding,
     analyze_connections: bool,
 ) -> (Vec<ImportSection>, Option<String>) {
-    let mut active = BTreeMap::<String, BTreeSet<usize>>::new();
+    let mut active = BTreeMap::<StationKey, BTreeSet<usize>>::new();
     let mut last_reset = None;
     let mut unresolved_link = None;
     let sections = records.iter().enumerate().map(|(id, record)| {
@@ -1098,8 +1119,9 @@ fn build_sections(
             } else {
                 let mut retained = BTreeMap::new();
                 for station in &record.stations {
+                    let keys = station_keys(&station.name, mak_encoding);
                     let providers = if station.fixed { BTreeSet::from([id]) }
-                        else { active.get(&station.name).cloned().unwrap_or_default() };
+                        else { keys.iter().filter_map(|key| active.get(key)).flatten().copied().collect() };
                     if providers.is_empty() {
                         unresolved_link.get_or_insert_with(|| format!(
                             "The link {} in {} has no verified earlier provider. Import all sections to preserve the original project.",
@@ -1109,17 +1131,21 @@ fn build_sections(
                     for provider in &providers {
                         if *provider != id { reasons.entry(*provider).or_default().insert(station.name.clone()); }
                     }
-                    retained.insert(station.name.clone(), providers);
+                    for key in keys {
+                        retained.entry(key).or_insert_with(BTreeSet::new).extend(&providers);
+                    }
                 }
                 active = retained;
                 last_reset = Some(id);
             }
             for station in &inventories[record.source_index] {
-                let providers = active.entry(station.clone()).or_default();
-                for provider in providers.iter().filter(|provider| **provider != id) {
-                    reasons.entry(*provider).or_default().insert(station.clone());
+                for key in station_keys(station, sources[record.source_index].encoding) {
+                    let providers = active.entry(key).or_default();
+                    for provider in providers.iter().filter(|provider| **provider != id) {
+                        reasons.entry(*provider).or_default().insert(station.clone());
+                    }
+                    providers.insert(id);
                 }
-                providers.insert(id);
             }
         }
         let destination = &sources[record.source_index].destination;
@@ -1191,6 +1217,32 @@ mod tests {
             .iter()
             .map(|edge| edge.section_id)
             .collect()
+    }
+
+    #[test]
+    fn identical_legacy_station_bytes_cannot_lose_a_dependency_when_comments_change_encoding() {
+        let fixture = Fixture::new();
+        // Both DATs originate in Windows-1252. The first happens to be valid
+        // UTF-8; a legacy comment in the second changes the inferred encoding.
+        let provider = survey("A Ã© 1 2 3 4 5 6 7");
+        let dependent = survey("Ã© B 1 2 3 4 5 6 7").replace("Header", "Café");
+        let provider_bytes = WINDOWS_1252.encode(&provider).0.into_owned();
+        let dependent_bytes = WINDOWS_1252.encode(&dependent).0.into_owned();
+        assert_eq!(text_encoding(&provider_bytes), UTF_8);
+        assert_eq!(text_encoding(&dependent_bytes), WINDOWS_1252);
+        fixture.write("a.dat", &provider_bytes);
+        fixture.write("b.dat", &dependent_bytes);
+        for mak in ["#a.dat;#b.dat;", "/ Café\n#a.dat;#b.dat,Ã©;"] {
+            let mak_bytes = WINDOWS_1252.encode(mak).0.into_owned();
+            let analysis = analyze(&fixture.write("Cave.mak", &mak_bytes)).unwrap();
+            assert!(analysis.full_import_reason.is_none());
+            assert_eq!(dependencies(&analysis, 1), BTreeSet::from([0]));
+            let stage = fixture.staging();
+            analysis.stage(Uuid::new_v4(), &[1], &stage).unwrap();
+            assert_eq!(fs::read(stage.join("a.dat")).unwrap(), provider_bytes);
+            assert_eq!(fs::read(stage.join("b.dat")).unwrap(), dependent_bytes);
+            assert_eq!(fs::read(stage.join("Cave.mak")).unwrap(), mak_bytes);
+        }
     }
 
     #[test]

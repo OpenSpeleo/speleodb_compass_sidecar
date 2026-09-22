@@ -1,3 +1,4 @@
+pub mod import;
 mod local_project;
 mod revision;
 
@@ -60,7 +61,7 @@ impl ProjectManager {
         SpeleoDbProjectRevision::revision_for_local_project(self.id())
     }
 
-    fn remote_project_has_compass_data(&self) -> bool {
+    pub(crate) fn remote_project_has_compass_data(&self) -> bool {
         self.latest_remote_commit().is_some_and(|latest_commit| {
             !(latest_commit.message == AUTOMATED_PROJECT_CREATION_COMMIT_MESSAGE
                 && latest_commit.tree.is_empty())
@@ -145,12 +146,14 @@ impl ProjectManager {
             "Zipping project folder for project: {}",
             self.project_info.name
         );
-        let zip_file = LocalProject::pack_zip(self.id())?;
+        let project_id = self.id();
+        let zip_file = tokio::task::spawn_blocking(move || LocalProject::pack_zip(project_id))
+            .await
+            .map_err(|error| Error::ZipFile(error.to_string()))??;
         let save_result =
-            api::project::upload_project_zip(api_info, self.id(), commit_message, &zip_file)
-                .await?;
+            api::project::upload_project_zip(api_info, self.id(), commit_message, &zip_file).await;
         std::fs::remove_file(&zip_file).ok();
-        Ok(save_result)
+        save_result
     }
 
     /// After a successful upload, sync local state without re-downloading.

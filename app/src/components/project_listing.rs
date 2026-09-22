@@ -142,7 +142,7 @@ pub fn project_listing(ProjectListingProps { ui_state }: &ProjectListingProps) -
                 <div class="projects-list" style=" display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
                     { for sorted_projects.iter().map(|project| {
                         html! {
-                            <ProjectListingItem project={project.clone()} user_email={user_email.clone()} />
+                            <ProjectListingItem key={project.id().to_string()} project={project.clone()} user_email={user_email.clone()} />
                         }
                     })}
                 </div>

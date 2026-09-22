@@ -8,12 +8,14 @@
 //! [ ] Investigate making files read-only when in read-only mode
 //! [ ] Show whether Compass is being tracked open on Windows
 
+use crate::components::import_selector::InitialImportModal;
 use crate::components::modal::{Modal, ModalType};
 use crate::speleo_db_controller::SPELEO_DB_CONTROLLER;
 use crate::ui_constants::{COLOR_ALARM, COLOR_GOOD, COLOR_WARN, FONT_COLOR_BLUE};
 #[cfg(any(target_arch = "wasm32", test))]
 use common::SERVER_TIME_ZONE;
 use common::api_types::{CommitInfo, ProjectSaveResult};
+use common::compass_import::InitialImportOutcome;
 use common::ui_state::{LocalProjectStatus, ProjectStatus};
 use log::info;
 use wasm_bindgen_futures::spawn_local;
@@ -155,6 +157,56 @@ mod tests {
         assert!(!state.show_upload_success);
         assert!(state.show_no_changes_modal);
     }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn section_selection_is_available_only_before_the_initial_import() {
+        assert!(supports_initial_import(LocalProjectStatus::EmptyLocal));
+        for status in [
+            LocalProjectStatus::RemoteOnly,
+            LocalProjectStatus::Unknown,
+            LocalProjectStatus::Dirty,
+            LocalProjectStatus::UpToDate,
+        ] {
+            assert!(!supports_initial_import(status));
+        }
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn an_automated_creation_commit_does_not_block_initial_section_selection() {
+        let info = serde_json::from_value(serde_json::json!({
+            "id": "9e12fe62-ad38-471b-a625-7ed9960ab3e4",
+            "name": "New project", "description": "Empty project",
+            "is_active": true, "permission": "ADMIN", "active_mutex": null,
+            "country": "US", "created_by": "surveyor@example.com",
+            "creation_date": "2026-09-22", "modified_date": "2026-09-22",
+            "fork_from": null, "visibility": "PRIVATE", "exclude_geojson": false,
+            "type": "COMPASS",
+            "latest_commit": {"id": "creation", "message": "Project created", "author_name": "SpeleoDB", "dt_since": "just now"}
+        })).unwrap();
+        let project = ProjectStatus::new(LocalProjectStatus::EmptyLocal, info);
+        assert!(project.latest_commit().is_some());
+        assert!(supports_initial_import(project.local_status()));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn initial_import_results_distinguish_upload_from_local_sync_recovery() {
+        let error = common::Error::CompassProject("Connection interrupted".into());
+        let local = initial_import_result_message(
+            &InitialImportOutcome::LocalOnly {
+                error: error.clone(),
+            },
+            4,
+        );
+        let uploaded =
+            initial_import_result_message(&InitialImportOutcome::UploadedNeedsRefresh { error }, 4);
+        assert!(local.contains("upload did not finish"));
+        assert!(local.contains("Save Project"));
+        assert!(uploaded.contains("were uploaded"));
+        assert!(uploaded.contains("finish synchronization"));
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -185,6 +237,27 @@ fn validate_import_commit_message(message: &str) -> bool {
 
 fn should_disable_project_action_buttons(compass_open: bool, busy: bool) -> bool {
     compass_open || busy
+}
+
+fn supports_initial_import(status: LocalProjectStatus) -> bool {
+    // The backend classifies remote Compass data. An automatically generated
+    // project-creation commit does not itself mean that survey data exists.
+    status == LocalProjectStatus::EmptyLocal
+}
+
+fn initial_import_result_message(outcome: &InitialImportOutcome, count: usize) -> String {
+    match outcome {
+        InitialImportOutcome::Synced { .. } => format!(
+            "Imported {count} {} and saved to SpeleoDB.",
+            if count == 1 { "section" } else { "sections" }
+        ),
+        InitialImportOutcome::LocalOnly { error } => format!(
+            "Your {count} imported sections are saved on this computer. The upload did not finish. Retry the upload using Save Project below; your selection is preserved. {error}"
+        ),
+        InitialImportOutcome::UploadedNeedsRefresh { error } => format!(
+            "Your {count} imported sections were uploaded to SpeleoDB, but local synchronization did not finish. Use Save Project below to finish synchronization. Your selection is preserved. {error}"
+        ),
+    }
 }
 
 fn normalize_commit_relative_time(relative_time: &str) -> String {
@@ -382,6 +455,8 @@ pub fn project_details(
     let show_upload_success = use_state(|| false);
     let show_no_changes_modal = use_state(|| false);
     let show_empty_project_modal = use_state(|| false);
+    let show_initial_import = use_state(|| false);
+    let initial_import_result = use_state(|| None::<(InitialImportOutcome, usize)>);
     let show_discard_confirm_modal = use_state(|| false);
     let reimport_flow_state = use_state(cancel_reimport_flow);
     let reimport_message = use_state(String::new);
@@ -396,7 +471,7 @@ pub fn project_details(
     let is_readonly = project.active_mutex().is_some()
         && &project.active_mutex().as_ref().unwrap().user != user_email
         || project.permission() == "READ_ONLY";
-    let busy = *uploading || *discarding || *reimporting || downloading;
+    let busy = *uploading || *discarding || *reimporting || downloading || *show_initial_import;
     let disable_project_action_buttons = should_disable_project_action_buttons(*compass_open, busy);
     let download_complete = use_state(|| false);
     let commit_message = use_state(String::new);
@@ -409,6 +484,30 @@ pub fn project_details(
             | LocalProjectStatus::RemoteOnly
             | LocalProjectStatus::Unknown
     );
+    let initial_import_available = supports_initial_import(project.local_status());
+
+    // The initial prompt remounts after cancellation. Native dialog focus
+    // restoration cannot restore a button removed during the transition.
+    {
+        use_effect_with(
+            (*show_initial_import, *show_empty_project_modal),
+            |(selecting, empty)| {
+                if !selecting && *empty {
+                    use wasm_bindgen::JsCast;
+                    if let Some(button) = web_sys::window()
+                        .and_then(|window| window.document())
+                        .and_then(|document| {
+                            document.get_element_by_id("initial-import-empty-trigger")
+                        })
+                        .and_then(|element| element.dyn_into::<web_sys::HtmlElement>().ok())
+                    {
+                        let _ = button.focus();
+                    }
+                }
+                || ()
+            },
+        );
+    }
 
     let (status_icon, status_color, status_text) = match project.local_status() {
         LocalProjectStatus::UpToDate => (
@@ -461,7 +560,7 @@ pub fn project_details(
         // On mount, check if the project is read-only
         if is_readonly {
             show_readonly_modal.set(true);
-        } else if let LocalProjectStatus::EmptyLocal = project.local_status() {
+        } else if initial_import_available {
             show_empty_project_modal.set(true);
         }
         initialized.set(true);
@@ -534,6 +633,7 @@ pub fn project_details(
         let show_upload_success = show_upload_success.clone();
         let show_no_changes_modal = show_no_changes_modal.clone();
         let upload_error = upload_error.clone();
+        let initial_import_result = initial_import_result.clone();
 
         Callback::from(move |_| {
             info!(
@@ -554,6 +654,7 @@ pub fn project_details(
             let upload_error = upload_error.clone();
             let commit_message = commit_message.clone();
             let commit_message_error = commit_message_error.clone();
+            let initial_import_result = initial_import_result.clone();
 
             uploading.set(true);
             upload_error.set(None);
@@ -563,6 +664,7 @@ pub fn project_details(
                 uploading.set(true);
                 match SPELEO_DB_CONTROLLER.save_project(project_id, &msg).await {
                     Ok(upload_result) => {
+                        initial_import_result.set(None);
                         let completion = save_completion_state(upload_result);
                         if completion.clear_commit_message {
                             commit_message.set(String::new());
@@ -586,49 +688,54 @@ pub fn project_details(
 
     // Load from Disk Handler
     let on_import_from_disk = {
-        let show_empty_project_modal = show_empty_project_modal.clone();
+        let show_initial_import = show_initial_import.clone();
         let error_message = error_message.clone();
-        let reimporting = reimporting.clone();
-        let project_id = project.id();
+        let initial_import_result = initial_import_result.clone();
         Callback::from(move |_: ()| {
-            if *reimporting {
+            if busy || !initial_import_available {
                 return;
             }
-            let show_empty_project_modal = show_empty_project_modal.clone();
-            let error_message = error_message.clone();
-            let reimporting = reimporting.clone();
-            reimporting.set(true);
             error_message.set(None);
-            spawn_local(async move {
-                match SPELEO_DB_CONTROLLER
-                    .import_compass_project(project_id)
-                    .await
-                {
-                    Ok(imported) => {
-                        if imported {
-                            show_empty_project_modal.set(false);
-                        } else {
-                            // File picker was cancelled: keep the empty project modal visible.
-                            show_empty_project_modal.set(true);
-                        }
-                    }
-                    Err(e) => {
-                        show_empty_project_modal.set(false);
-                        error_message.set(Some(format!("Failed to import Compass project: {}", e)));
-                    }
-                }
-                reimporting.set(false);
-            });
+            initial_import_result.set(None);
+            show_initial_import.set(true);
+        })
+    };
+
+    let on_initial_import_close = {
+        let show_initial_import = show_initial_import.clone();
+        let show_empty_project_modal = show_empty_project_modal.clone();
+        Callback::from(move |()| {
+            show_initial_import.set(false);
+            show_empty_project_modal.set(true);
+        })
+    };
+
+    let on_initial_import_complete = {
+        let show_initial_import = show_initial_import.clone();
+        let show_empty_project_modal = show_empty_project_modal.clone();
+        let initial_import_result = initial_import_result.clone();
+        let commit_message = commit_message.clone();
+        Callback::from(move |(outcome, count): (InitialImportOutcome, usize)| {
+            if !matches!(outcome, InitialImportOutcome::Synced { .. }) {
+                commit_message.set("Imported local project".to_owned());
+            }
+            show_initial_import.set(false);
+            show_empty_project_modal.set(false);
+            initial_import_result.set(Some((outcome, count)));
         })
     };
 
     let on_close_empty_project_modal = {
         let show_empty_project_modal = show_empty_project_modal.clone();
+        let error_message = error_message.clone();
         Callback::from(move |_: ()| {
             show_empty_project_modal.set(false);
+            let error_message = error_message.clone();
             spawn_local(async move {
                 // Return to project listing when dismissing the empty project modal.
-                let _ = SPELEO_DB_CONTROLLER.clear_active_project().await;
+                if let Err(error) = SPELEO_DB_CONTROLLER.clear_active_project().await {
+                    error_message.set(Some(format!("Could not return to projects: {error}")));
+                }
             });
         })
     };
@@ -695,10 +802,14 @@ pub fn project_details(
 
     // Back button handler - release mutex before navigating back
     let on_back_click = {
+        let error_message = error_message.clone();
         Callback::from(move |_| {
+            let error_message = error_message.clone();
             spawn_local(async move {
                 // Release mutex and clear active project first
-                let _ = SPELEO_DB_CONTROLLER.clear_active_project().await;
+                if let Err(error) = SPELEO_DB_CONTROLLER.clear_active_project().await {
+                    error_message.set(Some(format!("Could not return to projects: {error}")));
+                }
             });
         })
     };
@@ -806,7 +917,7 @@ pub fn project_details(
                     html! {
                         <div style="display: flex; justify-content: center; margin-top: 12px; margin-bottom: 4px;">
                             <button
-                                onclick={on_project_reimport_click.clone()}
+                                onclick={if initial_import_available { on_import_from_disk.reform(|_| ()) } else { on_project_reimport_click.clone() }}
                                 disabled={disable_project_action_buttons}
                                 class="project-primary-action-button"
                             >
@@ -817,6 +928,16 @@ pub fn project_details(
                 } else {
                     html! {}
                 }
+            }
+
+            if let Some((outcome, count)) = &*initial_import_result {
+                <div
+                    class={classes!("initial-import-result", (!matches!(outcome, InitialImportOutcome::Synced { .. })).then_some("initial-import-result--warning"))}
+                    role="status"
+                    aria-live="polite"
+                >
+                    {initial_import_result_message(outcome, *count)}
+                </div>
             }
 
             {
@@ -969,7 +1090,7 @@ pub fn project_details(
                         on_close={close_readonly_modal}
                     />
                 };
-            } else if *show_empty_project_modal {
+            } else if *show_empty_project_modal && !*show_initial_import {
                 let on_import_from_disk = on_import_from_disk.clone();
                 let on_close_empty_project_modal = on_close_empty_project_modal.clone();
                 html! {
@@ -981,13 +1102,22 @@ pub fn project_details(
                         close_button_text={Some("Back to Projects".to_string())}
                         on_close={on_close_empty_project_modal}
                         primary_button_text="Import Compass Project From Disk"
+                        primary_button_id="initial-import-empty-trigger"
                         on_primary_action={on_import_from_disk}
                     />
                 }
             } else {
                 html! {}
             }
-                    }
+            }
+
+            if *show_initial_import {
+                <InitialImportModal
+                    project_id={project.id()}
+                    on_close={on_initial_import_close}
+                    on_complete={on_initial_import_complete}
+                />
+            }
 
             // Reimport warning + commit message flow for the project-details button
             {

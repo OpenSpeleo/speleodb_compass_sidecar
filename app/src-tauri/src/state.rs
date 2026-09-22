@@ -112,6 +112,9 @@ where
 }
 
 pub struct AppState {
+    pub(crate) project_operations: tokio::sync::Mutex<()>,
+    pub(crate) import_previews: Mutex<crate::initial_import::ImportPreviewStore>,
+    pub(crate) initial_import_running: AtomicBool,
     app_handle: Mutex<Option<AppHandle>>,
     initializing: Mutex<bool>,
     loading_state: Mutex<LoadingState>,
@@ -143,6 +146,9 @@ pub struct AppState {
 impl AppState {
     pub fn new() -> Self {
         Self {
+            project_operations: tokio::sync::Mutex::new(()),
+            import_previews: Mutex::new(crate::initial_import::ImportPreviewStore::default()),
+            initial_import_running: AtomicBool::new(false),
             app_handle: Mutex::new(None),
             initializing: Mutex::new(false),
             loading_state: Mutex::new(LoadingState::NotStarted),
@@ -182,6 +188,11 @@ impl AppState {
 
     /// Asynchronously initialize the application state.
     pub async fn init_app_state(&self, app_handle: &AppHandle) {
+        let _operation = self.project_operations.lock().await;
+        self.init_app_state_unlocked(app_handle).await;
+    }
+
+    async fn init_app_state_unlocked(&self, app_handle: &AppHandle) {
         if self.app_handle.lock().unwrap().is_none() {
             *self.app_handle.lock().unwrap() = Some(app_handle.clone());
         }
@@ -242,6 +253,7 @@ impl AppState {
     pub fn update_user_prefs(&self, prefs: UserPrefs) -> Result<(), Error> {
         let _ = self.app_handle()?;
         prefs.save()?;
+        self.invalidate_import_previews();
         self.set_api_info(prefs.api_info().clone());
 
         // Menu update is deferred to `apply_menu_for_auth_state()`.
@@ -280,12 +292,14 @@ impl AppState {
     pub async fn authenticated(&self) -> () {
         if let Ok(app_handle) = self.app_handle() {
             self.set_loading_state(LoadingState::LoadingProjects).await;
-            self.init_app_state(&app_handle).await;
+            self.init_app_state_unlocked(&app_handle).await;
         }
     }
 
-    pub fn sign_out(&self, app_handle: &AppHandle) -> Result<(), Error> {
+    pub async fn sign_out(&self, app_handle: &AppHandle) -> Result<(), Error> {
+        let _operation = self.project_operations.lock().await;
         UserPrefs::forget()?;
+        self.invalidate_import_previews();
         {
             let mut project_lock = self.project_info.lock().unwrap();
             project_lock.clear();
@@ -317,6 +331,9 @@ impl AppState {
     }
 
     pub async fn set_active_project(&self, project_id: Option<Uuid>) -> Result<(), Error> {
+        if project_id != self.get_active_project_id() {
+            self.invalidate_import_previews();
+        }
         if let Some(project_id) = project_id {
             info!("Selecting: {project_id} as active project");
 
@@ -396,25 +413,44 @@ impl AppState {
             error!("No active project to save");
             return Err(Error::NoProjectSelected);
         };
+        self.save_project_by_id(project_id, &self.api_info(), commit_message)
+            .await
+            .map_err(crate::initial_import::ProjectSaveFailure::into_error)
+    }
+
+    /// Caller holds the operation gate; the target and credentials are captured
+    /// before an import starts, never inferred again from the current selection.
+    pub(crate) async fn save_project_by_id(
+        &self,
+        project_id: Uuid,
+        api_info: &ApiInfo,
+        commit_message: String,
+    ) -> Result<ProjectSaveResult, crate::initial_import::ProjectSaveFailure> {
+        use crate::initial_import::ProjectSaveFailure;
         let project_info = self
             .get_project_info(project_id)
-            .ok_or(Error::NoProjectSelected)?;
+            .ok_or(ProjectSaveFailure::Upload(Error::NoProjectSelected))?;
         let mut project_manager = ProjectManager::initialize_from_info(project_info);
-        let api_info = self.api_info();
         let result = project_manager
-            .save_local_changes(&api_info, commit_message)
-            .await?;
-
-        // After a successful upload, sync local state: copy working_copy -> index
-        // and update .revision.txt. We must NOT call update_local_copies here because
-        // it overwrites the working copy, which fails on Windows when Compass holds
-        // file locks on the project files.
+            .save_local_changes(api_info, commit_message)
+            .await
+            .map_err(ProjectSaveFailure::Upload)?;
         let old_commit_id = project_manager.latest_remote_commit().map(|c| c.id.clone());
-        let updated_project_info =
-            Self::fetch_project_info_after_save(&api_info, project_id, old_commit_id.as_deref())
-                .await?;
-        let project_manager = ProjectManager::initialize_from_info(updated_project_info.clone());
-        project_manager.sync_after_save()?;
+        let updated_project_info = Self::fetch_project_info_after_save(
+            api_info,
+            project_id,
+            old_commit_id.as_deref(),
+            result == ProjectSaveResult::Saved,
+        )
+        .await
+        .map_err(ProjectSaveFailure::Synchronization)?;
+        let manager = ProjectManager::initialize_from_info(updated_project_info.clone());
+        tauri::async_runtime::spawn_blocking(move || manager.sync_after_save())
+            .await
+            .map_err(|error| {
+                ProjectSaveFailure::Synchronization(Error::OsCommand(error.to_string()))
+            })?
+            .map_err(ProjectSaveFailure::Synchronization)?;
         self.set_project_info(updated_project_info);
         self.emit_app_state_change().await;
         Ok(result)
@@ -426,6 +462,7 @@ impl AppState {
         api_info: &ApiInfo,
         project_id: uuid::Uuid,
         old_commit_id: Option<&str>,
+        expect_new_commit: bool,
     ) -> Result<ProjectInfo, Error> {
         const MAX_RETRIES: u32 = 3;
         const RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
@@ -433,7 +470,7 @@ impl AppState {
         for attempt in 0..=MAX_RETRIES {
             let info = api::project::fetch_project_info(api_info, project_id).await?;
             let new_commit_id = info.latest_commit.as_ref().map(|c| c.id.as_str());
-            if new_commit_id != old_commit_id {
+            if !expect_new_commit || new_commit_id != old_commit_id {
                 return Ok(info);
             }
             if attempt < MAX_RETRIES {
@@ -446,12 +483,9 @@ impl AppState {
                 tokio::time::sleep(RETRY_DELAY).await;
             }
         }
-        warn!(
-            "Server did not reflect new commit for project {} after {} retries; \
-             proceeding with available data",
-            project_id, MAX_RETRIES
-        );
-        api::project::fetch_project_info(api_info, project_id).await
+        Err(Error::Conflict(format!(
+            "Upload completed for project {project_id}, but its new revision is not available yet. Retry saving to finish synchronization."
+        )))
     }
 
     pub async fn discard_active_project_changes(&self) -> Result<(), Error> {
@@ -688,12 +722,12 @@ impl AppState {
         }
     }
 
-    fn set_project_info(&self, project_info: ProjectInfo) {
+    pub(crate) fn set_project_info(&self, project_info: ProjectInfo) {
         let mut project_lock = self.project_info.lock().unwrap();
         project_lock.insert(project_info.id, project_info);
     }
 
-    fn get_project_info(&self, project_id: Uuid) -> Option<ProjectInfo> {
+    pub(crate) fn get_project_info(&self, project_id: Uuid) -> Option<ProjectInfo> {
         let project_lock = self.project_info.lock().unwrap();
         project_lock.get(&project_id).cloned()
     }
@@ -733,57 +767,64 @@ impl AppState {
         }
 
         loop {
-            // Remote API update on a timer
-            let last_project_update = *app_state.last_project_update.lock().unwrap();
-            if chrono::Utc::now()
-                .signed_duration_since(last_project_update)
-                .to_std()
-                .unwrap()
-                >= PROJECT_INFO_UPDATE_INTERVAL
             {
-                trace!("Background task: updating project info from API");
-                match app_state.load_user_projects().await {
-                    Ok(_) => {
-                        app_state.emit_app_state_change().await;
-                    }
-                    Err(e) => {
-                        error!("Background task: failed to update project info: {}", e);
-                    }
-                }
-            }
-
-            // Drain filesystem events — only recheck local status when files changed
-            let mut fs_changed = false;
-            while fs_rx.try_recv().is_ok() {
-                fs_changed = true;
-            }
-
-            if fs_changed {
-                trace!(
-                    "Background task: filesystem change detected, checking local project statuses"
-                );
-                let project_info: Vec<ProjectInfo> = app_state
-                    .project_info
-                    .lock()
+                // Skip this pass when a foreground operation owns the gate. In
+                // particular, do not drain file events until we can reconcile.
+                let Ok(_operation) = app_state.project_operations.try_lock() else {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    continue;
+                };
+                // Remote API update on a timer
+                let last_project_update = *app_state.last_project_update.lock().unwrap();
+                if chrono::Utc::now()
+                    .signed_duration_since(last_project_update)
+                    .to_std()
                     .unwrap()
-                    .values()
-                    .cloned()
-                    .collect();
-                for project in project_info {
-                    let project_id = project.id;
-                    if let Err(e) = app_state.update_local_project(project).await {
-                        error!(
-                            "Background task: failed to update local project {}: {}",
-                            project_id, e
-                        );
+                    >= PROJECT_INFO_UPDATE_INTERVAL
+                {
+                    trace!("Background task: updating project info from API");
+                    match app_state.load_user_projects().await {
+                        Ok(_) => {
+                            app_state.emit_app_state_change().await;
+                        }
+                        Err(e) => {
+                            error!("Background task: failed to update project info: {}", e);
+                        }
                     }
                 }
-                app_state.emit_app_state_change().await;
+
+                // Drain filesystem events — only recheck local status when files changed
+                let mut fs_changed = false;
+                while fs_rx.try_recv().is_ok() {
+                    fs_changed = true;
+                }
+
+                if fs_changed {
+                    trace!(
+                        "Background task: filesystem change detected, checking local project statuses"
+                    );
+                    let project_info: Vec<ProjectInfo> = app_state
+                        .project_info
+                        .lock()
+                        .unwrap()
+                        .values()
+                        .cloned()
+                        .collect();
+                    for project in project_info {
+                        let project_id = project.id;
+                        if let Err(e) = app_state.update_local_project(project).await {
+                            error!(
+                                "Background task: failed to update local project {}: {}",
+                                project_id, e
+                            );
+                        }
+                    }
+                    app_state.emit_app_state_change().await;
+                }
+
+                #[cfg(target_os = "windows")]
+                app_state.check_compass_process();
             }
-
-            #[cfg(target_os = "windows")]
-            app_state.check_compass_process();
-
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
     }

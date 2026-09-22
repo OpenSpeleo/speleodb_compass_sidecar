@@ -1,5 +1,6 @@
 // WASM controller now delegates network calls to native Tauri backend.
 use crate::{Error, invoke};
+use common::compass_import::{ImportPreview, InitialImportOutcome};
 use common::ui_state::ProjectSaveResult;
 use log::{error, info};
 use once_cell::sync::Lazy;
@@ -134,9 +135,55 @@ impl SpeleoDBController {
             .map_err(|e| e.to_string())
     }
 
-    pub async fn import_compass_project(&self, id: Uuid) -> Result<bool, Error> {
-        let args = ProjectIdArgs::new(id);
-        invoke("import_compass_project", &args).await
+    pub async fn preview_compass_import(
+        &self,
+        project_id: Uuid,
+        mak_path: &str,
+    ) -> Result<ImportPreview, Error> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args<'a> {
+            project_id: Uuid,
+            mak_path: &'a str,
+        }
+        invoke(
+            "preview_compass_import",
+            &Args {
+                project_id,
+                mak_path,
+            },
+        )
+        .await
+    }
+
+    pub async fn confirm_compass_import(
+        &self,
+        preview_id: Uuid,
+        selected_section_ids: Vec<usize>,
+    ) -> Result<InitialImportOutcome, Error> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args {
+            preview_id: Uuid,
+            selected_section_ids: Vec<usize>,
+        }
+        invoke(
+            "confirm_compass_import",
+            &Args {
+                preview_id,
+                selected_section_ids,
+            },
+        )
+        .await
+    }
+
+    pub async fn cancel_compass_import(&self, preview_id: Uuid) -> Result<(), Error> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Args {
+            preview_id: Uuid,
+        }
+        invoke("cancel_compass_import", &Args { preview_id }).await
     }
 
     pub async fn pick_compass_project_file(&self) -> Result<Option<String>, Error> {
@@ -168,13 +215,15 @@ impl SpeleoDBController {
 
     pub async fn set_active_project(&self, project_id: Uuid) -> Result<(), String> {
         let args = ProjectIdArgs::new(project_id);
-        let _: () = invoke("set_active_project", &args).await.unwrap();
-        Ok(())
+        invoke::<_, ()>("set_active_project", &args)
+            .await
+            .map_err(|error| error.to_string())
     }
 
     pub async fn clear_active_project(&self) -> Result<(), String> {
-        let _: () = invoke("clear_active_project", &()).await.unwrap();
-        Ok(())
+        invoke::<_, ()>("clear_active_project", &())
+            .await
+            .map_err(|error| error.to_string())
     }
 
     pub async fn create_project(

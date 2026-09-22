@@ -1,19 +1,39 @@
 ## [Unreleased]
 
+### Features
+
+- Added a section selector for the first Compass import into an empty project,
+  including automatic selection of required survey files and explanations of
+  dependencies. Source MAK and DAT files remain unchanged.
+- Added safe staged imports and distinct recovery guidance when an import is
+  saved locally but its upload or final synchronization cannot complete.
+
 ### User-facing fixes
 
 - Accept legacy Windows-1252 MAK and DAT text during initial Compass import,
   preserving accented filenames and original file bytes when selecting sections.
 - Avoid unnecessary full-project import restrictions for spaced survey names,
   blank survey teams, empty shot flags, and long or accented station names.
+- Wait for background project synchronization before preparing or confirming an
+  import, instead of rejecting the action while synchronization is busy.
+- Defer application update installation and restart until project imports and
+  saves finish.
+- Preserve required survey sections when legacy station bytes can also be
+  interpreted as UTF-8.
+- Keep selector actions reachable when long warnings or errors expand the
+  dialog, including at intermediate browser zoom levels.
 
 ### Tests
 
 - Added regressions for mixed MAK/DAT encodings, multi-survey legacy layouts,
   and malformed headers that must still prevent selective import.
+- Cover encoding-ambiguous station dependencies, import/update serialization,
+  and selector overflow; run JavaScript-dependent error tests in the browser.
 
 ### Documentation
 
+- Documented selective-import behavior, conservative dependency analysis,
+  compatibility fallback, and verification in `docs/compass-import.md`.
 - Explained legacy encoding and survey-metadata rejection causes, with synthetic
   regression coverage and a focused import-test command.
 

@@ -1,4 +1,5 @@
 mod commands;
+mod initial_import;
 #[cfg(target_os = "macos")]
 mod macos_menu;
 mod paths;
@@ -9,9 +10,10 @@ mod user_prefs;
 
 use crate::{
     commands::{
-        about_info, auth_request, check_for_updates_now, clear_active_project, create_project,
-        discard_changes, dismiss_update_notification, ensure_initialized, import_compass_project,
-        open_latest_release, open_project, pick_compass_project_file, reimport_compass_project,
+        about_info, auth_request, cancel_compass_import, check_for_updates_now,
+        clear_active_project, confirm_compass_import, create_project, discard_changes,
+        dismiss_update_notification, ensure_initialized, open_latest_release, open_project,
+        pick_compass_project_file, preview_compass_import, reimport_compass_project,
         release_project_mutex, report_frontend_error, save_project, set_active_project, sign_out,
     },
     paths::{compass_home, ensure_app_dir_exists, init_file_logger},
@@ -81,6 +83,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             about_info,
             auth_request,
+            cancel_compass_import,
+            confirm_compass_import,
             clear_active_project,
             check_for_updates_now,
             create_project,
@@ -88,9 +92,9 @@ pub fn run() {
             dismiss_update_notification,
             ensure_initialized,
             sign_out,
-            import_compass_project,
             open_latest_release,
             pick_compass_project_file,
+            preview_compass_import,
             reimport_compass_project,
             report_frontend_error,
             open_project,
@@ -103,8 +107,13 @@ pub fn run() {
             app.on_menu_event(move |app_handle, event| match event.id().0.as_str() {
                 SIGN_OUT_MENU_ID => {
                     log::info!("Sign out menu item clicked");
-                    let app_state = app_handle.state::<AppState>();
-                    app_state.sign_out(app_handle).ok();
+                    let app_handle = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let app_state = app_handle.state::<AppState>();
+                        if let Err(error) = app_state.sign_out(&app_handle).await {
+                            log::error!("Sign out failed: {error}");
+                        }
+                    });
                 }
                 ABOUT_MENU_ID => {
                     log::info!("About menu item clicked");
@@ -134,6 +143,10 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let app_state = window.state::<AppState>();
+                if app_state.initial_import_is_running() {
+                    api.prevent_close();
+                    return;
+                }
                 if app_state.compass_is_open() {
                     log::info!("Window close prevented: Compass is still open");
                     api.prevent_close();
@@ -158,8 +171,12 @@ pub fn run() {
                     app_state.init_app_state(&movable).await;
                 });
             }
-            if let tauri::RunEvent::ExitRequested { .. } = event {
+            if let tauri::RunEvent::ExitRequested { api, .. } = event {
                 let app_state = app_handle.state::<AppState>();
+                if app_state.initial_import_is_running() {
+                    api.prevent_exit();
+                    return;
+                }
                 if let Some(project_id) = app_state.get_active_project_id() {
                     log::info!(
                         "App exit requested, releasing mutex for project: {}",

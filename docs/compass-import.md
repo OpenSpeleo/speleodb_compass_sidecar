@@ -52,9 +52,9 @@ Initial import accepts UTF-8 (including a BOM), ASCII, and legacy Windows-1252
 MAK and DAT text. Valid UTF-8 takes precedence; otherwise the backend interprets
 the whole file as Windows-1252. Each MAK and DAT chooses its encoding
 independently, so a project can contain both encodings. This supports Western
-Windows filenames without replacing characters or modifying the source.
-Other Windows code pages and UTF-16 are not inferred; MAK files containing NUL
-bytes or UTF-16 byte-order marks remain rejected.
+Windows filenames without replacing characters or modifying the source. Other
+Windows code pages and UTF-16 are not inferred; MAK files containing NUL bytes
+or UTF-16 byte-order marks remain rejected.
 
 The MAK scanner tracks byte spans in the original input and decodes fields only
 for analysis and filename resolution. Filtering therefore preserves retained
@@ -66,8 +66,16 @@ keeps Compass data intact while allowing Unicode filenames in the selector and
 metadata. Encoding detection adds a linear scan during analysis, with no extra
 reads when the selection changes.
 
-This policy belongs to the initial-import analyzer. The separate existing-project
-reimport path still uses the `compass_data` reader and its encoding restrictions.
+Dependency matching retains both decoded station names and their original byte
+identity. A legacy station can accidentally contain valid UTF-8 bytes, while an
+unrelated comment makes another file detect as Windows-1252. Comparing only the
+decoded names would then miss a connection between identical station bytes. The
+dual comparison conservatively keeps that prerequisite while still matching the
+same Unicode station across explicitly different file encodings.
+
+This policy belongs to the initial-import analyzer. The separate
+existing-project reimport path still uses the `compass_data` reader and its
+encoding restrictions.
 
 ## Dependency analysis
 
@@ -76,12 +84,13 @@ silently disconnect cave surveys or move their coordinates. The backend analyzes
 the MAK and the stations in its DAT files once during preview. The UI then
 resolves selections against that graph without rescanning the files.
 
-Survey labels may contain spaces or accented text, and survey teams may be empty.
-Those headers do not define station identity: dependencies use the explicit
-`FROM` and `TO` values and MAK links, preserving complete case-sensitive names
-without applying an editor's historical length limit or truncating identifiers.
-Shot flags are read through their closing `#`, including empty `#| #` markers;
-unknown flags and incomplete shot rows still prevent selective import.
+Survey labels may contain spaces or accented text, and survey teams may be
+empty. Those headers do not define station identity: dependencies use the
+explicit `FROM` and `TO` values and MAK links, preserving complete
+case-sensitive names without applying an editor's historical length limit or
+truncating identifiers. Shot flags are read through their closing `#`, including
+empty `#| #` markers; unknown flags and incomplete shot rows still prevent
+selective import.
 
 Previously, the analyzer applied station-name restrictions to survey labels.
 `SURVEY NAME: Silt in the reg line` in `Abejas Negras.DAT` therefore triggered
@@ -153,6 +162,12 @@ Publication and upload are coordinated with project actions and background
 synchronization so another task cannot replace the files being imported. The
 save operation uses the preview's explicit project ID.
 
+Preview and confirmation wait for ongoing project work, then revalidate their
+project and session binding. A periodic background refresh therefore cannot
+discard a completed analysis just because it is busy. Application update checks
+and downloads can continue, but installation and restart use the same operation
+gate: an updater cannot terminate the process partway through import or save.
+
 Before publication, validation or filesystem failure leaves the prior project
 content intact. After publication, the working copy is retained even if the
 network operation fails. Index and revision synchronization follows a successful
@@ -187,14 +202,18 @@ require the original private project. Important cases include:
 - Missing or changed source files, malformed syntax, nested and
   platform-specific paths, duplicate filenames, safe destinations, and unchanged
   source bytes.
-- Spaced survey labels, blank teams, empty or adjacent-comment flag markers,
-  and full-length accented station names with exact dependency matching.
+- Spaced survey labels, blank teams, empty or adjacent-comment flag markers, and
+  full-length accented station names with exact dependency matching.
 - Legacy accented filenames and DAT headers, UTF-8/BOM compatibility, retained
   byte offsets during filtering, and path rewrites in the original encoding.
+- Encoding-ambiguous station bytes that must retain prerequisites even when
+  per-file decoding produces different Unicode names.
 - Cancellation, empty or unknown selections, stale previews, changed project or
   account, concurrent operations, and failures before and after publication.
 - Keyboard selection, search, focus containment/restoration, Escape dismissal,
   long filenames, scrolling, and reduced-motion presentation in the selector.
+- Background refresh contention and application updates waiting for project
+  operations before installation or process exit.
 
 Run the import parser and filesystem regressions from the repository root:
 
@@ -204,18 +223,18 @@ cargo test -p speleodb-compass-sidecar --lib project_management::import::tests
 
 The regression tests live in `app/src-tauri/src/project_management/import.rs`:
 
-| Test | Contract protected |
-| ---- | ------------------ |
-| `legacy_windows_text_preserves_names_offsets_and_source_bytes` | Windows-1252 filename resolution, complete/subset MAK bytes, unchanged DAT copies and sources. |
-| `mixed_file_encodings_preserve_dependencies_and_staged_bytes` | Independently encoded MAK/DAT files resolve the same accented station, select prerequisites, and preserve staged payloads, metadata filenames, and source bytes. |
-| `remapped_paths_keep_the_mak_encoding` | Required destination-path rewrites retain UTF-8 or Windows-1252 encoding. |
-| `utf8_bom_and_unicode_names_still_round_trip`, `legacy_encoding_is_selected_per_file_not_per_filename` | UTF-8/BOM compatibility and consistent whole-file decoding, even when an individual legacy filename resembles UTF-8. |
-| `survey_labels_and_empty_teams_do_not_change_station_dependencies` | Spaced/accented labels and blank teams permit selective import with the correct prerequisite DAT. |
-| `multi_survey_dat_layouts_preserve_later_station_dependencies` | CRLF surveys with or without form feeds retain later-survey dependencies when spaced labels, blank teams, and empty flags occur together. |
-| `permissive_metadata_parsing_still_requires_complete_headers` | Empty/control-containing names or missing structural headers still prohibit a subset; complete import preserves the source payload. |
-| `delimited_flags_allow_empty_values_and_adjacent_comments` | Empty flags and adjacent comments preserve shot indexing; incomplete or unknown flags remain unsupported. |
-| `long_and_accented_station_names_retain_their_complete_identity` | Exact DAT/MAK-link matching without truncating or conflating station names. |
-| `utf16_and_binary_mak_files_are_rejected` | Encoding tolerance does not admit UTF-16 or NUL-containing MAK files. |
+| Test                                                                                                   | Contract protected                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `legacy_windows_text_preserves_names_offsets_and_source_bytes`                                         | Windows-1252 filename resolution, complete/subset MAK bytes, unchanged DAT copies and sources.                                                                   |
+| `mixed_file_encodings_preserve_dependencies_and_staged_bytes`                                          | Independently encoded MAK/DAT files resolve the same accented station, select prerequisites, and preserve staged payloads, metadata filenames, and source bytes. |
+| `remapped_paths_keep_the_mak_encoding`                                                                 | Required destination-path rewrites retain UTF-8 or Windows-1252 encoding.                                                                                        |
+| `utf8_bom_and_unicode_names_still_round_trip`, `legacy_encoding_is_selected_per_file_not_per_filename` | UTF-8/BOM compatibility and consistent whole-file decoding, even when an individual legacy filename resembles UTF-8.                                             |
+| `survey_labels_and_empty_teams_do_not_change_station_dependencies`                                     | Spaced/accented labels and blank teams permit selective import with the correct prerequisite DAT.                                                                |
+| `multi_survey_dat_layouts_preserve_later_station_dependencies`                                         | CRLF surveys with or without form feeds retain later-survey dependencies when spaced labels, blank teams, and empty flags occur together.                        |
+| `permissive_metadata_parsing_still_requires_complete_headers`                                          | Empty/control-containing names or missing structural headers still prohibit a subset; complete import preserves the source payload.                              |
+| `delimited_flags_allow_empty_values_and_adjacent_comments`                                             | Empty flags and adjacent comments preserve shot indexing; incomplete or unknown flags remain unsupported.                                                        |
+| `long_and_accented_station_names_retain_their_complete_identity`                                       | Exact DAT/MAK-link matching without truncating or conflating station names.                                                                                      |
+| `utf16_and_binary_mak_files_are_rejected`                                                              | Encoding tolerance does not admit UTF-16 or NUL-containing MAK files.                                                                                            |
 
 For broader validation, run `make lint`, browser-backed `make test-ui`, and
 `make build-ui`. Browser testing requires Firefox, geckodriver, and a
@@ -240,6 +259,6 @@ graph. Only included DAT files enter the working copy and upload archive.
 
 The modal keeps its header and actions visible while the section list scrolls.
 At short viewport heights, including browser zoom, the sheet scrolls as one
-surface with sticky actions so controls remain reachable without nested scrolling.
-Its costs scale with source file analysis and the dependency graph, without
-adding file rescans to the application's background status checks.
+surface with sticky actions so controls remain reachable without nested
+scrolling. Its costs scale with source file analysis and the dependency graph,
+without adding file rescans to the application's background status checks.

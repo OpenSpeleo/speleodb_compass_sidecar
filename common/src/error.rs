@@ -71,6 +71,8 @@ pub enum Error {
     CompassExecutable(String),
     #[error("Compass Project Error: {0}")]
     CompassProject(String),
+    #[error("Source files changed. Refresh the preview before importing: {0}")]
+    ImportSourceChanged(String),
     #[error("No app handle available")]
     NoAppHandle,
 }

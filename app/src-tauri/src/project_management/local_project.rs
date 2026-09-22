@@ -77,6 +77,31 @@ pub struct LocalProject {
 }
 
 impl LocalProject {
+    /// Write metadata into an already staged import, before it becomes a working copy.
+    pub(super) fn write_import_metadata(
+        id: Uuid,
+        mak_file: String,
+        dat_files: Vec<String>,
+        directory: &Path,
+    ) -> Result<(), Error> {
+        let project = Self {
+            speleodb: SpeleoDb {
+                id,
+                version: SPELEODB_COMPASS_TOML_VERSION,
+            },
+            project_map: ProjectMap::import(mak_file, dat_files),
+        };
+        let serialized = toml::to_string_pretty(&project)
+            .map_err(|error| Error::Serialization(error.to_string()))?;
+        let path = directory.join(SPELEODB_COMPASS_PROJECT_FILE);
+        std::fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&path)
+            .and_then(|mut file| file.write_all(serialized.as_bytes()))
+            .map_err(|error| Error::FileWrite(format!("{}: {error}", path.display())))
+    }
+
     fn is_compass_artifact(path: &Path) -> bool {
         if path
             .file_name()

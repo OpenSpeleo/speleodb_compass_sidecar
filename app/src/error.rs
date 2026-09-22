@@ -3,6 +3,8 @@ use wasm_bindgen::JsValue;
 #[derive(Clone, Eq, PartialEq, Debug, thiserror::Error)]
 pub enum Error {
     #[error("{0}")]
+    ImportSourceChanged(String),
+    #[error("{0}")]
     Command(String),
     #[error("Failed to parse JSON: {0}")]
     Serde(String),
@@ -24,6 +26,9 @@ impl From<JsValue> for Error {
 
         let backend_error = serde_wasm_bindgen::from_value::<common::Error>(e.clone());
         if let Ok(error) = backend_error {
+            if let common::Error::ImportSourceChanged(message) = error {
+                return Self::ImportSourceChanged(message);
+            }
             return Self::Command(format_backend_error(&error));
         }
 
@@ -105,7 +110,8 @@ mod tests {
         );
     }
 
-    #[test]
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn js_string_command_error_is_forwarded() {
         let error = Error::from(JsValue::from_str("simple command failure"));
         assert_eq!(
@@ -115,12 +121,24 @@ mod tests {
         );
     }
 
-    #[test]
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn unknown_js_error_payload_falls_back_to_generic_message() {
         let error = Error::from(JsValue::from_f64(42.0));
         assert_eq!(
             error,
             Error::Command("Backend command failed with an unknown error.".to_string())
+        );
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn source_changed_error_remains_typed_for_preview_recovery() {
+        let error = common::Error::ImportSourceChanged("A.DAT changed".into());
+        let payload = serde_wasm_bindgen::to_value(&error).unwrap();
+        assert_eq!(
+            Error::from(payload),
+            Error::ImportSourceChanged("A.DAT changed".into())
         );
     }
 }

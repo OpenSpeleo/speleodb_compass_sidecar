@@ -1,5 +1,6 @@
 mod api_info;
 pub mod api_types;
+pub mod compass_import;
 pub mod ui_state;
 
 pub use api_info::{ApiInfo, OauthToken};
