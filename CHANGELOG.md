@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### Dependencies
+
+- Fix compilation with Sentry 0.49 by using the `ClientOptions` builder API.
+- Limit Dependabot Cargo updates to requirements that exclude newer releases,
+  and exclude `Cargo.lock` from automated updates.
+
 ### User-facing fixes
 
 - Remove unused settings and empty section separators when importing selected

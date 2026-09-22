@@ -13,6 +13,12 @@ updates:
 
   - package-ecosystem: "cargo"
     open-pull-requests-limit: 50
+    # Only change requirements when a release falls outside the current range.
+    # Cargo does not support the "widen" strategy.
+    versioning-strategy: "increase-if-necessary"
+    # Keep dependency PRs limited to Cargo.toml; refresh locks manually.
+    exclude-paths:
+      - "**/Cargo.lock"
     directories:
       - "/"
       - "/api"

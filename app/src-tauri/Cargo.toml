@@ -47,18 +47,18 @@ uuid.workspace = true
 # Cargo dependencies
 chrono = "0.4"
 compass_data = "0.0.7"
+dirs = "7"
 encoding_rs = "0.8"
+flexi_logger = "0.31"
+notify = "8"
 pretty_env_logger = "0.5"
 semver = { version = "1", features = ["serde"] }
-sha2 = "0.10"
-sentry = { version = "0.48", features = ["log"] }
+sentry = { version = "0.49", features = ["log"] }
+sha2 = "0.11"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
 zip = "8"
-dirs = "6"
-flexi_logger = "0.31"
-notify = "8"
 
 [dev-dependencies]
 serial_test = "4"
