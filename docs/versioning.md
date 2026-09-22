@@ -39,6 +39,21 @@ The command updates root `Cargo.toml` and `app/src-tauri/tauri.conf.json`.
 Date-like input with leading zeroes is accepted but normalized to SemVer, so
 `cargo bump-version 27.06.09` writes `27.6.9`.
 
+For the complete agent release workflow, use the repository's
+[`bump-version` skill](../.agents/skills/bump-version/SKILL.md), for example:
+"Bump the version to 27.6.9 using $bump-version." It directly edits the two
+version sources, runs `cargo update --workspace --offline` to refresh inherited
+workspace versions without upgrading unrelated dependencies, and moves
+Unreleased notes under `## v27.6.9` with a fresh empty `## [Unreleased]` above
+it. All four metadata files belong in one `[compass_speleodb] Release - v27.6.9`
+commit.
+
+This metadata-only workflow uses file and diff inspection instead of builds,
+tests, or commit hooks, so it avoids compiling `xtask` or the application. It
+has no runtime performance impact and does not tag, push, or publish a release.
+The verification commands below remain relevant when changing the versioning
+implementation itself.
+
 The startup logger prints `env!("CARGO_PKG_VERSION")` after file logging is
 initialized, so `~/.compass/speleodb_compass*.log` records the running software
 version.
