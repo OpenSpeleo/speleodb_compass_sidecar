@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+### User-facing fixes
+
+- Remove unused settings and empty section separators when importing selected
+  DAT files from a MAK, preserving the project header and inherited settings.
+
 ## v26.9.22
 
 ### Features

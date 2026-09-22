@@ -1,7 +1,7 @@
 //! Read-only import analysis and isolated staging for an initial Compass import.
 //!
-//! MAK records retain their original byte spans. We only remove excluded records
-//! and rewrite paths that cannot safely be copied into the destination. DATs are
+//! MAK commands retain their original byte spans. We remove excluded records and
+//! unused settings, and rewrite paths that cannot safely be copied. DATs are
 //! never serialized. Dependency analysis deliberately includes every possible
 //! earlier station provider, including shots whose X flag may be overridden by
 //! Compass settings. Unsupported analysis permits a complete, unchanged import.
@@ -126,7 +126,22 @@ struct Station {
 #[derive(Debug)]
 struct Mak {
     records: Vec<Record>,
+    commands: Vec<MakCommand>,
+    header_commands: usize,
     full_import_reason: Option<String>,
+}
+
+#[derive(Debug)]
+struct MakCommand {
+    span: Range<usize>,
+    kind: MakCommandKind,
+}
+
+#[derive(Debug)]
+enum MakCommandKind {
+    Survey(usize),
+    Setting(u8),
+    Metadata,
 }
 
 /// An immutable preview and its source fingerprints. No project files are changed
@@ -139,6 +154,8 @@ pub struct AnalyzedImport {
     mak_encoding: &'static Encoding,
     mak_destination: String,
     records: Vec<Record>,
+    commands: Vec<MakCommand>,
+    header_commands: usize,
     sources: Vec<SurveySource>,
     sections: Vec<ImportSection>,
     full_import_reason: Option<String>,
@@ -181,6 +198,8 @@ pub fn analyze(path: &Path) -> Result<AnalyzedImport, Error> {
     let mak_encoding = text_encoding(&mak_bytes);
     let Mak {
         mut records,
+        commands,
+        header_commands,
         mut full_import_reason,
     } = scan_mak(&mak_bytes, mak_encoding)?;
     if records.is_empty() {
@@ -247,6 +266,8 @@ pub fn analyze(path: &Path) -> Result<AnalyzedImport, Error> {
         mak_encoding,
         mak_destination,
         records,
+        commands,
+        header_commands,
         sources,
         sections,
         full_import_reason,
@@ -391,11 +412,54 @@ impl AnalyzedImport {
     }
 
     fn filtered_mak(&self, included: &BTreeSet<usize>) -> Result<Vec<u8>, Error> {
+        let mut retained = vec![true; self.commands.len()];
+        if included.len() != self.records.len() {
+            // Settings roll forward; '/' is a comment, not a state reset.
+            // Keep selected prefixes intact and only carry settings from excluded
+            // sections when a retained survey still inherits them.
+            let mut needed = BTreeSet::new();
+            let mut selected_prefix = false;
+            for (index, command) in self.commands.iter().enumerate().rev() {
+                retained[index] = match command.kind {
+                    MakCommandKind::Survey(id) => {
+                        selected_prefix = included.contains(&id);
+                        if selected_prefix {
+                            needed.extend(*b"@&$*!");
+                        }
+                        selected_prefix
+                    }
+                    MakCommandKind::Setting(kind) => {
+                        let inherited = needed.remove(&kind);
+                        index < self.header_commands || selected_prefix || inherited
+                    }
+                    MakCommandKind::Metadata => true,
+                };
+            }
+        }
         let mut result = Vec::with_capacity(self.mak_bytes.len());
-        let mut copied = 0;
-        for (id, record) in self.records.iter().enumerate() {
-            result.extend_from_slice(&self.mak_bytes[copied..record.span.start]);
-            if included.contains(&id) {
+        // Preserve the BOM and descriptive header comments. Bare separators
+        // belong to the first command, which may be an excluded section.
+        let mut copied = if self.mak_bytes.starts_with(b"\xef\xbb\xbf") {
+            3
+        } else {
+            0
+        };
+        if let Some(first) = self.commands.first()
+            && self.mak_bytes[copied..first.span.start]
+                .iter()
+                .any(|byte| !byte.is_ascii_whitespace() && !matches!(byte, b'/' | 0x1a))
+        {
+            copied = first.span.start;
+        }
+        result.extend_from_slice(&self.mak_bytes[..copied]);
+        for (command, retained) in self.commands.iter().zip(retained) {
+            if !retained {
+                copied = command.span.end;
+                continue;
+            }
+            result.extend_from_slice(&self.mak_bytes[copied..command.span.start]);
+            if let MakCommandKind::Survey(id) = command.kind {
+                let record = &self.records[id];
                 let destination = &self.sources[record.source_index].destination;
                 if portable_relative(&record.path).as_ref() == Some(destination) {
                     result.extend_from_slice(&self.mak_bytes[record.span.clone()]);
@@ -416,8 +480,10 @@ impl AnalyzedImport {
                     result
                         .extend_from_slice(&self.mak_bytes[record.path_span.end..record.span.end]);
                 }
+            } else {
+                result.extend_from_slice(&self.mak_bytes[command.span.clone()]);
             }
-            copied = record.span.end;
+            copied = command.span.end;
         }
         result.extend_from_slice(&self.mak_bytes[copied..]);
         Ok(result)
@@ -633,8 +699,11 @@ fn scan_mak(bytes: &[u8], encoding: &'static Encoding) -> Result<Mak, Error> {
     let mut folders = 0_usize;
     let mut mak = Mak {
         records: Vec::new(),
+        commands: Vec::new(),
+        header_commands: 0,
         full_import_reason: None,
     };
+    let mut in_header = true;
     while cursor < bytes.len() {
         while bytes
             .get(cursor)
@@ -651,6 +720,13 @@ fn scan_mak(bytes: &[u8], encoding: &'static Encoding) -> Result<Mak, Error> {
                 let candidate = &bytes[cursor + 1..cursor + 1 + end];
                 if std::str::from_utf8(candidate).is_ok_and(|value| Uuid::parse_str(value).is_ok())
                 {
+                    mak.commands.push(MakCommand {
+                        span: cursor..cursor + end + 2,
+                        kind: MakCommandKind::Metadata,
+                    });
+                    if in_header {
+                        mak.header_commands = mak.commands.len();
+                    }
                     cursor += end + 2;
                     continue;
                 }
@@ -670,8 +746,13 @@ fn scan_mak(bytes: &[u8], encoding: &'static Encoding) -> Result<Mak, Error> {
         let start = cursor;
         let command = bytes[cursor];
         cursor += 1;
+        if matches!(command, b'#' | b'$' | b'%' | b'*' | b'[') {
+            in_header = false;
+        }
+        let mut kind = MakCommandKind::Metadata;
         match command {
             b'#' => {
+                kind = MakCommandKind::Survey(mak.records.len());
                 let raw_start = cursor;
                 while bytes
                     .get(cursor)
@@ -752,6 +833,8 @@ fn scan_mak(bytes: &[u8], encoding: &'static Encoding) -> Result<Mak, Error> {
                 cursor += 1;
             }
             b'@' | b'&' | b'$' | b'%' | b'*' | b'!' => {
+                // Both commands replace the convergence setting (mode + angle).
+                kind = MakCommandKind::Setting(if command == b'%' { b'*' } else { command });
                 let end = record_end(bytes, cursor, true)?;
                 let (value, _) = encoding.decode_without_bom_handling(&bytes[cursor..end - 1]);
                 if !known_directive(command, &value) {
@@ -765,6 +848,13 @@ fn scan_mak(bytes: &[u8], encoding: &'static Encoding) -> Result<Mak, Error> {
                     "Unsupported MAK command at byte {start}; the complete file inventory cannot be verified"
                 )));
             }
+        }
+        mak.commands.push(MakCommand {
+            span: start..cursor,
+            kind,
+        });
+        if in_header {
+            mak.header_commands = mak.commands.len();
         }
     }
     if folders != 0 {
@@ -1269,7 +1359,7 @@ mod tests {
         analysis.stage(Uuid::new_v4(), &[0, 2], &subset).unwrap();
         assert_eq!(
             fs::read(subset.join("Cave.mak")).unwrap(),
-            b"/ Caf\xe9 \x96 original\r\n#Backshall\xb4s Backdoor.DAT;\r\n\r\n#last.dat;\r\n"
+            b"/ Caf\xe9 \x96 original\r\n#Backshall\xb4s Backdoor.DAT;\r\n#last.dat;\r\n"
         );
         assert!(!subset.join("Pequeña.DAT").exists());
         assert_eq!(
@@ -1316,7 +1406,7 @@ mod tests {
 
                 let stage = fixture.staging();
                 analysis.stage(Uuid::new_v4(), &[2], &stage).unwrap();
-                let expected = mak.replace("#unrelated.dat;", "");
+                let expected = mak.replace("#unrelated.dat;\r\n", "");
                 assert_eq!(
                     fs::read(stage.join("Cave.mak")).unwrap(),
                     mak_encoding.encode(&expected).0.as_ref()
@@ -1628,6 +1718,77 @@ mod tests {
     }
 
     #[test]
+    fn selecting_one_dat_removes_unused_settings_and_separators() {
+        let fixture = Fixture::new();
+        let header = b"\xef\xbb\xbf@166017.800,0.000,0.000,31,0.000;\r\n&WGS 1984;\r\n!gEvotScxpl;";
+        let mut mak = header.to_vec();
+        let mut blocks = Vec::new();
+        for (id, name) in ["Abejas Negras", "Actun Can", "Actun Zooz", "Ah Kax Ha"]
+            .iter()
+            .enumerate()
+        {
+            fixture.dat(&format!("{name}.DAT"), &format!("A{id}"), &format!("B{id}"));
+            let block = format!(
+                "\r\n\r\n/\r\n\r\n$16;\r\n&WGS 1984;\r\n*0.00;\r\n#{name}.DAT,\r\n A{id}[m,455446.000,2241835.000,0.000];"
+            );
+            mak.extend_from_slice(block.as_bytes());
+            blocks.push(block);
+        }
+        mak.extend_from_slice(b"\r\n\x1a");
+        let source = fixture.write("Cave.mak", &mak);
+        let analysis = analyze(&source).unwrap();
+        assert!(analysis.full_import_reason.is_none());
+        for selected in [vec![0], vec![2], vec![3], vec![0, 2], vec![0, 1, 2, 3]] {
+            let stage = fixture.staging();
+            analysis.stage(Uuid::new_v4(), &selected, &stage).unwrap();
+            let mut expected = header.to_vec();
+            for id in &selected {
+                expected.extend_from_slice(blocks[*id].as_bytes());
+            }
+            expected.extend_from_slice(b"\r\n\x1a");
+            assert_eq!(fs::read(stage.join("Cave.mak")).unwrap(), expected);
+            assert_eq!(fs::read_dir(&stage).unwrap().count(), selected.len() + 2);
+        }
+        assert_eq!(fs::read(source).unwrap(), mak);
+    }
+
+    #[test]
+    fn a_headerless_mak_does_not_retain_the_first_excluded_separator() {
+        let fixture = Fixture::new();
+        fixture.dat("a.dat", "A1", "A2");
+        fixture.dat("b.dat", "B1", "B2");
+        let mak = b"\xef\xbb\xbf/\r\n$12;\r\n#a.dat;\r\n/\r\n$16;\r\n#b.dat;\r\n";
+        let analysis = analyze(&fixture.write("Cave.mak", mak)).unwrap();
+        let stage = fixture.staging();
+        analysis.stage(Uuid::new_v4(), &[1], &stage).unwrap();
+        assert_eq!(
+            fs::read(stage.join("Cave.mak")).unwrap(),
+            b"\xef\xbb\xbf\r\n/\r\n$16;\r\n#b.dat;\r\n"
+        );
+    }
+
+    #[test]
+    fn excluded_sections_only_supply_settings_still_inherited_by_selected_dats() {
+        let fixture = Fixture::new();
+        for (name, from, to) in [("a", "A1", "A2"), ("b", "B1", "B2"), ("c", "C1", "C2")] {
+            fixture.dat(&format!("{name}.dat"), from, to);
+        }
+        let header = b"@1,2,3,13,0;\n&WGS 1984;\n!gEvotScxpl;";
+        let inherited =
+            b"\n/ Caf\xe9 #ignored.dat; /\n$16;\n&North American 1983;\n!GAVOTSCXPL;\n@4,5,6,16,0;";
+        let selected = b"\n/\n*0.00;\n#b.dat;\n#c.dat;\n";
+        let mak = [header.as_slice(), inherited, b"\n%1.25;\n#a.dat;", selected].concat();
+        let analysis = analyze(&fixture.write("Cave.mak", &mak)).unwrap();
+        assert!(analysis.full_import_reason.is_none());
+        let stage = fixture.staging();
+        analysis.stage(Uuid::new_v4(), &[1, 2], &stage).unwrap();
+        assert_eq!(
+            fs::read(stage.join("Cave.mak")).unwrap(),
+            [header.as_slice(), inherited, selected].concat()
+        );
+    }
+
+    #[test]
     fn removing_records_retains_rolling_settings_and_multiline_station_records() {
         let fixture = Fixture::new();
         fixture.dat("a.dat", "A1", "A2");
@@ -1639,7 +1800,7 @@ mod tests {
         analysis.stage(Uuid::new_v4(), &[1], &stage).unwrap();
         assert_eq!(
             fs::read_to_string(stage.join("Cave.mak")).unwrap(),
-            mak.replace("#a.dat;", "")
+            mak.replace("#a.dat;\r\n", "")
         );
     }
 

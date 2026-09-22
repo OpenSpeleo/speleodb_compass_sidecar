@@ -129,6 +129,29 @@ can disappear when its last selected dependent is removed. Both frontend and
 backend use the same shared selection resolver; the backend validates section
 IDs and recomputes the closure at confirmation.
 
+## MAK settings during selection
+
+The backend filters complete command spans, including their preceding whitespace
+and comments. Removing a DAT also removes settings that no retained DAT needs,
+so selecting one independently positioned DAT produces the project header and
+that DAT's section without hundreds of empty `$`, `&`, `*`, and `/` blocks. The
+initial global header, retained section settings, and survey records keep their
+original bytes; a complete import bypasses command pruning.
+
+Compass settings roll forward, and `/` introduces a comment rather than
+resetting state. A backward pass therefore retains the latest setting still
+inherited by each selected DAT, even when it appears before an excluded DAT. `%`
+and `*` replace the same convergence setting. Splitting on slash lines or
+deleting every excluded prefix would risk changing retained surveys' coordinates
+or processing options. The scanner records command spans during preview, and
+confirmation filters them in linear passes without rereading DATs for this
+analysis.
+
+Exact-output staging regressions cover first/middle/last DAT selection, multiple
+selected sections, full-import byte identity, inherited settings, convergence
+replacement, comments, CRLF, BOM, DOS EOF markers, and Windows-1252 text. The
+generated MAK and staged DAT inventory must agree, and source files stay intact.
+
 ## Ownership and import lifecycle
 
 - The Yew selector owns interaction, focus, search, and presentation. Its
