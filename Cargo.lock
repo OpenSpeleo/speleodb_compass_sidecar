@@ -4830,6 +4830,7 @@ dependencies = [
  "compass_data",
  "dirs",
  "embed-resource",
+ "encoding_rs",
  "flexi_logger",
  "log",
  "notify",

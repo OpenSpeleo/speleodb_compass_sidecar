@@ -1,5 +1,22 @@
 ## [Unreleased]
 
+### User-facing fixes
+
+- Accept legacy Windows-1252 MAK and DAT text during initial Compass import,
+  preserving accented filenames and original file bytes when selecting sections.
+- Avoid unnecessary full-project import restrictions for spaced survey names,
+  blank survey teams, empty shot flags, and long or accented station names.
+
+### Tests
+
+- Added regressions for mixed MAK/DAT encodings, multi-survey legacy layouts,
+  and malformed headers that must still prevent selective import.
+
+### Documentation
+
+- Explained legacy encoding and survey-metadata rejection causes, with synthetic
+  regression coverage and a focused import-test command.
+
 ## v26.7.26
 
 ### User-facing fixes
