@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## v26.9.22
+
 ### Features
 
 - Added a section selector for the first Compass import into an empty project,
