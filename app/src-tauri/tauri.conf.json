@@ -4,9 +4,9 @@
   "version": "26.9.23",
   "identifier": "com.speleodb-compass-sidecar",
   "build": {
-    "beforeDevCommand": "cargo run -p xtask -- trunk-serve-dev",
+    "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "trunk build",
+    "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
   },
   "app": {

@@ -58,6 +58,9 @@ The startup logger prints `env!("CARGO_PKG_VERSION")` after file logging is
 initialized, so `~/.compass/speleodb_compass*.log` records the running software
 version.
 
+The frontend `app/package.json` is private and deliberately has no version
+field. Bun dependency changes do not create another application version source.
+
 ## Local metadata version
 
 `SPELEODB_COMPASS_TOML_VERSION` is intentionally fixed at `1.0.0` and scoped to

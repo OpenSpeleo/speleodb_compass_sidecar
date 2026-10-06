@@ -1,17 +1,25 @@
-# Tauri + Yew
+# SpeleoDB Compass Sidecar
 
-This template should help get you started developing with Tauri and Yew.
+A Tauri desktop companion for synchronizing SpeleoDB projects and editing them
+with Compass. The frontend uses React and TypeScript; Rust owns authentication,
+HTTP requests, local files, project locks, Compass processes, menus and updates.
 
-## Importing a Compass project
+Install the Bun version in `app/.bun-version`, Node 24 and the native Rust/Tauri
+prerequisites described in [Development](DEV.md), then run:
 
-When importing into an empty project, choose a MAK file and review its survey
-sections before uploading. All sections start selected; choose a subset and
-required dependencies are included automatically. The original MAK and DAT files
-are preserved. See [Compass import](docs/compass-import.md) for dependency
-rules, compatibility, and recovery behavior.
+```sh
+make setup
+make dev
+```
 
-## Recommended IDE Setup
+Use `make lint`, `make test`, and `make build-tauri` to validate and package the
+app. [Testing](TESTING.md) distinguishes deterministic frontend/native coverage
+from tests requiring real SpeleoDB credentials.
 
-[VS Code](https://code.visualstudio.com/) +
-[Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) +
-[rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
+Initial Compass import supports choosing MAK survey sections and automatically
+including dependencies. Original source files remain unchanged; see
+[Compass import](docs/compass-import.md).
+
+See [Frontend architecture](docs/react-frontend.md),
+[Development server](docs/tauri-dev.md), and
+[Release workflow](docs/release-workflow.md) for engineering details.

@@ -48,68 +48,124 @@ fn named_step<'a>(workflow: &'a str, name: &str) -> &'a str {
 
 #[test]
 fn named_step_handles_lf_and_crlf_line_endings() {
-    let workflow = "\
-jobs:
-  release:
-    steps:
-      - name: Install trunk
-        env:
-          GITHUB_TOKEN: token
-        run: cargo binstall trunk
-      - name: Publish
-        run: publish
-";
-
+    let workflow = "jobs:\n  release:\n    steps:\n      - name: Install frontend dependencies\n        run: bun install --frozen-lockfile\n        working-directory: app\n      - name: Publish\n        run: publish\n";
     for newline in ["\n", "\r\n"] {
         let workflow = workflow.replace('\n', newline);
-        let install_step = named_step(&workflow, "Install trunk");
-
-        assert!(install_step.contains("GITHUB_TOKEN: token"));
-        assert!(install_step.contains("cargo binstall trunk"));
-        assert!(!install_step.contains("- name: Publish"));
+        let step = named_step(&workflow, "Install frontend dependencies");
+        assert!(step.contains("bun install --frozen-lockfile"));
+        assert!(step.contains("working-directory: app"));
+        assert!(!step.contains("- name: Publish"));
     }
 }
 
 #[test]
-fn install_trunk_step_is_authenticated_and_locked() {
-    let workflow = publish_workflow();
-    let install_step = named_step(&workflow, "Install trunk");
-
-    assert!(
-        install_step.contains("shell: bash"),
-        "the cross-platform Trunk bootstrap must run its shell script with Bash"
-    );
-    assert!(
-        install_step.contains("GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}"),
-        "the Trunk bootstrap must authenticate cargo-binstall GitHub API requests"
-    );
-    assert!(
-        install_step.contains("cargo binstall --no-confirm --force --locked trunk"),
-        "the Trunk bootstrap must repair a missing binary despite stale Cargo install metadata"
-    );
+fn workflows_install_the_pinned_frontend_from_its_lockfile() {
+    for name in ["ci.yml", "publish.yml"] {
+        let workflow = workflow(name);
+        assert!(workflow.contains("bun-version-file: app/.bun-version"));
+        let install = named_step(&workflow, "Install frontend dependencies");
+        assert!(install.contains("bun install --frozen-lockfile"));
+        assert!(install.contains("working-directory: app"));
+        assert!(workflow.contains("hashFiles('app/.bun-version', 'app/bun.lock')"));
+        for obsolete in [
+            "trunk",
+            "wasm-pack",
+            "wasm-bindgen",
+            "wasm32-unknown-unknown",
+            "geckodriver",
+        ] {
+            assert!(
+                !workflow.contains(obsolete),
+                "{name} still requires {obsolete}"
+            );
+        }
+    }
 }
 
 #[test]
-fn publish_workflow_uses_current_repository_paths() {
+fn publish_preserves_packaging_and_updater_contracts() {
     let workflow = publish_workflow();
-
-    assert!(
-        !workflow.contains("./src-tauri -> target"),
-        "the removed top-level src-tauri cache workspace must not return"
-    );
-    assert!(
-        workflow.contains("app/dist"),
-        "the release cache must use the app UI output directory"
-    );
+    for required in [
+        "projectPath: app",
+        "tauriScript: bun run tauri",
+        "SIDECAR_UI_PROFILE: release",
+        "uploadUpdaterJson: true",
+        "releaseDraft: true",
+        "tagName: v__VERSION__",
+        "--target aarch64-apple-darwin",
+        "windows-latest",
+        "TAURI_SIGNING_PRIVATE_KEY:",
+        "TAURI_SIGNING_PRIVATE_KEY_PASSWORD:",
+        "SENTRY_DSN_SPELEODB_COMPASS:",
+        "APPLE_SIGNING_IDENTITY: \"-\"",
+    ] {
+        assert!(
+            workflow.contains(required),
+            "missing release contract: {required}"
+        );
+    }
+    assert!(!workflow.contains("includeUpdaterJson:"));
+    assert!(!workflow.contains("./src-tauri -> target"));
 }
 
 #[test]
-fn ci_repairs_missing_wasm_pack_binary_despite_cached_cargo_metadata() {
+fn ci_gates_releases_on_native_and_frontend_checks() {
     let workflow = workflow("ci.yml");
-    let install_step = named_step(&workflow, "Install WASM test tools");
-
+    assert!(workflow.contains("platform: [windows-latest, macos-latest]"));
+    assert!(named_step(&workflow, "Run native tests").contains("cargo test --workspace --locked"));
+    assert!(named_step(&workflow, "Run frontend tests").contains("bun run test:ui"));
     assert!(
-        install_step.contains("cargo binstall --no-confirm --force --locked wasm-pack"),
-        "the WASM tool bootstrap must bypass stale cargo-binstall metadata when wasm-pack is missing"
+        named_step(&workflow, "Build native application")
+            .contains("bun run tauri build --no-bundle")
     );
+    assert!(named_step(&workflow, "Require API credentials for trusted pushes").contains("exit 1"));
+    let release = workflow.split("  trigger-release:").nth(1).unwrap();
+    assert!(release.contains("needs: [test]"));
+    assert!(release.contains("gh workflow run publish.yml --ref \"$TAG\""));
+}
+
+#[test]
+fn frontend_package_uses_the_shared_bun_pin_without_a_release_version() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let bun_version = fs::read_to_string(root.join("app/.bun-version")).unwrap();
+    let package: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(root.join("app/package.json")).unwrap()).unwrap();
+    assert_eq!(
+        package["packageManager"],
+        format!("bun@{}", bun_version.trim())
+    );
+    assert_eq!(package["private"], true);
+    assert!(
+        package.get("version").is_none(),
+        "Cargo and Tauri remain the only app version sources"
+    );
+}
+
+#[test]
+fn bun_dependabot_preserves_floors_and_avoids_routine_lockfile_churn() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let config = fs::read_to_string(root.join(".github/dependabot.yml")).unwrap();
+    let bun = config
+        .split("- package-ecosystem: \"bun\"")
+        .nth(1)
+        .expect("Bun dependency maintenance must remain configured");
+    for required in [
+        "directory: \"/app\"",
+        "versioning-strategy: \"widen\"",
+        "dependency-type: \"direct\"",
+        "dependency-name: \"*\"",
+        "version-update:semver-minor",
+        "version-update:semver-patch",
+    ] {
+        assert!(
+            bun.contains(required),
+            "missing Bun update policy: {required}"
+        );
+    }
+    assert!(!bun.contains("version-update:semver-major"));
+    assert!(
+        !bun.contains("exclude-paths:"),
+        "Bun locks must accompany range widening"
+    );
+    assert!(!bun.contains("open-pull-requests-limit: 0"));
 }

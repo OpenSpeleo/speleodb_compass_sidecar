@@ -1,4 +1,4 @@
-.PHONY: clean test test-rust test-rust-verbose test-tauri test-common test-ui test-ui-ci lint lint-fmt lint-clippy dev build-tauri build-ui setup
+.PHONY: clean test test-rust test-rust-verbose test-tauri test-common test-ui test-ui-ci lint lint-fmt lint-clippy lint-ui dev build-tauri build-ui setup update pre-commit
 
 # ============================================================================ #
 # Load .env file
@@ -18,6 +18,7 @@ clean:
 	rm -fr dist/
 	rm -fr target/
 	rm -rf app/dist/
+	rm -rf app/test-results/ app/playwright-report/
 
 # ============================================================================ #
 # LINTING COMMANDS
@@ -27,13 +28,13 @@ pre-commit:
 	@command -v prek >/dev/null 2>&1 || { \
 		echo "error: 'prek' is not on PATH."; \
 		echo "       Local devs: run 'make setup' once to install it."; \
-		echo "       CI: install via the 'Install prek' workflow step."; \
+		echo "       CI: provision prek before running make pre-commit."; \
 		exit 127; \
 	}
 	prek run -a
 
-# Run all lint checks (formatting + clippy)
-lint: lint-fmt lint-clippy
+# Run all lint checks (formatting + clippy + frontend checks)
+lint: lint-fmt lint-clippy lint-ui
 
 # Check formatting
 lint-fmt:
@@ -43,20 +44,26 @@ lint-fmt:
 lint-clippy:
 	cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+# Check frontend types, lint rules, and formatting
+lint-ui:
+	cd app && bun run typecheck
+	cd app && bun run lint
+	cd app && bun run format:check
+
 # ============================================================================ #
 # TEST COMMANDS
 # ============================================================================ #
 
-# Default: Test EVERYTHING (lint + Rust + WASM UI)
-test: test-rust test-tauri test-common test-ui
+# Default: Test EVERYTHING (Rust + React UI), running each suite once
+test: test-rust test-ui
 
-# Run standard Rust tests (backend + common crate)
+# Run standard Rust tests (backend + common crate + tooling)
 test-rust:
-	cargo test --workspace --exclude speleodb-compass-sidecar-ui
+	cargo test --workspace
 
 # Run Rust tests with verbose output
 test-rust-verbose:
-	cargo test --workspace --exclude speleodb-compass-sidecar-ui -- --nocapture
+	cargo test --workspace -- --nocapture
 
 # Run only Tauri backend tests
 test-tauri:
@@ -66,23 +73,12 @@ test-tauri:
 test-common:
 	cargo test -p common
 
-# Run WASM UI tests (requires wasm-pack)
+# Run React UI tests (unit/component tests + Chromium/WebKit browser checks)
 test-ui:
-	@if command -v wasm-pack >/dev/null 2>&1; then \
-		cd app/src && wasm-pack test --headless --firefox; \
-	else \
-		echo "wasm-pack not found, skipping UI tests"; \
-	fi
+	cd app && bun run test:ui
 
-# Run WASM UI tests in CI after the matching wasm-bindgen-cli is installed.
-# When GECKODRIVER points at a geckodriver binary (set by CI), pass it
-# explicitly so wasm-pack does not depend on PATH discovery, which is
-# unreliable under bash on Windows.
-GECKODRIVER_ARG := $(if $(GECKODRIVER),--geckodriver "$(GECKODRIVER)",)
-test-ui-ci:
-	@command -v wasm-pack >/dev/null 2>&1 || { echo "wasm-pack not found"; exit 127; }
-	@command -v wasm-bindgen >/dev/null 2>&1 || { echo "wasm-bindgen not found"; exit 127; }
-	cd app/src && wasm-pack test --headless --firefox --mode no-install $(GECKODRIVER_ARG)
+# Run the same UI suite in CI; missing tools fail instead of skipping tests
+test-ui-ci: test-ui
 
 # ============================================================================ #
 # BUILD COMMANDS
@@ -90,32 +86,39 @@ test-ui-ci:
 
 # Build Tauri app
 build-tauri:
-	cd app && \
-	cargo tauri build
+	cd app && bun run tauri build
 
 # Build UI for distribution
 build-ui:
-	cd app && \
-	trunk build --release
+	cd app && bun run build:release
 
 # ============================================================================ #
 # DEV COMMANDS
 # ============================================================================ #
 
-# Install dev tools and set up git hooks
+# Install frontend dependencies, browsers, and Rust development tools
 setup:
-	cargo install --locked cargo-binstall
-	cargo binstall --locked prek
-	cargo binstall --locked cargo-outdated
+	# -------------------------- bun/js/ts -------------------------- #
+	@command -v bun >/dev/null 2>&1 || { echo "Install Bun $$(cat app/.bun-version) first; see DEV.md."; exit 127; }
+	cd app && bun install --frozen-lockfile
+	cd app && PLAYWRIGHT_SKIP_BROWSER_GC=1 bunx --no-install playwright install chromium webkit
+	# -------------------------- cargo-binstall -------------------------- #
+	curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+	# cargo install cargo-binstall --locked
+	cargo binstall --locked --no-confirm prek
+	cargo binstall --locked --no-confirm cargo-outdated
+	cargo binstall --locked --no-confirm cargo-machete
+	cargo binstall --locked --no-confirm cargo-deny
+	cargo binstall --locked --no-confirm cargo-audit
+	cargo binstall --locked --no-confirm cargo-wizard
+	cargo binstall --locked --no-confirm cargo-nextest
+	cargo binstall --locked --no-confirm kache
 
 dev:
-	cd app && \
-	cargo tauri dev
+	cd app && bun run tauri dev
 
+# All Rust crates share this workspace and Cargo.lock; one update covers them.
 update:
 	cargo update --manifest-path "Cargo.toml"
-	cargo update --manifest-path "api/Cargo.toml"
-	cargo update --manifest-path "app/Cargo.toml"
-	cargo update --manifest-path "common/Cargo.toml"
-	cargo update --manifest-path "xtask/Cargo.toml"
 	cargo outdated --depth 1
+	cd app && bun outdated

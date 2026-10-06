@@ -1,5 +1,28 @@
 ## [Unreleased]
 
+### Fixes
+
+- Match the frontend API environment to native release/debug builds so packaged
+  release builds default to production instead of staging; cover Tauri hooks and
+  explicit profile overrides with build-script regression tests.
+
+### Developer tooling
+
+- Restore frontend dependency/browser setup and use the Bun-managed Tauri CLI
+  instead of installing a duplicate Cargo CLI.
+
+- Replace the Rust/Yew frontend with React and TypeScript, preserving the
+  existing interface and native backend contracts; use Bun and Vite for UI
+  development and builds.
+- Migrate frontend tests and CI to JavaScript/browser tooling, retain native
+  macOS and Windows checks, and use frozen Bun installs for signed releases.
+- Refresh development, testing, architecture and release documentation for the
+  React frontend and separate native and frontend dependency maintenance.
+- Configure Bun dependency updates to preserve lower bounds and widen upper
+  bounds with the lockfile, suppressing routine minor/patch lockfile-only PRs.
+- Require agents to preserve relevant explanatory comments, section headings and
+  dividers throughout the repository.
+
 ## v26.9.23
 
 ### Dependencies

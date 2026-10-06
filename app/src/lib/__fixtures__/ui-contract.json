@@ -1,0 +1,1137 @@
+{
+  "empty_state": {
+    "loading_state": "NotStarted",
+    "platform": "Windows",
+    "user_email": null,
+    "project_status": [],
+    "selected_project_id": null,
+    "compass_open": false,
+    "project_downloading": false,
+    "update_notification": null
+  },
+  "ui_states": [
+    {
+      "loading_state": "Ready",
+      "platform": "Windows",
+      "user_email": "surveyor@example.com",
+      "project_status": [
+        {
+          "local_status": "Unknown",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "RemoteOnly",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "EmptyLocal",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "Dirty",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "UpToDate",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "OutOfDate",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "DirtyAndOutOfDate",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        }
+      ],
+      "selected_project_id": "00000000-0000-0000-0000-000000000000",
+      "compass_open": true,
+      "project_downloading": true,
+      "update_notification": {
+        "id": 7,
+        "phase": "Checking"
+      }
+    },
+    {
+      "loading_state": "Ready",
+      "platform": "MacOS",
+      "user_email": "surveyor@example.com",
+      "project_status": [
+        {
+          "local_status": "Unknown",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "RemoteOnly",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "EmptyLocal",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "Dirty",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "UpToDate",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "OutOfDate",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "DirtyAndOutOfDate",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        }
+      ],
+      "selected_project_id": "00000000-0000-0000-0000-000000000000",
+      "compass_open": true,
+      "project_downloading": true,
+      "update_notification": {
+        "id": 7,
+        "phase": "Checking"
+      }
+    },
+    {
+      "loading_state": "Ready",
+      "platform": "Linux",
+      "user_email": "surveyor@example.com",
+      "project_status": [
+        {
+          "local_status": "Unknown",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "RemoteOnly",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "EmptyLocal",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "Dirty",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "UpToDate",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "OutOfDate",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        },
+        {
+          "local_status": "DirtyAndOutOfDate",
+          "info": {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Cave",
+            "description": "Survey",
+            "is_active": true,
+            "permission": "ADMIN",
+            "active_mutex": {
+              "user": "surveyor@example.com",
+              "creation_date": "2026-01-01",
+              "modified_date": "2026-02-01"
+            },
+            "country": "US",
+            "created_by": "surveyor@example.com",
+            "creation_date": "2026-01-01",
+            "modified_date": "2026-02-01",
+            "fork_from": "source",
+            "visibility": "PRIVATE",
+            "exclude_geojson": false,
+            "latest_commit": {
+              "id": "abc123",
+              "message": "Surveyed",
+              "author_name": "Surveyor",
+              "commit_date": "2026-02-01T12:00:00-05:00",
+              "dt_since": "just now"
+            },
+            "type": "COMPASS",
+            "latitude": 45.5,
+            "longitude": -73.5
+          }
+        }
+      ],
+      "selected_project_id": "00000000-0000-0000-0000-000000000000",
+      "compass_open": true,
+      "project_downloading": true,
+      "update_notification": {
+        "id": 7,
+        "phase": "Checking"
+      }
+    }
+  ],
+  "projects": [
+    {
+      "id": "00000000-0000-0000-0000-000000000000",
+      "name": "Cave",
+      "description": "Survey",
+      "is_active": true,
+      "permission": "ADMIN",
+      "active_mutex": null,
+      "country": "US",
+      "created_by": "surveyor@example.com",
+      "creation_date": "2026-01-01",
+      "modified_date": "2026-02-01",
+      "fork_from": null,
+      "visibility": "PRIVATE",
+      "exclude_geojson": false,
+      "latest_commit": null,
+      "type": "COMPASS"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000000",
+      "name": "Cave",
+      "description": "Survey",
+      "is_active": true,
+      "permission": "ADMIN",
+      "active_mutex": {
+        "user": "surveyor@example.com",
+        "creation_date": "2026-01-01",
+        "modified_date": "2026-02-01"
+      },
+      "country": "US",
+      "created_by": "surveyor@example.com",
+      "creation_date": "2026-01-01",
+      "modified_date": "2026-02-01",
+      "fork_from": "source",
+      "visibility": "PRIVATE",
+      "exclude_geojson": false,
+      "latest_commit": {
+        "id": "abc123",
+        "message": "Surveyed",
+        "author_name": "Surveyor",
+        "commit_date": "2026-02-01T12:00:00-05:00",
+        "dt_since": "just now"
+      },
+      "type": "COMPASS",
+      "latitude": 45.5,
+      "longitude": -73.5
+    }
+  ],
+  "project_types": ["COMPASS", "IGNORED"],
+  "commit_without_date": {
+    "id": "abc",
+    "message": "Saved",
+    "author_name": "Surveyor",
+    "dt_since": "now"
+  },
+  "loading_states": [
+    "NotStarted",
+    "LoadingPrefs",
+    "Authenticating",
+    "LoadingProjects",
+    "Unauthenticated",
+    "Ready",
+    {
+      "Failed": {
+        "NetworkRequest": "offline"
+      }
+    }
+  ],
+  "notifications": [
+    {
+      "payload": {
+        "id": 7,
+        "phase": "Checking"
+      },
+      "dismissal_key": "7:checking"
+    },
+    {
+      "payload": {
+        "id": 7,
+        "phase": {
+          "Downloading": {
+            "version": "26.9.24",
+            "progress_percent": null
+          }
+        }
+      },
+      "dismissal_key": "7:downloading"
+    },
+    {
+      "payload": {
+        "id": 7,
+        "phase": {
+          "Downloading": {
+            "version": "26.9.24",
+            "progress_percent": 0
+          }
+        }
+      },
+      "dismissal_key": "7:downloading"
+    },
+    {
+      "payload": {
+        "id": 7,
+        "phase": {
+          "Downloading": {
+            "version": "26.9.24",
+            "progress_percent": 100
+          }
+        }
+      },
+      "dismissal_key": "7:downloading"
+    },
+    {
+      "payload": {
+        "id": 7,
+        "phase": {
+          "Installing": {
+            "version": "26.9.24"
+          }
+        }
+      },
+      "dismissal_key": "7:installing"
+    },
+    {
+      "payload": {
+        "id": 7,
+        "phase": {
+          "Relaunching": {
+            "version": "26.9.24"
+          }
+        }
+      },
+      "dismissal_key": "7:relaunching"
+    },
+    {
+      "payload": {
+        "id": 7,
+        "phase": {
+          "UpToDate": {
+            "app_name": "SpeleoDB Compass Sidecar"
+          }
+        }
+      },
+      "dismissal_key": "7:up-to-date"
+    },
+    {
+      "payload": {
+        "id": 7,
+        "phase": {
+          "Failed": {
+            "message": "offline"
+          }
+        }
+      },
+      "dismissal_key": "7:failed"
+    }
+  ],
+  "preview": {
+    "preview_id": "00000000-0000-0000-0000-000000000000",
+    "source_name": "Cave.mak",
+    "source_directory": "Surveys",
+    "sections": [
+      {
+        "id": 0,
+        "name": "A.DAT",
+        "relative_path": "A.DAT",
+        "dependencies": []
+      },
+      {
+        "id": 1,
+        "name": "B.DAT",
+        "relative_path": "B.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      }
+    ],
+    "full_import_reason": null
+  },
+  "import_outcomes": [
+    {
+      "Synced": {
+        "save_result": "Saved"
+      }
+    },
+    {
+      "Synced": {
+        "save_result": "NoChanges"
+      }
+    },
+    {
+      "LocalOnly": {
+        "error": {
+          "NetworkRequest": "offline"
+        }
+      }
+    },
+    {
+      "UploadedNeedsRefresh": {
+        "error": {
+          "Unauthorized": "expired"
+        }
+      }
+    }
+  ],
+  "errors": [
+    {
+      "payload": "NoAuthToken",
+      "display": "No auth token set"
+    },
+    {
+      "payload": {
+        "ProjectAlreadyExists": "survey"
+      },
+      "display": "Project directory already exists at survey"
+    },
+    {
+      "payload": {
+        "ProjectNotFound": "survey"
+      },
+      "display": "Project not found: survey"
+    },
+    {
+      "payload": {
+        "CreateDirectory": "survey"
+      },
+      "display": "Couldn't create storage directory for project"
+    },
+    {
+      "payload": {
+        "Deserialization": "detail"
+      },
+      "display": "Error deserializing data: detail"
+    },
+    {
+      "payload": {
+        "Serialization": "detail"
+      },
+      "display": "Error serializing TOML"
+    },
+    {
+      "payload": "NoUserPreferences",
+      "display": "No user preferences found"
+    },
+    {
+      "payload": {
+        "ApiInfoRead": "prefs"
+      },
+      "display": "Error reading user preferece file"
+    },
+    {
+      "payload": {
+        "ApiInfoWrite": "prefs"
+      },
+      "display": "Error writing user preference file"
+    },
+    {
+      "payload": {
+        "ProjectImport": {
+          "src_path": "A.DAT",
+          "dst_path": "B.DAT",
+          "details": "denied",
+          "is_permission_error": false
+        }
+      },
+      "display": "Error importing project file from: A.DAT to B.DAT: denied"
+    },
+    {
+      "payload": {
+        "ProjectImport": {
+          "src_path": "A.DAT",
+          "dst_path": "B.DAT",
+          "details": "denied",
+          "is_permission_error": true
+        }
+      },
+      "display": "Error importing project file from: A.DAT to B.DAT: denied"
+    },
+    {
+      "payload": {
+        "ProjectWrite": "survey"
+      },
+      "display": "Error writing project file"
+    },
+    {
+      "payload": "FilePermissionSet",
+      "display": "Error setting file permissions"
+    },
+    {
+      "payload": "NoProjectSelected",
+      "display": "No project selected"
+    },
+    {
+      "payload": {
+        "ProjectFileNotFound": "survey"
+      },
+      "display": "Referenced file not found: survey"
+    },
+    {
+      "payload": {
+        "EmptyProjectDirectory": "00000000-0000-0000-0000-000000000000"
+      },
+      "display": "Empty project directory for project ID: 00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "payload": {
+        "NetworkRequest": "detail"
+      },
+      "display": "Network request error: detail"
+    },
+    {
+      "payload": {
+        "Unauthorized": "detail"
+      },
+      "display": "Unauthorized: detail"
+    },
+    {
+      "payload": {
+        "NotFound": "detail"
+      },
+      "display": "Resource not found: detail"
+    },
+    {
+      "payload": {
+        "Unprocessable": "detail"
+      },
+      "display": "Unprocessable entity: detail"
+    },
+    {
+      "payload": {
+        "Conflict": "detail"
+      },
+      "display": "Conflict: detail"
+    },
+    {
+      "payload": {
+        "Api": {
+          "status": 503,
+          "message": "detail"
+        }
+      },
+      "display": "API error 503: detail"
+    },
+    {
+      "payload": {
+        "FileRead": "detail"
+      },
+      "display": "File read failed: detail"
+    },
+    {
+      "payload": {
+        "FileWrite": "detail"
+      },
+      "display": "File write failed: detail"
+    },
+    {
+      "payload": {
+        "NoProjectData": "00000000-0000-0000-0000-000000000000"
+      },
+      "display": "No project data found for project 00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "payload": {
+        "ProjectMutexLocked": "00000000-0000-0000-0000-000000000000"
+      },
+      "display": "Project mutex already locked for project 00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "payload": {
+        "ZipFile": "detail"
+      },
+      "display": "Zip File Error: detail"
+    },
+    {
+      "payload": {
+        "OsCommand": "detail"
+      },
+      "display": "Os Command Error: detail"
+    },
+    {
+      "payload": "CompassNotFound",
+      "display": "Compass Not Found"
+    },
+    {
+      "payload": {
+        "CompassExecutable": "detail"
+      },
+      "display": "Compass Executable Error: detail"
+    },
+    {
+      "payload": {
+        "CompassProject": "detail"
+      },
+      "display": "Compass Project Error: detail"
+    },
+    {
+      "payload": {
+        "ImportSourceChanged": "A.DAT changed"
+      },
+      "display": "Source files changed. Refresh the preview before importing: A.DAT changed"
+    },
+    {
+      "payload": "NoAppHandle",
+      "display": "No app handle available"
+    }
+  ]
+}

@@ -22,10 +22,26 @@ updates:
     directories:
       - "/"
       - "/api"
-      - "/app"
       - "/app/src-tauri"
       - "/common"
       - "/xtask"
     # Every weekday
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "bun"
+    directory: "/app"
+    open-pull-requests-limit: 25
+    # Keep the existing floor; only extend the next-major upper bound.
+    versioning-strategy: "widen"
+    allow:
+      - dependency-type: "direct"
+    # Within-range updates would only churn bun.lock. Update it together with
+    # the manifest when a new major requires a wider upper bound instead.
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
     schedule:
       interval: "weekly"

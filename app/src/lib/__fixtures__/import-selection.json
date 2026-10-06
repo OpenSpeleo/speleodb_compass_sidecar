@@ -1,0 +1,1872 @@
+[
+  {
+    "name": "transitive and shared",
+    "sections": [
+      {
+        "id": 0,
+        "name": "0.DAT",
+        "relative_path": "region/0.DAT",
+        "dependencies": []
+      },
+      {
+        "id": 1,
+        "name": "1.DAT",
+        "relative_path": "region/1.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "2.DAT",
+        "relative_path": "region/2.DAT",
+        "dependencies": [
+          {
+            "section_id": 1,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "3.DAT",
+        "relative_path": "region/3.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      }
+    ],
+    "explicit": [2, 3],
+    "result": {
+      "included": [0, 1, 2, 3],
+      "requiredBy": {
+        "0": [2, 3],
+        "1": [2]
+      }
+    }
+  },
+  {
+    "name": "all selected",
+    "sections": [
+      {
+        "id": 0,
+        "name": "0.DAT",
+        "relative_path": "region/0.DAT",
+        "dependencies": []
+      },
+      {
+        "id": 1,
+        "name": "1.DAT",
+        "relative_path": "region/1.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "2.DAT",
+        "relative_path": "region/2.DAT",
+        "dependencies": [
+          {
+            "section_id": 1,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "3.DAT",
+        "relative_path": "region/3.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      }
+    ],
+    "explicit": [0, 1, 2, 3],
+    "result": {
+      "included": [0, 1, 2, 3],
+      "requiredBy": {
+        "0": [1, 2, 3],
+        "1": [2]
+      }
+    }
+  },
+  {
+    "name": "explicit prerequisite preserved",
+    "sections": [
+      {
+        "id": 0,
+        "name": "0.DAT",
+        "relative_path": "region/0.DAT",
+        "dependencies": []
+      },
+      {
+        "id": 1,
+        "name": "1.DAT",
+        "relative_path": "region/1.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "2.DAT",
+        "relative_path": "region/2.DAT",
+        "dependencies": [
+          {
+            "section_id": 1,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "3.DAT",
+        "relative_path": "region/3.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      }
+    ],
+    "explicit": [0, 1],
+    "result": {
+      "included": [0, 1],
+      "requiredBy": {
+        "0": [1]
+      }
+    }
+  },
+  {
+    "name": "independent prerequisite",
+    "sections": [
+      {
+        "id": 0,
+        "name": "0.DAT",
+        "relative_path": "region/0.DAT",
+        "dependencies": []
+      },
+      {
+        "id": 1,
+        "name": "1.DAT",
+        "relative_path": "region/1.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "2.DAT",
+        "relative_path": "region/2.DAT",
+        "dependencies": [
+          {
+            "section_id": 1,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "3.DAT",
+        "relative_path": "region/3.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      }
+    ],
+    "explicit": [0],
+    "result": {
+      "included": [0],
+      "requiredBy": {}
+    }
+  },
+  {
+    "name": "clear",
+    "sections": [
+      {
+        "id": 0,
+        "name": "0.DAT",
+        "relative_path": "region/0.DAT",
+        "dependencies": []
+      },
+      {
+        "id": 1,
+        "name": "1.DAT",
+        "relative_path": "region/1.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "2.DAT",
+        "relative_path": "region/2.DAT",
+        "dependencies": [
+          {
+            "section_id": 1,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "3.DAT",
+        "relative_path": "region/3.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      }
+    ],
+    "explicit": [],
+    "result": {
+      "included": [],
+      "requiredBy": {}
+    }
+  },
+  {
+    "name": "unknown root",
+    "sections": [
+      {
+        "id": 0,
+        "name": "0.DAT",
+        "relative_path": "region/0.DAT",
+        "dependencies": []
+      },
+      {
+        "id": 1,
+        "name": "1.DAT",
+        "relative_path": "region/1.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "2.DAT",
+        "relative_path": "region/2.DAT",
+        "dependencies": [
+          {
+            "section_id": 1,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "3.DAT",
+        "relative_path": "region/3.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      }
+    ],
+    "explicit": [100],
+    "result": {
+      "error": "Compass Project Error: Unknown import section"
+    }
+  },
+  {
+    "name": "forward edge",
+    "sections": [
+      {
+        "id": 0,
+        "name": "0.DAT",
+        "relative_path": "region/0.DAT",
+        "dependencies": [
+          {
+            "section_id": 1,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 1,
+        "name": "1.DAT",
+        "relative_path": "region/1.DAT",
+        "dependencies": []
+      }
+    ],
+    "explicit": [1],
+    "result": {
+      "error": "Compass Project Error: Invalid import dependency graph"
+    }
+  },
+  {
+    "name": "missing dependency",
+    "sections": [
+      {
+        "id": 2,
+        "name": "2.DAT",
+        "relative_path": "region/2.DAT",
+        "dependencies": [
+          {
+            "section_id": 1,
+            "reason": "Shared station"
+          }
+        ]
+      }
+    ],
+    "explicit": [2],
+    "result": {
+      "error": "Compass Project Error: Invalid import dependency graph"
+    }
+  },
+  {
+    "name": "duplicate section",
+    "sections": [
+      {
+        "id": 0,
+        "name": "0.DAT",
+        "relative_path": "region/0.DAT",
+        "dependencies": []
+      },
+      {
+        "id": 0,
+        "name": "0.DAT",
+        "relative_path": "region/0.DAT",
+        "dependencies": []
+      }
+    ],
+    "explicit": [0],
+    "result": {
+      "error": "Compass Project Error: Invalid import dependency graph"
+    }
+  },
+  {
+    "name": "unsorted sparse identifiers",
+    "sections": [
+      {
+        "id": 90,
+        "name": "90.DAT",
+        "relative_path": "region/90.DAT",
+        "dependencies": [
+          {
+            "section_id": 10,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "name": "10.DAT",
+        "relative_path": "region/10.DAT",
+        "dependencies": []
+      }
+    ],
+    "explicit": [90],
+    "result": {
+      "included": [10, 90],
+      "requiredBy": {
+        "10": [90]
+      }
+    }
+  },
+  {
+    "name": "empty graph",
+    "sections": [],
+    "explicit": [],
+    "result": {
+      "included": [],
+      "requiredBy": {}
+    }
+  },
+  {
+    "name": "word boundaries",
+    "sections": [
+      {
+        "id": 0,
+        "name": "0.DAT",
+        "relative_path": "region/0.DAT",
+        "dependencies": []
+      },
+      {
+        "id": 1,
+        "name": "1.DAT",
+        "relative_path": "region/1.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "2.DAT",
+        "relative_path": "region/2.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "3.DAT",
+        "relative_path": "region/3.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "name": "4.DAT",
+        "relative_path": "region/4.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "name": "5.DAT",
+        "relative_path": "region/5.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "name": "6.DAT",
+        "relative_path": "region/6.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "name": "7.DAT",
+        "relative_path": "region/7.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "name": "8.DAT",
+        "relative_path": "region/8.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "name": "9.DAT",
+        "relative_path": "region/9.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "name": "10.DAT",
+        "relative_path": "region/10.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "name": "11.DAT",
+        "relative_path": "region/11.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "name": "12.DAT",
+        "relative_path": "region/12.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "name": "13.DAT",
+        "relative_path": "region/13.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "name": "14.DAT",
+        "relative_path": "region/14.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 15,
+        "name": "15.DAT",
+        "relative_path": "region/15.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 16,
+        "name": "16.DAT",
+        "relative_path": "region/16.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 17,
+        "name": "17.DAT",
+        "relative_path": "region/17.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 18,
+        "name": "18.DAT",
+        "relative_path": "region/18.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 19,
+        "name": "19.DAT",
+        "relative_path": "region/19.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 20,
+        "name": "20.DAT",
+        "relative_path": "region/20.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 21,
+        "name": "21.DAT",
+        "relative_path": "region/21.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 22,
+        "name": "22.DAT",
+        "relative_path": "region/22.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 23,
+        "name": "23.DAT",
+        "relative_path": "region/23.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 24,
+        "name": "24.DAT",
+        "relative_path": "region/24.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 25,
+        "name": "25.DAT",
+        "relative_path": "region/25.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 26,
+        "name": "26.DAT",
+        "relative_path": "region/26.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 27,
+        "name": "27.DAT",
+        "relative_path": "region/27.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 28,
+        "name": "28.DAT",
+        "relative_path": "region/28.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 29,
+        "name": "29.DAT",
+        "relative_path": "region/29.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 30,
+        "name": "30.DAT",
+        "relative_path": "region/30.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 31,
+        "name": "31.DAT",
+        "relative_path": "region/31.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 32,
+        "name": "32.DAT",
+        "relative_path": "region/32.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 33,
+        "name": "33.DAT",
+        "relative_path": "region/33.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 34,
+        "name": "34.DAT",
+        "relative_path": "region/34.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 35,
+        "name": "35.DAT",
+        "relative_path": "region/35.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 36,
+        "name": "36.DAT",
+        "relative_path": "region/36.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 37,
+        "name": "37.DAT",
+        "relative_path": "region/37.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 38,
+        "name": "38.DAT",
+        "relative_path": "region/38.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 39,
+        "name": "39.DAT",
+        "relative_path": "region/39.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 40,
+        "name": "40.DAT",
+        "relative_path": "region/40.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 41,
+        "name": "41.DAT",
+        "relative_path": "region/41.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 42,
+        "name": "42.DAT",
+        "relative_path": "region/42.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 43,
+        "name": "43.DAT",
+        "relative_path": "region/43.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 44,
+        "name": "44.DAT",
+        "relative_path": "region/44.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 45,
+        "name": "45.DAT",
+        "relative_path": "region/45.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 46,
+        "name": "46.DAT",
+        "relative_path": "region/46.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 47,
+        "name": "47.DAT",
+        "relative_path": "region/47.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 48,
+        "name": "48.DAT",
+        "relative_path": "region/48.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 49,
+        "name": "49.DAT",
+        "relative_path": "region/49.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 50,
+        "name": "50.DAT",
+        "relative_path": "region/50.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 51,
+        "name": "51.DAT",
+        "relative_path": "region/51.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 52,
+        "name": "52.DAT",
+        "relative_path": "region/52.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 53,
+        "name": "53.DAT",
+        "relative_path": "region/53.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 54,
+        "name": "54.DAT",
+        "relative_path": "region/54.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 55,
+        "name": "55.DAT",
+        "relative_path": "region/55.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 56,
+        "name": "56.DAT",
+        "relative_path": "region/56.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 57,
+        "name": "57.DAT",
+        "relative_path": "region/57.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 58,
+        "name": "58.DAT",
+        "relative_path": "region/58.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 59,
+        "name": "59.DAT",
+        "relative_path": "region/59.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 60,
+        "name": "60.DAT",
+        "relative_path": "region/60.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 61,
+        "name": "61.DAT",
+        "relative_path": "region/61.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 62,
+        "name": "62.DAT",
+        "relative_path": "region/62.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 63,
+        "name": "63.DAT",
+        "relative_path": "region/63.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 64,
+        "name": "64.DAT",
+        "relative_path": "region/64.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 65,
+        "name": "65.DAT",
+        "relative_path": "region/65.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 66,
+        "name": "66.DAT",
+        "relative_path": "region/66.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 67,
+        "name": "67.DAT",
+        "relative_path": "region/67.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 68,
+        "name": "68.DAT",
+        "relative_path": "region/68.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 69,
+        "name": "69.DAT",
+        "relative_path": "region/69.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 70,
+        "name": "70.DAT",
+        "relative_path": "region/70.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 71,
+        "name": "71.DAT",
+        "relative_path": "region/71.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 72,
+        "name": "72.DAT",
+        "relative_path": "region/72.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 73,
+        "name": "73.DAT",
+        "relative_path": "region/73.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 74,
+        "name": "74.DAT",
+        "relative_path": "region/74.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 75,
+        "name": "75.DAT",
+        "relative_path": "region/75.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 76,
+        "name": "76.DAT",
+        "relative_path": "region/76.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 77,
+        "name": "77.DAT",
+        "relative_path": "region/77.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 78,
+        "name": "78.DAT",
+        "relative_path": "region/78.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 79,
+        "name": "79.DAT",
+        "relative_path": "region/79.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 80,
+        "name": "80.DAT",
+        "relative_path": "region/80.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 81,
+        "name": "81.DAT",
+        "relative_path": "region/81.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 82,
+        "name": "82.DAT",
+        "relative_path": "region/82.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 83,
+        "name": "83.DAT",
+        "relative_path": "region/83.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 84,
+        "name": "84.DAT",
+        "relative_path": "region/84.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 85,
+        "name": "85.DAT",
+        "relative_path": "region/85.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 86,
+        "name": "86.DAT",
+        "relative_path": "region/86.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 87,
+        "name": "87.DAT",
+        "relative_path": "region/87.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 88,
+        "name": "88.DAT",
+        "relative_path": "region/88.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 89,
+        "name": "89.DAT",
+        "relative_path": "region/89.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 90,
+        "name": "90.DAT",
+        "relative_path": "region/90.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 91,
+        "name": "91.DAT",
+        "relative_path": "region/91.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 92,
+        "name": "92.DAT",
+        "relative_path": "region/92.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 93,
+        "name": "93.DAT",
+        "relative_path": "region/93.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 94,
+        "name": "94.DAT",
+        "relative_path": "region/94.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 95,
+        "name": "95.DAT",
+        "relative_path": "region/95.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 96,
+        "name": "96.DAT",
+        "relative_path": "region/96.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 97,
+        "name": "97.DAT",
+        "relative_path": "region/97.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 98,
+        "name": "98.DAT",
+        "relative_path": "region/98.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 99,
+        "name": "99.DAT",
+        "relative_path": "region/99.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 100,
+        "name": "100.DAT",
+        "relative_path": "region/100.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 101,
+        "name": "101.DAT",
+        "relative_path": "region/101.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 102,
+        "name": "102.DAT",
+        "relative_path": "region/102.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 103,
+        "name": "103.DAT",
+        "relative_path": "region/103.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 104,
+        "name": "104.DAT",
+        "relative_path": "region/104.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 105,
+        "name": "105.DAT",
+        "relative_path": "region/105.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 106,
+        "name": "106.DAT",
+        "relative_path": "region/106.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 107,
+        "name": "107.DAT",
+        "relative_path": "region/107.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 108,
+        "name": "108.DAT",
+        "relative_path": "region/108.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 109,
+        "name": "109.DAT",
+        "relative_path": "region/109.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 110,
+        "name": "110.DAT",
+        "relative_path": "region/110.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 111,
+        "name": "111.DAT",
+        "relative_path": "region/111.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 112,
+        "name": "112.DAT",
+        "relative_path": "region/112.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 113,
+        "name": "113.DAT",
+        "relative_path": "region/113.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 114,
+        "name": "114.DAT",
+        "relative_path": "region/114.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 115,
+        "name": "115.DAT",
+        "relative_path": "region/115.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 116,
+        "name": "116.DAT",
+        "relative_path": "region/116.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 117,
+        "name": "117.DAT",
+        "relative_path": "region/117.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 118,
+        "name": "118.DAT",
+        "relative_path": "region/118.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 119,
+        "name": "119.DAT",
+        "relative_path": "region/119.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 120,
+        "name": "120.DAT",
+        "relative_path": "region/120.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 121,
+        "name": "121.DAT",
+        "relative_path": "region/121.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 122,
+        "name": "122.DAT",
+        "relative_path": "region/122.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 123,
+        "name": "123.DAT",
+        "relative_path": "region/123.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 124,
+        "name": "124.DAT",
+        "relative_path": "region/124.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 125,
+        "name": "125.DAT",
+        "relative_path": "region/125.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 126,
+        "name": "126.DAT",
+        "relative_path": "region/126.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 127,
+        "name": "127.DAT",
+        "relative_path": "region/127.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 128,
+        "name": "128.DAT",
+        "relative_path": "region/128.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      },
+      {
+        "id": 129,
+        "name": "129.DAT",
+        "relative_path": "region/129.DAT",
+        "dependencies": [
+          {
+            "section_id": 0,
+            "reason": "Shared station"
+          }
+        ]
+      }
+    ],
+    "explicit": [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+      21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+      39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56,
+      57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74,
+      75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92,
+      93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108,
+      109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123,
+      124, 125, 126, 127, 128, 129
+    ],
+    "result": {
+      "included": [
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+        20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37,
+        38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
+        56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
+        74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91,
+        92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107,
+        108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121,
+        122, 123, 124, 125, 126, 127, 128, 129
+      ],
+      "requiredBy": {
+        "0": [
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+          21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37,
+          38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54,
+          55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,
+          72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88,
+          89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104,
+          105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118,
+          119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129
+        ]
+      }
+    }
+  }
+]

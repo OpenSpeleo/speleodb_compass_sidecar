@@ -90,10 +90,11 @@ UI code see it. Outbound project creation still serializes
 
 ## Testing strategy
 
-All tests in the `api` crate hit a real SpeleoDB instance. There are no mocks;
-the staging server is the contract. Tests live alongside production code in
-`#[cfg(test)] mod tests` blocks, with shared infrastructure in
-[api/src/test_support.rs](../api/src/test_support.rs).
+Endpoint integration tests in the `api` crate hit a real SpeleoDB instance.
+There are no HTTP mocks; the configured server is the contract. Pure HTTP
+status/error mapping tests run without network access. Tests live alongside
+production code in `#[cfg(test)] mod tests` blocks, with shared infrastructure
+in [api/src/test_support.rs](../api/src/test_support.rs).
 
 ### Coverage matrix
 

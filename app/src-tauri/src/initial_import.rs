@@ -228,10 +228,10 @@ fn validate_initial_target(
     if api.oauth_token().is_none() {
         return Err(Error::NoAuthToken);
     }
-    if !info
+    if info
         .active_mutex
         .as_ref()
-        .is_some_and(|mutex| mutex.user == email)
+        .is_none_or(|mutex| mutex.user != email)
     {
         return Err(Error::ProjectMutexLocked(info.id));
     }

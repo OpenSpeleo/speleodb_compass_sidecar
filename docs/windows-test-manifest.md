@@ -84,19 +84,18 @@ Once any one of the following lands and is in the version we depend on:
 
 Verification on revert: delete `windows-app-manifest.{xml,rc}`, the
 `embed-resource` build-dep, and the `#[cfg(windows)]` branch in `build.rs`, then
-confirm that `cargo test --workspace --exclude speleodb-compass-sidecar-ui`
-passes on the `windows-latest` GitHub runner. If it fails with `0xc0000139`
-again, the upstream fix has not actually shipped — restore this workaround.
+confirm that `cargo test --workspace` passes on the `windows-latest` GitHub
+runner. If it fails with `0xc0000139` again, the upstream fix has not actually
+shipped — restore this workaround.
 
 ## Verification checklist (must hold after any change here)
 
 1. `cargo check --workspace --all-features` passes on macOS and Linux.
 2. `make lint-clippy` passes on macOS (`-D warnings`).
-3. `cargo test --workspace --exclude speleodb-compass-sidecar-ui` completes the
-   `speleodb_compass_sidecar_lib` test binary without exit code `0xc0000139` on
-   `windows-latest`.
-4. `cargo tauri build` on Windows produces a release `.exe` with exactly one
-   embedded manifest. Quick check from a Developer Command Prompt:
+3. `cargo test --workspace` completes the `speleodb_compass_sidecar_lib` test
+   binary without exit code `0xc0000139` on `windows-latest`.
+4. `bun run tauri build` from `app/` on Windows produces a release `.exe` with
+   exactly one embedded manifest. Quick check from a Developer Command Prompt:
    `mt.exe -inputresource:target\release\<exe>;#1 -out:NUL` should succeed and
    report a single manifest. Visual sanity: dialogs and the file picker render
    with v6 styling, identical to today's release builds.

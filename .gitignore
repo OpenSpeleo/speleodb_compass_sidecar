@@ -7,3 +7,8 @@ gen/
 .env
 
 .claude/
+
+node_modules/
+app/test-results/
+app/playwright-report/
+*.tsbuildinfo

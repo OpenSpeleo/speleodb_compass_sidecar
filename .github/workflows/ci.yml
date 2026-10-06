@@ -2,196 +2,116 @@ name: "CI Tests"
 
 on:
   push:
-    branches:
-      - master
+    branches: [master]
   pull_request:
-    branches:
-      - master
+    branches: [master]
   workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   lint:
-    permissions:
-      contents: read
-    env:
-      # Authenticate cargo-binstall's GitHub API release lookups. Without a
-      # token these run unauthenticated and intermittently return HTTP 403
-      # ("rate limit exceeded") on shared CI egress IPs.
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: app/.bun-version
+      - name: Cache Bun downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('app/.bun-version', 'app/bun.lock') }}
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+        working-directory: app
       - name: Install Tauri system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-
-      - name: Cache cargo tools
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/bin/cargo-binstall*
-            ~/.cargo/bin/prek*
-            ~/.cargo/.crates.toml
-            ~/.cargo/.crates2.json
-          key: ${{ runner.os }}-lint-cargo-tools-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-lint-cargo-tools-
-
-      - uses: cargo-bins/cargo-binstall@v1.23.0
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
           shared-key: ubuntu-lint
-
-      # Install prek as a dedicated step rather than from inside `make lint`
-      # so the Makefile only has to *use* the tool, not provision it.
-      # `--force` is required to bypass the well-known
-      # Swatinem/rust-cache <-> cargo-binstall metadata-vs-binary skew bug
-      # (Swatinem/rust-cache#204): the cache can restore `.crates2.json`
-      # claiming prek is installed without restoring `~/.cargo/bin/prek`,
-      # at which point a plain `cargo binstall` exits 0 without doing
-      # anything and the next `prek` invocation fails ENOENT (exit 127).
-      - name: Install prek
-        run: |
-          if ! command -v prek >/dev/null 2>&1; then
-            cargo binstall --no-confirm --force --locked prek
-          fi
-
       - name: Run all lint checks
         run: make lint
+      - name: Verify release workflow contracts
+        run: cargo test -p xtask --test release_workflow
 
   test:
-    permissions:
-      contents: read
-    env:
-      # Authenticate cargo-binstall's GitHub API release lookups (wasm-pack,
-      # wasm-bindgen-cli). Without a token these hit HTTP 403 rate limits on
-      # shared CI egress IPs, then fall back to slow from-source builds.
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    needs: [lint]
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: "windows-latest"
-          - platform: "macos-latest"
-
+        platform: [windows-latest, macos-latest]
     runs-on: ${{ matrix.platform }}
-
-    needs: [lint]
-
+    env:
+      TEST_SPELEODB_INSTANCE: ${{ secrets.TEST_SPELEODB_INSTANCE }}
+      TEST_SPELEODB_OAUTH: ${{ secrets.TEST_SPELEODB_OAUTH }}
     steps:
       - uses: actions/checkout@v7
-
-      - name: setup node
-        uses: actions/setup-node@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: lts/*
-
-      - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+          node-version: "24"
+      - uses: oven-sh/setup-bun@v2
         with:
-          targets: wasm32-unknown-unknown
-
-      - name: Cache cargo tools
+          bun-version-file: app/.bun-version
+      - name: Cache Bun downloads
         uses: actions/cache@v6
         with:
-          path: |
-            ~/.cargo/bin/cargo-binstall*
-            ~/.cargo/bin/wasm-pack*
-            ~/.cargo/bin/wasm-bindgen*
-            ~/.cargo/bin/wasm-bindgen-test-runner*
-            ~/.cargo/bin/wasm2es6js*
-            ~/.cargo/.crates.toml
-            ~/.cargo/.crates2.json
-          key: ${{ runner.os }}-wasm-cargo-tools-${{ hashFiles('Cargo.lock', '.github/workflows/ci.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-wasm-cargo-tools-
-
-      - uses: cargo-bins/cargo-binstall@v1.23.0
-
-      # `--force` repairs the same metadata-vs-binary cache skew documented for
-      # prek above: `.crates2.json` can claim wasm-pack is installed even when
-      # the separately cached executable is missing.
-      - name: Install WASM test tools
-        run: |
-          WASM_BINDGEN_VERSION="$(cargo pkgid -p wasm-bindgen | sed 's/.*@//')"
-          if ! command -v wasm-pack >/dev/null 2>&1; then
-            cargo binstall --no-confirm --force --locked wasm-pack
-          fi
-          if ! command -v wasm-bindgen >/dev/null 2>&1 || [ "$(wasm-bindgen --version | awk '{print $2}')" != "${WASM_BINDGEN_VERSION}" ]; then
-            cargo binstall --no-confirm --force --locked "wasm-bindgen-cli@${WASM_BINDGEN_VERSION}"
-          fi
-        shell: bash
-
-      - name: Install geckodriver
-        uses: browser-actions/setup-geckodriver@latest
-        with:
-          # Authenticate the geckodriver release lookup. Without a token the
-          # action makes unauthenticated GitHub API calls and intermittently
-          # fails with "API rate limit exceeded" (see macOS CI failures).
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      # `setup-geckodriver` only puts geckodriver on PATH for the *native*
-      # shell, and `wasm-pack ... --mode no-install` running under bash on
-      # Windows does not see it ("could not find a global geckodriver on the
-      # $PATH"). Resolve the absolute binary path in the native shell and hand
-      # it to wasm-pack explicitly via GECKODRIVER.
-      - name: Resolve geckodriver path (Unix)
-        if: matrix.platform != 'windows-latest'
-        run: echo "GECKODRIVER=$(command -v geckodriver)" >> "$GITHUB_ENV"
-        shell: bash
-
-      - name: Resolve geckodriver path (Windows)
-        if: matrix.platform == 'windows-latest'
-        run: |
-          "GECKODRIVER=$((Get-Command geckodriver).Source)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-        shell: pwsh
-
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('app/.bun-version', 'app/bun.lock') }}
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+        working-directory: app
+      - uses: dtolnay/rust-toolchain@stable
       # Cache Rust dependencies and build artifacts
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
           shared-key: ${{ matrix.platform }}-test
-
-      # Cache Trunk frontend build artifacts
-      - name: Cache Trunk build
-        uses: actions/cache@v6
-        with:
-          path: |
-            app/dist
-            target/wasm32-unknown-unknown
-          key: ${{ runner.os }}-trunk-test-${{ hashFiles('app/Trunk.toml', 'app/index.html', 'app/styles.css', 'app/src/**', 'app/Cargo.toml', 'Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-trunk-test-
-
-      - name: Setup test environment
+      - name: Require API credentials for trusted pushes
+        if: github.event_name == 'push'
+        shell: bash
         run: |
-          echo "TEST_SPELEODB_INSTANCE=${{ secrets.TEST_SPELEODB_INSTANCE || 'https://www.speleoDB.org' }}" >> $GITHUB_ENV
-          echo "TEST_SPELEODB_OAUTH=${{ secrets.TEST_SPELEODB_OAUTH || '0123456789abcdef0123456789abcdef01234567' }}" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Install make (Windows)
-        if: matrix.platform == 'windows-latest'
-        run: choco install make
-        shell: powershell
-
-      - name: Run tests
-        run: make test-rust test-ui-ci
-        shell: bash
+          if [ -z "$TEST_SPELEODB_INSTANCE" ] || [ -z "$TEST_SPELEODB_OAUTH" ]; then
+            echo "Trusted push tests require TEST_SPELEODB_INSTANCE and TEST_SPELEODB_OAUTH secrets."
+            exit 1
+          fi
+      - name: Run native tests
+        run: cargo test --workspace --locked
+      - name: Install browser engines
+        run: bunx --no-install playwright install chromium webkit
+        working-directory: app
+      - name: Run frontend tests
+        run: bun run test:ui
+        working-directory: app
+      - name: Build frontend
+        run: bun run build:release
+        working-directory: app
+      - name: Build native application
+        run: bun run tauri build --no-bundle
+        working-directory: app
+      - name: Upload browser failure reports
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: browser-results-${{ matrix.platform }}
+          path: |
+            app/test-results
+            app/playwright-report
+          if-no-files-found: ignore
 
   trigger-release:
     name: Trigger release

@@ -175,7 +175,7 @@ Shared `UiState` covered:
 - dismissal key change across phase transitions
 - workflow `id` increments per check (so retries are not suppressed)
 
-Frontend helpers covered:
+React frontend helpers covered:
 
 - the message string for every phase
 - which phases render as "working" (spinner) versus "error" (dot + actions)

@@ -47,6 +47,9 @@ Set the same version in:
 | `Cargo.toml`                    | `[workspace.package].version` |
 | `app/src-tauri/tauri.conf.json` | Top-level `version`           |
 
+The private frontend `app/package.json` is unversioned and is not release
+metadata.
+
 Workspace packages inherit `version.workspace = true`; preserve that inheritance
 instead of inserting versions into member manifests. Do not change dependency
 requirements, app identifiers, signing settings, or the fixed
@@ -67,11 +70,11 @@ If that fails, report the blocker and leave the release uncommitted.
 
 Inspect the `Cargo.lock` diff: the expected changes are only the versions of
 workspace packages inheriting the root version (currently `api`, `common`,
-`speleodb-compass-sidecar`, `speleodb-compass-sidecar-ui`, and `xtask`). Do not
-manually replace matching version strings throughout the lockfile. Do not use
-plain `cargo update`, `make update`, or regenerate the lockfile from scratch;
-these can upgrade unrelated dependencies. Resolve unexpected dependency churn
-before committing, preserving any pre-existing lockfile edits.
+`speleodb-compass-sidecar` and `xtask`). Do not manually replace matching
+version strings throughout the lockfile. Do not use plain `cargo update`,
+`make update`, or regenerate the lockfile from scratch; these can upgrade
+unrelated dependencies. Resolve unexpected dependency churn before committing,
+preserving any pre-existing lockfile edits.
 
 ## 3. Roll the changelog forward
 

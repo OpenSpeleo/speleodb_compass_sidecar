@@ -1,220 +1,105 @@
-# Testing Guide
+# Testing
 
-## Environment Variables for Testing
+Run `make lint` and `make test` from the repository root. `make test` runs the
+native workspace once, followed by frontend unit and browser tests. Missing
+frontend tooling fails the run rather than silently skipping coverage.
 
-This project uses environment variables for test credentials, which allows:
+The [frontend contract map](docs/frontend-test-map.md) maps every former Rust UI
+test to its JavaScript replacement and distinguishes browser-only obligations.
 
-- Local testing with a `.env` file
-- CI/CD testing with secrets
-- No modification of user preferences during tests
+## Suites and ownership
 
-## Local Testing Setup
+| Command                                       | Coverage                                                           |
+| --------------------------------------------- | ------------------------------------------------------------------ |
+| `make lint`                                   | Rust formatting/Clippy, TypeScript, ESLint and frontend formatting |
+| `make test-rust`                              | Native API, common domain, Tauri backend and xtask tests           |
+| `make test-tauri`                             | Tauri backend library tests                                        |
+| `make test-common`                            | Shared Rust types, serialization and import selection              |
+| `cd app && bun run test`                      | Frontend pure logic and component tests                            |
+| `make test-ui`                                | Frontend unit and Playwright browser tests                         |
+| `make test-ui-ci`                             | Same frontend suites, retained as a CI-compatible alias            |
+| `cargo test -p xtask --test release_workflow` | CI/release install, paths and packaging contracts                  |
 
-1. **Copy the distribution environment file:**
+Deterministic Rust tests use synthetic Compass files and temporary directories.
+Frontend tests use explicit presentation fixtures to exercise UI states and
+callbacks. Such tests prove rendering and interaction contracts, not live server
+or native IPC behavior. HTTP integration tests contact a real SpeleoDB instance;
+no fake API replaces that coverage.
 
-   ```bash
-   cp .env.dist .env
-   ```
+## Real API tests
 
-2. **Edit `.env` with your test credentials:**
+Copy `.env.dist` to `.env`, then set valid `TEST_SPELEODB_INSTANCE` and
+`TEST_SPELEODB_OAUTH`. Optional email authentication tests use
+`TEST_SPELEODB_EMAIL` and `TEST_SPELEODB_PASSWORD`. Never commit credentials.
 
-   ```bash
-   # SpeleoDB instance URL (without trailing slash)
-   TEST_SPELEODB_INSTANCE=https://www.speleoDB.org
-
-   # OAuth token (40 character hexadecimal)
-   TEST_SPELEODB_OAUTH=your_actual_token_here
-   ```
-
-3. **Run the tests:**
-
-   ```bash
-   # Test EVERYTHING (Rust tests + WASM UI)
-   # All tests use real HTTP requests to your server
-   make test
-
-   # Or just Rust tests
-   make test-rust
-
-   # Or directly with cargo
-   cargo test --workspace --exclude speleodb-compass-sidecar-ui
-   ```
-
-   Or for specific test targets:
-
-   ```bash
-   # Test only the Tauri backend
-   make test-tauri
-
-   # Test only the common crate
-   make test-common
-
-   # Test only WASM UI
-   make test-ui
-
-   # Test with output visible
-   make test-rust-verbose
-   ```
-
-   Tests will:
-   - Authenticate with your real API
-   - Fetch real project data
-   - Test error handling with invalid credentials
-   - All using **real HTTP requests** - no mocking
-
-## CI/CD Setup
-
-### GitHub Actions
-
-The project includes two GitHub Actions workflows:
-
-1. **`.github/workflows/ci.yml`** - Runs tests on every push and pull request
-   - Executes `make test-rust test-ui-ci`
-   - Runs on Windows and macOS
-   - Uses caching for faster Rust and Trunk builds
-
-2. **`.github/workflows/publish.yml`** - Publishes the app
-   - Triggered manually with `workflow_dispatch`
-   - Creates draft GitHub releases with macOS and Windows artifacts
-   - Authenticates Trunk artifact lookup and keeps its source fallback locked
-
-### Release Workflow Regression Test
-
-The `xtask` integration test verifies the release-tool authentication,
-deterministic Trunk fallback, and current application/cache paths:
-
-```bash
-cargo test -p xtask --test release_workflow
+```sh
+cp .env.dist .env
+# Edit .env with your instance URL and actual 40-character hexadecimal token.
 ```
 
-Run it after changing `.github/workflows/publish.yml`. See
-[`docs/release-workflow.md`](docs/release-workflow.md) for the safeguards and
-historical failure symptoms.
+The API test harness loads the workspace `.env` automatically with `dotenvy`.
+Environment variables supplied by CI take precedence. `.env` remains ignored;
+`.env.dist` is the committed setup template. Native user-preference tests use
+`user_prefs_test.json`, separate from production `user_prefs.json`. Tests that
+share mutable state retain their `#[serial]` guards.
 
-### Setting Up Secrets
-
-Set these environment variables as repository secrets in GitHub:
-
-- `TEST_SPELEODB_INSTANCE` - Your SpeleoDB instance URL
-- `TEST_SPELEODB_OAUTH` - Your OAuth token for testing
-
-**To add secrets:**
-
-1. Go to your repository → Settings → Secrets and variables → Actions
-2. Click "New repository secret"
-3. Add `TEST_SPELEODB_INSTANCE` and `TEST_SPELEODB_OAUTH`
-
-If secrets are not set, the workflow will use default placeholder values (tests
-may fail if they require real API access).
-
-### Workflow Behavior
-
-```
-Push to master or PR:
-  ├─ CI Tests workflow runs automatically
-  │  ├─ Setup environment (Node, Rust, wasm-pack, wasm-bindgen-cli)
-  │  ├─ Run `make test-rust test-ui-ci`
-  │  └─ Report results
-
-Manual release dispatch:
-  └─ Publish workflow builds macOS and Windows artifacts
-     └─ Creates or updates a draft GitHub release
+```sh
+make test-rust
+cargo test -p api -- --nocapture
+cargo test -p speleodb-compass-sidecar --lib project_management::import::tests
+make test-rust-verbose            # native tests with output visible
+cargo test native_auth_request   # one matching test
+cargo test -- --test-threads=1    # serialize tests when diagnosing shared state
 ```
 
-### Manual Workflow Dispatch
+The API harness skips tests when credentials are absent. With credentials, its
+shared authentication preflight reports invalid or unreachable setups before
+endpoint failures cascade. Tests create permanent fixture projects because the
+API has no project-delete endpoint. Use a dedicated test instance/account; mutex
+lifecycle tests release acquired locks even after failures. See
+[API v2](docs/api-v2.md) and [Compass import](docs/compass-import.md).
 
-You can manually trigger the CI or Release workflow from the Actions tab in
-GitHub.
+## Browser and native parity
 
-## How It Works
+Install dependencies with `cd app && bun install --frozen-lockfile`, then
+install browser engines with
+`PLAYWRIGHT_SKIP_BROWSER_GC=1 bunx --no-install playwright install chromium webkit`
+to preserve engine revisions used by other projects. Standard CI runs ten
+browser interaction cases in each engine, covering application initialization,
+authentication, project navigation/save, About, modal focus and Escape, import
+selection, dependency details and scroll geometry. Unit/component tests cover
+validation, loading/errors, sorting, permissions, project actions, import
+recovery and updater phases.
 
-1. **Tests load `.env` automatically**: The test suite uses the `dotenvy` crate
-   to load environment variables from `.env` before running tests.
+Compare captures on the same OS, engine, viewport, scale, fonts and animation
+state. Preserve the 800×900 native window, exact copy, assets, icon geometry,
+focus order and scroll behavior. Investigate differences rather than accepting
+new screenshots to make tests pass. Test long/Unicode text, reduced motion and
+short viewports as well as default dimensions.
 
-2. **Real HTTP requests only**: All tests make actual HTTP requests to your
-   SpeleoDB server. There are no mocks or fake servers.
+Native macOS and Windows checks remain required for file pickers, clipboard
+roles, menus/About, updater actions, Compass/folder launch, import/save/discard,
+mutex release, sign-out and shutdown. Playwright WebKit is not a substitute for
+WKWebView; Chromium is not a substitute for packaged WebView2. Record any checks
+not performed rather than claiming parity from browser tests alone.
 
-3. **Fallback to user preferences**: The `fetch_projects` command checks for
-   environment variables first. If not found, it falls back to user preferences
-   (for production use).
+## CI and release checks
 
-4. **No test pollution**: Tests use environment variables instead of saving to
-   user preferences, preventing test data from affecting your local development
-   environment.
+Configure `TEST_SPELEODB_INSTANCE` and `TEST_SPELEODB_OAUTH` under the
+repository's **Settings → Secrets and variables → Actions → New repository
+secret**. Use a running test instance and a valid token; no placeholder token
+substitutes for real integration coverage. The release workflow remains manually
+runnable from the Actions tab with **Run workflow**.
 
-## Test Categories
+CI runs Rust/frontend lint on Ubuntu and native tests, frontend unit/browser
+tests and native builds on Windows and macOS. Bun's version and lockfile are
+pinned; dependencies are installed with `--frozen-lockfile`. Trusted pushes
+require real API credentials so release gates cannot succeed with placeholder
+credentials. Fork PRs may lack secrets and therefore skip real-network tests;
+this limitation does not imply API coverage passed.
 
-All tests make **real HTTP requests** to your SpeleoDB instance. There are no
-mocks.
-
-**Requirements:**
-
-- A running SpeleoDB server (set in `TEST_SPELEODB_INSTANCE`)
-- Valid OAuth token (set in `TEST_SPELEODB_OAUTH`)
-
-### Test Details
-
-#### Common Crate (8 tests)
-
-- Application directory management
-- File logger initialization
-- Path utilities
-
-#### Tauri Backend (25 tests)
-
-- Basic commands (greet)
-- Token parsing (8 tests)
-- User preferences (5 tests) - uses `#[serial]`
-- Authentication (6 tests)
-- Projects API (3 tests) - uses `#[serial]`
-
-### Running Specific Tests
-
-```bash
-# Run only authentication tests
-cargo test native_auth_request
-
-# Run only project fetching tests
-cargo test fetch_projects
-
-# Run with output
-cargo test -- --nocapture
-
-# Run tests serially (slower but prevents race conditions)
-cargo test -- --test-threads=1
-```
-
-## Makefile Targets
-
-The project includes helpful Makefile targets for common tasks:
-
-### Testing
-
-- `make test` - **Test EVERYTHING** (Rust + WASM UI) - **default** - uses real
-  API
-- `make test-rust` - Run only Rust tests (backend + common crate) - uses real
-  API
-- `make test-rust-verbose` - Run Rust tests with output visible (`--nocapture`)
-- `make test-tauri` - Run only Tauri backend tests - uses real API
-- `make test-common` - Run only common crate tests
-- `make test-ui` - Run only WASM UI tests (requires wasm-pack)
-- `make test-ui-ci` - Run WASM UI tests without installing wasm-bindgen-cli
-
-### Building
-
-- `make build-tauri` - Build the Tauri application
-- `make build-ui` - Build UI for distribution with trunk
-
-### Development
-
-- `make dev` - Run development server with hot-reload
-- `make clean` - Remove build artifacts
-
-## Notes
-
-- `.env` is in `.gitignore` and will never be committed
-- `.env.dist` is the distribution template (committed to git)
-- Tests that modify shared state use the `#[serial]` attribute to prevent race
-  conditions
-- **All tests use real HTTP requests** - no mocks, no fake servers
-- Tests require a running SpeleoDB instance at `TEST_SPELEODB_INSTANCE`
+A successful tagged push dispatches the release workflow. Releases preserve
+macOS/Windows packaging, draft status and updater artifacts. Run
+`cargo test -p xtask --test release_workflow` after workflow edits; see
+[Release workflow](docs/release-workflow.md). Existing Windows application
+manifest tests remain necessary for native test executable startup.

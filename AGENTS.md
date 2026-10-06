@@ -1,5 +1,22 @@
 # AGENTS.md
 
+## Git actions require an explicit user request
+
+NEVER stage, unstage, stash, unstash (including stash apply or pop), commit, or
+push unless the user explicitly asks for that specific action. Permission for
+one action does not authorize any of the others. Requests to review, fix,
+implement, test, or finish work do not authorize these Git actions.
+
+Invoking a skill, plugin, workflow, or sub-agent does NOT authorize these Git
+actions, even if its instructions say to perform them. This restriction also
+applies to sub-agents, scripts, tools, hooks, and other indirect execution.
+
+Preserve the existing staging area and stash entries. Never automatically stash
+or unstage work to run checks. Do not reset, restore, discard, or clean user
+changes without an explicit request for that action. If the user tells you to
+stop Git operations, stop immediately and do not attempt to undo previous Git
+actions without a new explicit request.
+
 Guidance for AI/code agents working in the SpeleoDB Compass Sidecar repository.
 
 This file is intentionally opinionated and feature-focused so agents can make
@@ -7,10 +24,10 @@ correct changes without re-discovering architecture every session.
 
 ## Project Overview
 
-SpeleoDB Compass Sidecar is a Tauri v2 + Yew desktop application that bridges
-SpeleoDB (cave survey database) with Compass (desktop cave surveying software).
-It manages project synchronization, authentication, and launches Compass for
-editing.
+SpeleoDB Compass Sidecar is a Tauri v2 + React/TypeScript desktop application
+that bridges SpeleoDB (cave survey database) with Compass (desktop cave
+surveying software). It manages project synchronization, authentication, and
+launches Compass for editing.
 
 ## Core Principles
 
@@ -28,6 +45,16 @@ editing.
   conditionals or per-call custom checks.
 - **Tests are cheap**: Every behavior should be tested. Untested code is broken
   code.
+
+## Preserve comments and file structure
+
+Preserve existing explanatory comments, section headings, and visual dividers in
+every file, including source code, Makefiles, configuration, and workflows. Do
+not remove them as part of refactoring, migration, formatting, or cleanup while
+they still describe relevant code or behavior. Update their wording when the
+implementation changes. Remove them only when the corresponding code or behavior
+is removed or the comment is otherwise no longer relevant. Preserve the
+surrounding section structure when changing commands or implementation.
 
 ## Temporary agent files
 
@@ -107,21 +134,18 @@ files.
 
 ## Testing Requirements
 
-For map viewer/frontend changes, validate tests:
-
-- `npm run test:js`
-
-Backend/API changes should also run relevant `pytest` targets:
-
-- `pytest`
-
-New tests should respects coding existing structures
+Run `make test-ui` for frontend changes (Vitest and Playwright) and relevant
+native Cargo tests for backend/shared contracts. Run `make lint` for both Rust
+and frontend checks. The API integration suite uses real SpeleoDB credentials;
+unit tests and browser presentation fixtures do not claim native/API coverage.
+See `TESTING.md` for browser setup, native smoke tests and credential policy.
 
 ## Linter
 
 Run `make lint` to validate the codebase. This depends on:
 
 - `make lint-fmt` — `cargo fmt --all -- --check`
+- `make lint-ui` — TypeScript, ESLint and frontend formatting checks
 - `make lint-clippy` —
   `cargo clippy --workspace --all-targets --all-features -- -D warnings`
 
@@ -157,13 +181,13 @@ error.
 
 ## Performance and Regression Checklist
 
-Before finishing map viewer work, check:
-
-1. No duplicated permission matrix logic was added.
-2. Depth mode toggles still avoid per-feature rescans.
-3. Public and private map viewers still initialize shared modules correctly.
-4. Lint and tests pass from root.
-5. Tailwind outputs still generate from root scripts.
+1. Keep Rust authoritative for permissions, files, project locks and polling.
+2. Resolve import selection from the preview graph without file rescans.
+3. Preserve exact UI copy, layout, CSS, SVGs, focus and scroll behavior.
+4. Keep one cleaned-up IPC subscription; background snapshots must not reset
+   forms.
+5. Run native and browser checks; browser screenshots do not prove native
+   parity.
 
 ## Practical Do/Do-Not
 
@@ -180,69 +204,42 @@ Before finishing map viewer work, check:
 - Introduce "quick patches" that hinder long term maintainability.
 - Add expensive computations.
 
-## Build Commands
+## Build and test commands
 
 ```bash
-# Development with hot-reload
-make dev
-# or: cd app && cargo tauri dev
-
-# Build release
-make build-tauri
-# or: cd app && cargo tauri build
-
-# Build UI only (WASM)
-make build-ui
-# or: cd app && trunk build --release
+make setup          # Bun frozen install, Playwright browsers, Rust helpers
+make dev            # Tauri + Vite on fixed port 1420
+make build-tauri    # packaged release
+make build-ui       # production frontend
+make lint           # Rust + TypeScript/frontend checks
+make test           # native suite once, frontend unit + browser suites
+make test-rust      # cargo test --workspace
+make test-ui        # bun run test:ui from app/
+make test-tauri     # Tauri backend library tests
+make test-common    # shared Rust contracts
 ```
 
-## Testing
-
-All tests make **real HTTP requests** - no mocks. Requires `.env` file with
-valid credentials.
-
-```bash
-# Setup: copy .env.dist to .env and add credentials
-cp .env.dist .env
-# Edit .env with TEST_SPELEODB_INSTANCE and TEST_SPELEODB_OAUTH
-
-# Test everything (Rust + WASM)
-make test
-
-# Test only Rust (excludes WASM UI)
-make test-rust
-
-# Test specific crates
-make test-tauri    # Tauri backend only
-make test-common   # Common crate only
-make test-ui       # WASM UI tests (requires wasm-pack)
-
-# Verbose output
-make test-rust-verbose
-
-# Run specific test
-cargo test native_auth_request
-
-# Run tests serially (prevents race conditions)
-cargo test -- --test-threads=1
-```
+Use the Bun version in `app/.bun-version` and Node 24. Package operations use
+Bun and `app/bun.lock`, never npm/Yarn/pnpm lockfiles. `make test-ui` fails if
+browser tooling is missing. Real HTTP tests load `.env`; valid
+`TEST_SPELEODB_INSTANCE` and `TEST_SPELEODB_OAUTH` are required for API
+coverage. Deterministic unit/browser tests use fixtures without contacting
+SpeleoDB.
 
 ## Workspace Structure
 
-Five Cargo workspace members (resolver v3, Rust edition 2024):
+Four native Cargo members (resolver v3, Rust edition 2024):
 
-- **api/** - SpeleoDB REST API client (auth, project CRUD, mutex
-  acquire/release)
-- **app/** - Yew WASM frontend (`speleodb-compass-sidecar-ui`, components + IPC
-  to backend)
-- **app/src-tauri/** - Tauri backend (`speleodb-compass-sidecar`, commands,
-  state management, Compass integration)
-- **common/** - Shared types (ApiInfo, OauthToken, ProjectInfo, UiState,
-  LoadingState, LocalProjectStatus)
-- **errors/** - Single Error enum with ~30 variants, serializable for frontend
+- **api/** — SpeleoDB REST client and HTTP policy.
+- **app/src-tauri/** — native commands, state, Compass integration and OS
+  actions.
+- **common/** — serialized types, shared errors and native domain helpers.
+- **xtask/** — versioning and workflow regression tests.
 
-Workspace dependencies defined in root `Cargo.toml`: bytes, log, serde,
-serde_json, thiserror, tokio, toml, url, uuid.
+**app/** is a separate private, unversioned React/TypeScript package. Vite emits
+`app/dist`; `app/src/lib` owns IPC/types and pure frontend helpers;
+`app/src/components` owns presentation and interactions. Rust handles all server
+and filesystem operations. See `docs/react-frontend.md` for boundaries.
 
 ## Architecture
 
@@ -276,9 +273,10 @@ serde_json, thiserror, tokio, toml, url, uuid.
   alongside the application-owned native actions
 - `commands.rs` - Tauri commands: `about_info`, `auth_request`,
   `clear_active_project`, `create_project`, `discard_changes`,
-  `ensure_initialized`, `import_compass_project`, `open_project`,
-  `pick_compass_project_file`, `reimport_compass_project`,
-  `release_project_mutex`, `save_project`, `set_active_project`, `sign_out`
+  `ensure_initialized`, `open_project`, `pick_compass_project_file`,
+  `preview_compass_import`, `confirm_compass_import`, `cancel_compass_import`,
+  `reimport_compass_project`, `release_project_mutex`, `save_project`,
+  `set_active_project`, `sign_out`, and update/diagnostic actions
 - `state.rs` - `AppState` with Mutex-protected fields (api_info, project_info
   HashMap, active_project, compass_pid, loading_state), unified desktop menu
   layout, background task, `emit_app_state_change()` to push `UiState` to
@@ -295,33 +293,24 @@ serde_json, thiserror, tokio, toml, url, uuid.
   packing, project import via `compass_data` crate
 - `project_management/revision.rs` - `.revision.txt` read/write for tracking
   synced commit hash
+- `initial_import.rs` and `project_management/import.rs` - preview/session
+  lifecycle, source analysis, safe staging and selective Compass import
+- `self_update.rs` - non-blocking update checks, progress and native
+  install/restart
 
 **Frontend (app/src/)**
 
-- `main.rs` - WASM entry: panic hook, wasm_logger, renders `App`
-- `app.rs` - Root component: subscribes to `UI_STATE_EVENT`, calls
-  `ensure_initialized()`, routes to AuthScreen / MainLayout / LoadingScreen
-  based on `LoadingState`
-- `speleo_db_controller.rs` - `SpeleoDBController` singleton wrapping Tauri
-  `invoke()` calls with input validation (OAuth = 40 hex chars)
-- `error.rs` - Frontend `Error` enum (Command, Serde variants)
-- `ui_constants.rs` - Color palette constants (warn, alarm, good, blue, grey)
-- `components/mod.rs` - Module declarations for all components
-- `components/auth_screen.rs` - Login UI with OAuth token and email/password
-  tabs, instance URL dropdown (stage/production)
-- `components/main_layout.rs` - Two-pane authenticated layout: project listing +
-  project details, header with user email and sign-out
-- `components/project_listing.rs` - Scrollable project list from
-  `UiState.project_status`
-- `components/project_listing_item.rs` - Individual project row with status
-  indicator
-- `components/project_details.rs` - Project detail view: open in Compass,
-  download, commit form, read-only indicator, mutex status
-- `components/create_project_modal.rs` - New project form (name, description,
-  country, coordinates)
-- `components/loading_screen.rs` - Loading state display with status text
-- `components/modal.rs` - Generic modal component (Success, Error, Info,
-  Warning, Confirmation types)
+- React entry/root subscribe to `ui-state-update`, initialize the existing
+  backend, and select auth/loading/main presentation.
+- `lib/controller.ts` wraps Tauri `invoke()` with the existing command names,
+  payload keys, input validation and error presentation.
+- `lib/types.ts` models actual Rust serialization; contract tests must cover
+  enum representations, nullable fields and command arguments.
+- `lib/import-selection.ts` mirrors the Rust selection resolver for immediate
+  feedback; Rust recomputes and validates before writes.
+- Components preserve authentication, project listing/details, creation/import,
+  modal and updater behavior. CSS remains in `app/styles.css`.
+- `app/about.html` remains a separate static entry using the global Tauri API.
 
 **API (api/src/)**
 
@@ -348,8 +337,8 @@ serde_json, thiserror, tokio, toml, url, uuid.
   in release)
 - `api_info.rs` - `ApiInfo` (instance URL, email, oauth_token), `OauthToken`
   newtype
-- `api_types.rs` - `ProjectInfo`, `CommitInfo`, `ProjectType` (ARIANE, COMPASS),
-  `ProjectSaveResult`
+- `api_types.rs` - `ProjectInfo`, `CommitInfo`, `ProjectType` (Compass,
+  Ignored), `ProjectSaveResult`
 - `ui_state.rs` - `UiState`, `LoadingState`, `LocalProjectStatus`,
   `ProjectStatus`, `Platform`
 - `error.rs` - Single `Error` enum covering auth, file I/O, project state,
@@ -360,10 +349,10 @@ serde_json, thiserror, tokio, toml, url, uuid.
 
 ### IPC Communication
 
-- Frontend → Backend: `invoke()` calls via `tauri-sys` (JSON serialized with
-  `serde-wasm-bindgen`)
+- Frontend → Backend: typed controller calls `invoke()` from `@tauri-apps/api`.
 - Backend → Frontend: `emit()` events via `UI_STATE_EVENT` ("ui-state-update")
-- Frontend listens with Yew stream subscription in `App` component
+- Frontend registers one event subscription before initialization and cleans it
+  up on WebView teardown or development store-module replacement.
 
 ### Local Project Layout
 
@@ -393,43 +382,59 @@ tail -f ~/.compass/speleodb_compass*.log
 grep "pattern" ~/.compass/speleodb_compass*.log
 ```
 
-## Key Dependencies
-
-- **Tauri 2** with plugins: `tauri-plugin-dialog`, `tauri-plugin-updater`
-- **Yew 0.22** (CSR mode) with `yew_icons` (FontAwesome)
-- **compass_data 0.0.7** - Parses Compass survey file formats
-- **sentry 0.46** - Error tracking
-- **reqwest 0.12** (rustls-tls) - HTTP client for SpeleoDB API
-- **sysinfo 0.33** (Windows only) - Compass process monitoring
-- **zip 7** - Project packaging for upload/download
-
 ## Windows Development Setup
 
-Requires Windows toolchain with MinGW:
+The native Tauri backend still requires Rust. For local Windows development with
+MinGW:
 
 ```bash
 rustup toolchain install stable-x86_64-pc-windows-gnu
 rustup default stable-x86_64-pc-windows-gnu
-rustup target add wasm32-unknown-unknown
-cargo install tauri-cli --version "^2.0.0" --locked
-cargo install trunk --locked
-cargo install wasm-pack
+rustup component add rustfmt clippy
 ```
 
-Also requires MSYS2 with `base-devel` and `mingw-w64-ucrt-x86_64-toolchain`
-packages.
+Install MSYS2 and run the following in its terminal:
+
+```bash
+pacman -S --needed base-devel mingw-w64-ucrt-x86_64-toolchain \
+    mingw-w64-ucrt-x86_64-nasm
+```
+
+Add `C:\msys64\ucrt64\bin` to PATH and restart the terminal. Bun installs the
+Tauri CLI with the frontend dependencies; `make setup` prepares the remaining
+tools. See `DEV.md` for Rust installation and other native prerequisites.
+
+## Key Dependencies
+
+- **Tauri 2** with `tauri-plugin-dialog` and `tauri-plugin-updater` — native
+  application shell, file dialogs and signed application updates.
+- **React 19 + TypeScript** — frontend components, state and typed IPC; **Vite**
+  builds the frontend and **Bun 1.3.13** manages packages and scripts.
+- **compass_data 0.0.7** — parses Compass survey file formats.
+- **sentry 0.49** — native error tracking.
+- **reqwest 0.13** with rustls — SpeleoDB HTTP client.
+- **sysinfo 0.39** (Windows only) — monitors the Compass process.
+- **zip 8** — packages project files for upload and download.
+
+Cargo manifests and `Cargo.lock` remain authoritative for native requirements
+and resolutions; `app/package.json` and `app/bun.lock` serve the frontend.
+`app/.bun-version` pins Bun. Do not upgrade native dependencies as a side effect
+of frontend work.
 
 ## CI/CD
 
-- `ci.yml` - Runs on push/PR to master, executes `make test` on Windows. Uses
-  cargo-binstall for trunk/wasm-pack.
-- `publish.yml` - Manually dispatched. Builds for macOS (aarch64) and Windows
-  via `tauri-action`. Creates a signed draft GitHub release with updater
-  artifacts. Keep `GITHUB_TOKEN` scoped to the Trunk install step, preserve
-  `cargo binstall --no-confirm --force --locked trunk`, run its portable guard
-  with `shell: bash`, and run `cargo test -p xtask --test release_workflow`
-  after release workflow changes.
-- `dependabot.yml` - Automated dependency updates
+- `ci.yml` runs Rust/frontend lint on Ubuntu, then native tests, browser tests
+  and native builds on Windows and macOS. Trusted pushes require real API
+  credentials. Secretless PRs cannot claim real-network test coverage.
+- `publish.yml` uses pinned Bun, a frozen frontend install and
+  `projectPath: app`. Preserve signed updater artifacts, draft releases, app
+  identity, Sentry input, macOS signing and the Windows manifest. Run
+  `cargo test -p xtask --test release_workflow` after workflow changes.
+- `dependabot.yml` maintains Cargo, Bun and Actions independently. Cargo updates
+  keep their manifest-only policy; Bun updates include its text lockfile.
+
+See `DEV.md` for native prerequisites and `docs/release-workflow.md` for release
+contracts. No WASM target, Trunk or wasm-pack is needed for this React app.
 
 ## Version Info
 

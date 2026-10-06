@@ -1,32 +1,20 @@
 # Tauri development server
 
-## Feature intent
+`make dev` runs `bun run tauri dev` from `app/`. Tauri starts the React frontend
+through its Bun/Vite development hook and loads `http://localhost:1420`. Vite
+uses a fixed port with `strictPort` so the native shell cannot accidentally
+connect to a different application when another process holds that port.
 
-`cargo tauri dev` runs the desktop shell and a hot-reloading Yew frontend. Tauri
-loads the frontend from `http://localhost:1420`, so Trunk and Tauri must agree
-on a fixed local port.
+Stop the listener explicitly before retrying. The development server does not
+kill `node` or `bun` processes: those executables can belong to unrelated apps.
+The previous Trunk-specific process recovery and its Rust launcher have been
+removed. The versioning xtask discovers the repository through `Cargo.toml` and
+`app/src-tauri/tauri.conf.json`, independently of frontend tooling.
 
-## Design
+Native code remains in `app/src-tauri`; frontend watching excludes native build
+artifacts. Hot reload updates React while Rust changes use Tauri's normal
+rebuild. This development plumbing adds no packaged runtime work.
 
-The Tauri config uses `cargo run -p xtask -- trunk-serve-dev` as its
-`beforeDevCommand`. That command checks port `1420` before starting
-`trunk serve`.
-
-If the port is already held by a stale `trunk` process, the preflight stops that
-process and waits for the port to become free before launching a new Trunk
-server. If another process owns the port, the command exits with an actionable
-error instead of killing an unrelated process.
-
-This keeps the normal development command simple while avoiding the common
-failure mode where a previous dev run leaves Trunk listening on the fixed port.
-
-## Verification
-
-The process-detection and parser behavior is covered by `cargo test -p xtask`.
-Full development verification is still `cargo tauri dev` from `app/` or
-`make dev` from the repository root.
-
-## Performance
-
-The preflight performs one local port inspection during startup and then hands
-off to Trunk. It does not run during application runtime.
+Verify `make dev`, frontend changes, native rebuilds and an occupied-port
+failure locally. `cargo test -p xtask` checks versioning and repository
+discovery; `make build-ui` verifies the standalone production frontend.

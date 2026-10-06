@@ -1,0 +1,6 @@
+# Generated build output and test reports. Dependencies are ignored by default.
+dist/
+src-tauri/gen/
+src-tauri/target/
+test-results/
+playwright-report/

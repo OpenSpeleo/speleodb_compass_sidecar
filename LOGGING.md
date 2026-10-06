@@ -1,46 +1,44 @@
-# Log File Location
+# Application logs
 
-The application logs are written to:
+Native logs are written under `~/.compass/` with the filename pattern
+`speleodb_compass*.log`. The startup record includes the running application
+version. HTTP, synchronization, project operations and operating-system errors
+remain logged by Rust after the frontend transition.
 
-```
-~/.speleodb_compass/speleodb_compass.log
-```
+## View logs
 
-## View Logs
-
-To see the logs in real-time:
-
-```bash
-tail -f ~/.speleodb_compass/speleodb_compass.log
+```sh
+tail -f ~/.compass/speleodb_compass*.log
+rg "Downloading project|Download failed|404" ~/.compass/speleodb_compass*.log
 ```
 
-To search for specific entries:
+For frontend problems during development, inspect the WebView console alongside
+native logs. Distinguish an IPC invocation failure from a native HTTP error; API
+status mapping and server-provided messages remain owned by `api/src/http.rs`.
+Do not include OAuth tokens or private project contents in shared diagnostic
+reports.
 
-```bash
-grep "Downloading project" ~/.speleodb_compass/speleodb_compass.log
-grep "404" ~/.speleodb_compass/speleodb_compass.log
+## Download diagnostics
+
+A download records its project ID before sending the request:
+
+```text
+Downloading project zip for project: {project_id}
+Download request completed for project {project_id} in ...
 ```
 
-## What You'll See
+Failures record `Download failed for project {project_id}: ...`. The endpoint is
+the configured instance followed by
+`api/v2/projects/{project_id}/download/compass_zip/`; instances hosted below a
+path prefix retain that prefix. Project-info fetch logs also show the requested
+URL. Correlate the project ID, request timing and server-provided error message
+when investigating a failed download.
 
-The download command logs:
+## Debugging a 404
 
-```
-Downloading project ZIP from: https://www.speleodb.org/api/v2/projects/{project_id}/download/compass_zip/
-```
-
-This will show you the exact URL being requested.
-
-## Debugging the 404
-
-Now with the updated code, the error message in the UI will also show the URL:
-
-```
-Download failed with status 404 (URL: https://...)
-```
-
-This will help identify if:
-
-1. The endpoint path is wrong
-2. The project ID is incorrect
-3. The API structure is different than expected
+Check the configured instance and any path prefix, the project ID, and whether
+the server provides the v2 endpoint above. A 404 maps to `NotFound` with the
+server's message; the UI displays that typed failure. A 422 download response
+maps separately to `NoProjectData`, so an empty project should not be diagnosed
+as a missing route. These HTTP mappings remain centralized in `api/src/http.rs`
+and `api/src/project.rs`.

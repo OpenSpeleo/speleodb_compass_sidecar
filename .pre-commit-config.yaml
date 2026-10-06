@@ -61,3 +61,24 @@ repos:
         entry: cargo check --all-targets --all-features
         language: system
         pass_filenames: false
+
+      - id: frontend-typecheck
+        name: frontend typecheck
+        entry: bun --cwd app run typecheck
+        language: system
+        files: ^app/.*\.(ts|tsx|json)$
+        pass_filenames: false
+
+      - id: frontend-lint
+        name: frontend lint
+        entry: bun --cwd app run lint
+        language: system
+        files: ^app/.*\.(ts|tsx|js|json)$
+        pass_filenames: false
+
+      - id: frontend-format
+        name: frontend format check
+        entry: bun --cwd app run format:check
+        language: system
+        files: ^app/.*\.(ts|tsx|js|json|css|html)$
+        pass_filenames: false

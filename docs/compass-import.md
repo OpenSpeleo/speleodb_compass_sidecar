@@ -125,9 +125,10 @@ silently omitting files under the guise of a complete import.
 Selection has two parts: the user's explicit choices and the dependency closure
 derived from those choices. A prerequisite explicitly chosen by the user stays
 selected after its dependent is removed. An automatically included prerequisite
-can disappear when its last selected dependent is removed. Both frontend and
-backend use the same shared selection resolver; the backend validates section
-IDs and recomputes the closure at confirmation.
+can disappear when its last selected dependent is removed. The TypeScript
+frontend mirrors the shared Rust selection resolver with contract tests; the
+backend validates section IDs and recomputes the authoritative closure at
+confirmation.
 
 ## MAK settings during selection
 
@@ -154,7 +155,7 @@ generated MAK and staged DAT inventory must agree, and source files stay intact.
 
 ## Ownership and import lifecycle
 
-- The Yew selector owns interaction, focus, search, and presentation. Its
+- The React selector owns interaction, focus, search, and presentation. Its
   controller transports preview IDs and section IDs through Tauri IPC.
 - The shared `common::compass_import` contract describes preview sections,
   dependency explanations, selection resolution, and terminal outcomes.
@@ -260,10 +261,9 @@ The regression tests live in `app/src-tauri/src/project_management/import.rs`:
 | `utf16_and_binary_mak_files_are_rejected`                                                              | Encoding tolerance does not admit UTF-16 or NUL-containing MAK files.                                                                                            |
 
 For broader validation, run `make lint`, browser-backed `make test-ui`, and
-`make build-ui`. Browser testing requires Firefox, geckodriver, and a
-wasm-bindgen CLI version matching `Cargo.lock`. The existing CI matrix runs
-native tests on Windows and macOS; Windows file locking and native-picker
-behavior also need a Windows smoke test.
+`make build-ui`. Browser testing requires Bun-installed Playwright Chromium and
+WebKit. The existing CI matrix runs native tests on Windows and macOS; Windows
+file locking and native-picker behavior also need a Windows smoke test.
 
 The real-HTTP API suite is separate. It requires valid test credentials and may
 create permanent fixture projects on the configured server. Verify its auth
