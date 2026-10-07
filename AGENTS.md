@@ -29,6 +29,22 @@ that bridges SpeleoDB (cave survey database) with Compass (desktop cave
 surveying software). It manages project synchronization, authentication, and
 launches Compass for editing.
 
+## Temporary agent files
+
+Keep agent plans, task lists, TODO tracking, progress notes, review notes, and
+scratch lessons outside the repository tree, including all submodules. Use a
+unique task directory under `/tmp/` (for example, create one with
+`mktemp -d /tmp/sdb-compass-sidecar-task.XXXXXX`) or another OS temporary
+directory whose resolved path is outside every checkout.
+
+Never create or update these working files inside the checkout, even in ignored
+directories such as `tasks/`, `todos/`, or `plans/`. Never stage or commit them.
+Existing tracked task and lesson files are historical references; do not append
+new work to them. Keep durable product and architecture documentation in
+`docs/`, without embedding task checklists or linking to temporary files. Before
+an authorized commit, inspect the staged filenames and exclude all agent working
+files.
+
 ## Core Principles
 
 - **Simplicity First**: Make every change as simple as possible. Impact minimal
