@@ -1,3 +1,4 @@
+---
 repos:
   # -------------------------
   # Generic sanity checks
@@ -30,6 +31,39 @@ repos:
         types_or: [markdown]
         args: [--prose-wrap=always]
         # args: [--prose-wrap=always, --embedded-language-formatting=off]
+
+  # -------------------------
+  # CI formatting
+  # -------------------------
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        # Accept GitHub Actions `on` and capitalized YAML booleans.
+        args:
+          - --config-data
+          - |
+            extends: default
+            rules:
+              truthy:
+                allowed-values: ['true', 'false', 'True', 'False', 'on']
+
+  - repo: https://github.com/shenxianpeng/hadolint-pre-commit
+    # This wrapper bundles Hadolint 2.15.1 in prek's isolated environment.
+    rev: v2.15.1.2
+    hooks:
+      - id: hadolint
+        # Allow latest image tags and distro-managed APT package versions.
+        args:
+          - --ignore
+          - DL3007  # Allow `latest` Docker image tags.
+          - --ignore
+          - DL3008  # Allow APT packages without explicit version pins.
 
   # -------------------------
   # Rust formatting

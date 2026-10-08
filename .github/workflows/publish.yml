@@ -1,3 +1,4 @@
+---
 name: Release
 run-name: "[Release] ${{ github.ref_name }}"
 
@@ -19,11 +20,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: "macos-latest" # for Arm based macs (M1 and above).
+          - platform: "macos-latest"  # for Arm based macs (M1 and above).
             args: "--target aarch64-apple-darwin"
           # - platform: 'macos-latest' # for Intel based macs.
           #   args: '--target x86_64-apple-darwin'
-          # - platform: 'ubuntu-22.04' # for Tauri v1 you could replace this with ubuntu-20.04.
+          # For Tauri v1 you could replace this with ubuntu-20.04.
+          # - platform: 'ubuntu-22.04'
           #   args: ''
           - platform: "windows-latest"
             args: ""
@@ -44,7 +46,9 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('app/.bun-version', 'app/bun.lock') }}
+          key: >-
+            ${{ runner.os }}-bun-${{
+            hashFiles('app/.bun-version', 'app/bun.lock') }}
 
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
@@ -53,7 +57,9 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
+          targets: >-
+            ${{ matrix.platform == 'macos-latest' &&
+            'aarch64-apple-darwin' || '' }}
 
       # Cache Rust dependencies and build artifacts
       - name: Rust cache
@@ -64,20 +70,23 @@ jobs:
       - uses: tauri-apps/tauri-action@action-v1.0.0
         env:
           SIDECAR_UI_PROFILE: release
-          SENTRY_DSN_SPELEODB_COMPASS: ${{ secrets.SENTRY_DSN_SPELEODB_COMPASS }}
+          SENTRY_DSN_SPELEODB_COMPASS: >-
+            ${{ secrets.SENTRY_DSN_SPELEODB_COMPASS }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Tauri Updater signing (required for in-app self-update)
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # -------------------------- Apple code signing -------------------------- #
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: >-
+            ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # -------------------- Apple code signing -------------------- #
           # ENABLE_CODE_SIGNING: "true"
           # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_CERTIFICATE_PASSWORD: >-
+          #   ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           # APPLE_ID: ${{ secrets.APPLE_ID }}
           # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          # -------------------------- macOS ad-hoc code signing -------------------------- #
+          # ---------------- macOS ad-hoc code signing ---------------- #
           # macOS ad-hoc code signing. Pseudo-identity "-" runs `codesign -s -`
           # so the bundle is locally signed and bypasses the "App is damaged"
           # Gatekeeper hard-block on Apple Silicon. Users still see the
@@ -88,7 +97,8 @@ jobs:
           APPLE_SIGNING_IDENTITY: "-"
 
         with:
-          tagName: v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
+          # The action replaces __VERSION__ with the app version.
+          tagName: v__VERSION__
           releaseName: "App v__VERSION__"
           releaseBody: "See the assets to download this version and install."
           releaseDraft: true

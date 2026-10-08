@@ -8,6 +8,10 @@
 
 ### Developer tooling
 
+- Fix YAML formatting in workflows and hook configuration so yamllint passes
+  without changing CI or release behavior; format the Playwright example test
+  for the frontend formatting check.
+
 - Restore frontend dependency/browser setup and use the Bun-managed Tauri CLI
   instead of installing a duplicate Cargo CLI.
 
