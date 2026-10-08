@@ -4,6 +4,12 @@ Run `make lint` and `make test` from the repository root. `make test` runs the
 native workspace once, followed by frontend unit and browser tests. Missing
 frontend tooling fails the run rather than silently skipping coverage.
 
+Use the Bun version pinned in `app/.bun-version`. `app/bunfig.toml` applies the
+Bun runtime to Vitest, Playwright and their executable children. Runtime
+regressions verify both the Vitest worker and an inherited Node-shebang command
+use that exact Bun version. `bun run test` retains the existing Vitest suite;
+`bun test` is a different runner.
+
 The [frontend contract map](docs/frontend-test-map.md) maps every former Rust UI
 test to its JavaScript replacement and distinguishes browser-only obligations.
 
@@ -63,7 +69,7 @@ lifecycle tests release acquired locks even after failures. See
 
 Install dependencies with `cd app && bun install --frozen-lockfile`, then
 install browser engines with
-`PLAYWRIGHT_SKIP_BROWSER_GC=1 bunx --no-install playwright install chromium webkit`
+`PLAYWRIGHT_SKIP_BROWSER_GC=1 bunx --bun --no-install playwright install chromium webkit`
 to preserve engine revisions used by other projects. Standard CI runs ten
 browser interaction cases in each engine, covering application initialization,
 authentication, project navigation/save, About, modal focus and Escape, import

@@ -2,7 +2,10 @@
   "name": "speleodb-compass-sidecar-ui",
   "private": true,
   "type": "module",
-  "packageManager": "bun@1.3.13",
+  "packageManager": "bun@1.4.2",
+  "engines": {
+    "bun": "1.4.2"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && bun run scripts/build.ts",

@@ -8,6 +8,10 @@
 
 ### Developer tooling
 
+- Standardize frontend tools and their child processes on Bun 1.4.2, remove
+  redundant Node setup from CI and releases, and run the Markdown formatter hook
+  with Bun; retain Vitest, Playwright and the native Tauri build.
+
 - Fix YAML formatting in workflows and hook configuration so yamllint passes
   without changing CI or release behavior; format the Playwright example test
   for the frontend formatting check.

@@ -1,9 +1,15 @@
 # Development
 
-Install Rust stable, Node 24, and the Bun version pinned in `app/.bun-version`
-(currently 1.3.13). Bun owns frontend packages and `app/bun.lock`; do not create
-npm, Yarn or pnpm lockfiles. The private frontend package has no release
-version.
+Install Rust stable and the Bun version pinned in `app/.bun-version` (currently
+1.4.2). Bun owns frontend packages and `app/bun.lock`; do not create npm, Yarn
+or pnpm lockfiles. The private frontend package has no release version.
+
+`app/bunfig.toml` sets `[run] bun = true`, so Vite, TypeScript, ESLint,
+Prettier, Vitest, Playwright and the Tauri CLI use Bun, including executable
+children with Node shebangs. There is no separate Node installation step. Keep
+using `bun run test`: the configured runner is Vitest, and `bun test` runs a
+different test framework. Node-compatible imports and `@types/node` describe
+APIs supported by Bun and do not require a Node process.
 
 ## Rust and native prerequisites
 
@@ -62,7 +68,7 @@ make build-tauri              # packaged native application
 
 `make setup` installs Chromium and WebKit for Playwright. On Linux, install
 their system dependencies with
-`cd app && bunx --no-install playwright install --with-deps chromium webkit`
+`cd app && bunx --bun --no-install playwright install --with-deps chromium webkit`
 when needed. Native package builds still require the platform SDKs; frontend
 browser tests do not replace native smoke tests.
 
@@ -88,4 +94,5 @@ Bun.
 VS Code recommendations cover Tauri, rust-analyzer, ESLint and Prettier. Rust
 and TypeScript use language-specific formatters. `make pre-commit` runs
 repository hooks after `make setup`; hooks include frontend checks for frontend
-changes.
+changes. The Markdown formatter hook uses prek's Bun environment and the system
+Bun binary; it does not provision npm or Node.

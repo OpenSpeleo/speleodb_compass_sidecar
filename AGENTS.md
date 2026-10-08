@@ -235,12 +235,15 @@ make test-tauri     # Tauri backend library tests
 make test-common    # shared Rust contracts
 ```
 
-Use the Bun version in `app/.bun-version` and Node 24. Package operations use
-Bun and `app/bun.lock`, never npm/Yarn/pnpm lockfiles. `make test-ui` fails if
-browser tooling is missing. Real HTTP tests load `.env`; valid
-`TEST_SPELEODB_INSTANCE` and `TEST_SPELEODB_OAUTH` are required for API
-coverage. Deterministic unit/browser tests use fixtures without contacting
-SpeleoDB.
+Use the Bun version in `app/.bun-version` for packages and frontend tools. Keep
+`[run] bun = true` in `app/bunfig.toml` so executable children also use Bun.
+Browser installation uses `bunx --bun --no-install`; the Markdown formatter hook
+uses prek's Bun language with the system Bun binary. Do not add Node
+installation steps or npm/Yarn/pnpm lockfiles. Retain Vitest through
+`bun run test`, not Bun's separate test runner. `make test-ui` fails if browser
+tooling is missing. Real HTTP tests load `.env`; valid `TEST_SPELEODB_INSTANCE`
+and `TEST_SPELEODB_OAUTH` are required for API coverage. Deterministic
+unit/browser tests use fixtures without contacting SpeleoDB.
 
 ## Workspace Structure
 
@@ -425,7 +428,7 @@ tools. See `DEV.md` for Rust installation and other native prerequisites.
 - **Tauri 2** with `tauri-plugin-dialog` and `tauri-plugin-updater` — native
   application shell, file dialogs and signed application updates.
 - **React 19 + TypeScript** — frontend components, state and typed IPC; **Vite**
-  builds the frontend and **Bun 1.3.13** manages packages and scripts.
+  builds the frontend and **Bun 1.4.2** manages packages and runs tools.
 - **compass_data 0.0.7** — parses Compass survey file formats.
 - **sentry 0.49** — native error tracking.
 - **reqwest 0.13** with rustls — SpeleoDB HTTP client.

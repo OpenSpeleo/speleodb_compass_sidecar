@@ -101,7 +101,7 @@ setup:
 	# -------------------------- bun/js/ts -------------------------- #
 	@command -v bun >/dev/null 2>&1 || { echo "Install Bun $$(cat app/.bun-version) first; see DEV.md."; exit 127; }
 	cd app && bun install --frozen-lockfile
-	cd app && PLAYWRIGHT_SKIP_BROWSER_GC=1 bunx --no-install playwright install chromium webkit
+	cd app && PLAYWRIGHT_SKIP_BROWSER_GC=1 bunx --bun --no-install playwright install chromium webkit
 	# -------------------------- cargo-binstall -------------------------- #
 	curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
 	# cargo install cargo-binstall --locked

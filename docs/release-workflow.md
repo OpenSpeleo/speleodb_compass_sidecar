@@ -6,10 +6,22 @@ tagged-push gate dispatches a `v*` tag after all required checks pass.
 
 ## Reproducible frontend build
 
-Both CI and release jobs install Node 24 and the Bun version declared in
-`app/.bun-version`. Run `bun install --frozen-lockfile` from `app/`; cache Bun's
-downloads by OS, Bun version and `app/bun.lock`, then build assets freshly. Do
-not restore generated frontend output as a replacement for a build.
+Both CI and release jobs install the Bun version declared in `app/.bun-version`.
+Run `bun install --frozen-lockfile` from `app/`; cache Bun's downloads by OS,
+Bun version and `app/bun.lock`, then build assets freshly. Do not restore
+generated frontend output as a replacement for a build.
+
+The retained browser workflow template at `app/.github/workflows/playwright.yml`
+follows the same Bun runtime contract; GitHub executes only the workflows in the
+repository-root `.github/workflows`.
+
+`app/bunfig.toml` forces scripts and executable children onto Bun, including
+tools with Node shebangs. Browser installation explicitly uses
+`bunx --bun --no-install`. Workflows do not install a separate Node runtime;
+GitHub manages the internal runtime of its JavaScript actions independently.
+Native Rust, platform SDKs and signing remain required. This removes duplicate
+JavaScript runtime setup without changing the native dependency graph or the
+packaged application's WebView runtime.
 
 The Tauri action uses `projectPath: app` and `tauriScript: bun run tauri`.
 `SIDECAR_UI_PROFILE: release` selects the production instance; output remains
@@ -32,7 +44,10 @@ cargo test -p xtask --test release_workflow
 
 These tests protect pinned/frozen frontend installation, current project paths,
 release/update signing configuration, platform coverage and the native/frontend
-release gate. Workflow parsing tests cover both LF and CRLF checkouts.
+release gate. They also guard Bun script inheritance and the Bun formatter hook
+against reintroducing Node setup. Frontend runtime tests verify the actual
+Vitest worker and inherited executable runtime. Workflow parsing tests cover
+both LF and CRLF checkouts.
 
 The former Trunk bootstrap needed authenticated, forced and locked
 cargo-binstall fallbacks after failures in release v26.6.10. Trunk and WASM

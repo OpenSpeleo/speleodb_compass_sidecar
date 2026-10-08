@@ -28,6 +28,9 @@ repos:
     hooks:
       - id: prettier
         name: prettier markdown
+        entry: bun run --bun prettier --write --ignore-unknown
+        language: bun
+        language_version: system
         types_or: [markdown]
         args: [--prose-wrap=always]
         # args: [--prose-wrap=always, --embedded-language-formatting=off]

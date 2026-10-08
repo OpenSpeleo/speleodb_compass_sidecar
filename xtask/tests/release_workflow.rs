@@ -68,6 +68,8 @@ fn workflows_install_the_pinned_frontend_from_its_lockfile() {
         assert!(install.contains("working-directory: app"));
         assert!(workflow.contains("hashFiles('app/.bun-version', 'app/bun.lock')"));
         for obsolete in [
+            "actions/setup-node",
+            "node-version:",
             "trunk",
             "wasm-pack",
             "wasm-bindgen",
@@ -115,6 +117,10 @@ fn ci_gates_releases_on_native_and_frontend_checks() {
     assert!(named_step(&workflow, "Run native tests").contains("cargo test --workspace --locked"));
     assert!(named_step(&workflow, "Run frontend tests").contains("bun run test:ui"));
     assert!(
+        named_step(&workflow, "Install browser engines")
+            .contains("bunx --bun --no-install playwright install chromium webkit")
+    );
+    assert!(
         named_step(&workflow, "Build native application")
             .contains("bun run tauri build --no-bundle")
     );
@@ -135,9 +141,45 @@ fn frontend_package_uses_the_shared_bun_pin_without_a_release_version() {
         format!("bun@{}", bun_version.trim())
     );
     assert_eq!(package["private"], true);
+    assert_eq!(package["engines"]["bun"], bun_version.trim());
+    assert_eq!(package["scripts"]["test"], "vitest run");
     assert!(
         package.get("version").is_none(),
         "Cargo and Tauri remain the only app version sources"
+    );
+}
+
+#[test]
+fn frontend_tools_and_formatter_hooks_use_bun_without_node_bootstrap() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let bunfig: toml::Value =
+        toml::from_str(&fs::read_to_string(root.join("app/bunfig.toml")).unwrap()).unwrap();
+    assert_eq!(bunfig["run"]["bun"].as_bool(), Some(true));
+
+    let hooks = fs::read_to_string(root.join(".pre-commit-config.yaml")).unwrap();
+    let prettier = hooks
+        .split("- id: prettier")
+        .nth(1)
+        .unwrap()
+        .split("- repo:")
+        .next()
+        .unwrap();
+    assert!(prettier.contains("entry: bun run --bun prettier --write --ignore-unknown"));
+    assert!(prettier.contains("language: bun"));
+    assert!(prettier.contains("language_version: system"));
+
+    let browser_workflow =
+        fs::read_to_string(root.join("app/.github/workflows/playwright.yml")).unwrap();
+    assert!(browser_workflow.contains("bun-version-file: app/.bun-version"));
+    assert!(!browser_workflow.contains("actions/setup-node"));
+    assert!(!browser_workflow.contains("node-version:"));
+    assert!(
+        named_step(&browser_workflow, "Install Playwright Browsers")
+            .contains("bunx --bun --no-install playwright install --with-deps")
+    );
+    assert!(
+        named_step(&browser_workflow, "Run Playwright tests")
+            .contains("bunx --bun --no-install playwright test")
     );
 }
 

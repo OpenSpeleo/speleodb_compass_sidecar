@@ -20,9 +20,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "24"
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: app/.bun-version
@@ -65,9 +62,6 @@ jobs:
       TEST_SPELEODB_OAUTH: ${{ secrets.TEST_SPELEODB_OAUTH }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "24"
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: app/.bun-version
@@ -100,7 +94,7 @@ jobs:
       - name: Run native tests
         run: cargo test --workspace --locked
       - name: Install browser engines
-        run: bunx --no-install playwright install chromium webkit
+        run: bunx --bun --no-install playwright install chromium webkit
         working-directory: app
       - name: Run frontend tests
         run: bun run test:ui

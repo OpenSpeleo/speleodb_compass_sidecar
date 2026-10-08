@@ -2,11 +2,11 @@
 
 ## Intent and boundaries
 
-React and TypeScript render the application UI. Bun manages packages and Vite
-builds the frontend. The Rust backend remains authoritative for authentication,
-polling, project state, permissions, file operations, import validation,
-mutexes, menus and updates. The browser never calls SpeleoDB directly or gains
-filesystem access.
+React and TypeScript render the application UI. Bun manages packages and runs
+the frontend tools; Vite builds the frontend. The Rust backend remains
+authoritative for authentication, polling, project state, permissions, file
+operations, import validation, mutexes, menus and updates. The browser never
+calls SpeleoDB directly or gains filesystem access.
 
 The frontend has one typed controller for existing Tauri commands and one
 subscription to `ui-state-update`. Wire names, argument keys, enum shapes and
@@ -36,6 +36,14 @@ build hooks infer that profile from `TAURI_ENV_PLATFORM` and `TAURI_ENV_DEBUG`;
 standalone builds default to debug unless explicitly configured.
 `app/package.json` is private and unversioned; application versions remain in
 Cargo and Tauri configuration.
+
+`app/.bun-version` pins the development and CI runtime, mirrored by
+`packageManager` and `engines.bun`. `[run] bun = true` in `app/bunfig.toml`
+keeps package scripts and their executable children on Bun. The native Tauri CLI
+is invoked through the existing `bun run tauri` command. The packaged UI still
+executes in the operating system's WebView, while native application logic
+executes in Rust. This runtime choice does not add a runtime to the distributed
+application or change its frontend assets.
 
 ## Verification and performance
 

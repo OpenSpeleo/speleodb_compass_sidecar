@@ -4,7 +4,7 @@ A Tauri desktop companion for synchronizing SpeleoDB projects and editing them
 with Compass. The frontend uses React and TypeScript; Rust owns authentication,
 HTTP requests, local files, project locks, Compass processes, menus and updates.
 
-Install the Bun version in `app/.bun-version`, Node 24 and the native Rust/Tauri
+Install the Bun version in `app/.bun-version` and the native Rust/Tauri
 prerequisites described in [Development](DEV.md), then run:
 
 ```sh
