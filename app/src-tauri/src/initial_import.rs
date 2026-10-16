@@ -754,7 +754,13 @@ mod tests {
                 .await
                 .expect("uploaded selection must be downloadable");
             let mut archive = zip::ZipArchive::new(std::io::Cursor::new(downloaded)).unwrap();
-            let actual_names: BTreeSet<String> = archive.file_names().map(str::to_owned).collect();
+            let actual_names: BTreeSet<String> = archive
+                .file_names()
+                .map(|name| {
+                    name.expect("uploaded ZIP filename must be readable")
+                        .into_owned()
+                })
+                .collect();
             let expected_names: BTreeSet<String> = expected_dats
                 .iter()
                 .cloned()

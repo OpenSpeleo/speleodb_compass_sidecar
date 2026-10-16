@@ -8,6 +8,8 @@
 
 ### Developer tooling
 
+- Fix native test compilation with Zip 9's fallible archive filename iterator.
+
 - Standardize frontend tools and their child processes on Bun 1.4.2, remove
   redundant Node setup from CI and releases, and run the Markdown formatter hook
   with Bun; retain Vitest, Playwright and the native Tauri build.

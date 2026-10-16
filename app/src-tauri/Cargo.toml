@@ -58,7 +58,7 @@ sha2 = "0.11"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
-zip = "8"
+zip = "9"
 
 [dev-dependencies]
 serial_test = "4"
