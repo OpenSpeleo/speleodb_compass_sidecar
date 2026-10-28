@@ -1,20 +1,18 @@
 use common::{ApiInfo, Error};
 use log::{error, info};
-use reqwest::RequestBuilder;
-use serde::Deserialize;
-use serde_json::json;
+use speleodb_api::{
+    ApiOpError,
+    types::{AuthTokenResponse, PatchedAuthTokenRequest},
+};
 use url::Url;
 
-use crate::{get_api_client, http};
+use crate::http;
 
-#[derive(Deserialize)]
-struct TokenResponse {
-    token: String,
-    user: String,
-}
-
-async fn handle_auth_response(instance: Url, builder: RequestBuilder) -> Result<ApiInfo, String> {
-    match http::send_json::<TokenResponse>(builder).await {
+fn handle_auth_response<E: std::fmt::Debug>(
+    instance: Url,
+    response: Result<AuthTokenResponse, ApiOpError<E>>,
+) -> Result<ApiInfo, String> {
+    match response.map_err(http::sdk_error) {
         Ok(resp) => Ok(ApiInfo::new(instance, Some(resp.user), Some(resp.token))),
         Err(err) => {
             error!("Authorization failed: {err}");
@@ -60,11 +58,11 @@ fn format_auth_error(err: &Error) -> String {
 
 pub async fn authorize_with_token(instance: Url, oauth: &str) -> Result<ApiInfo, String> {
     info!("Attempting to authorize with: {instance} using OAuth token");
-    let url = http::v2_url(&instance, "user/auth-token/");
-    let builder = get_api_client()
-        .get(url)
-        .header("Authorization", format!("Token {oauth}"));
-    handle_auth_response(instance, builder).await
+    let response = http::client(&instance)
+        .with_header("Authorization", format!("Token {oauth}"))
+        .v2_user_auth_token_retrieve(None)
+        .await;
+    handle_auth_response(instance, response)
 }
 
 pub async fn authorize_with_email(
@@ -73,10 +71,17 @@ pub async fn authorize_with_email(
     password: &str,
 ) -> Result<ApiInfo, String> {
     info!("Attempting to authorize with: {instance} using email/password");
-    let url = http::v2_url(&instance, "user/auth-token/");
-    let body = json!({"email": email, "password": password});
-    let builder = get_api_client().post(url).json(&body);
-    handle_auth_response(instance, builder).await
+    let response = http::client(&instance)
+        .v2_user_auth_token_create_with_json(
+            None,
+            None::<&str>,
+            Some(PatchedAuthTokenRequest {
+                email: Some(email.into()),
+                password: Some(password.into()),
+            }),
+        )
+        .await;
+    handle_auth_response(instance, response)
 }
 
 #[cfg(test)]

@@ -21,5 +21,6 @@ including dependencies. Original source files remain unchanged; see
 [Compass import](docs/compass-import.md).
 
 See [Frontend architecture](docs/react-frontend.md),
+[SpeleoDB SDK integration](docs/api-v2.md),
 [Development server](docs/tauri-dev.md), and
 [Release workflow](docs/release-workflow.md) for engineering details.

@@ -1,19 +1,14 @@
-use std::{
-    path::Path,
-    time::{Duration, Instant},
-};
+use std::{path::Path, time::Instant};
 
 use common::{
     ApiInfo, Error,
-    api_types::{ProjectInfo, ProjectSaveResult, ProjectType},
+    api_types::{ProjectInfo, ProjectSaveResult},
 };
 use log::{error, info, warn};
+use speleodb_api::{ApiOpError, types};
 use uuid::Uuid;
 
-use crate::{get_api_client, http};
-
-const PROJECT_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
-const PROJECT_UPLOAD_TIMEOUT: Duration = Duration::from_secs(60);
+use crate::{http, models::project_info};
 
 /// HTTP status used by the v2 upload endpoint when the working copy already
 /// matches the latest server commit. We surface this as `NoChanges` rather
@@ -29,23 +24,26 @@ pub async fn create_project(
     longitude: Option<String>,
 ) -> Result<ProjectInfo, Error> {
     info!("Creating new project: {name}");
-    let url = http::v2_url(api_info.instance(), "projects/");
-
-    let mut body = serde_json::json!({
-        "name": name,
-        "description": description,
-        "country": country,
-        "type": ProjectType::Compass,
+    let client = http::authenticated(api_info)?;
+    let country = serde_json::from_value(serde_json::Value::String(country))
+        .map_err(|error| Error::Unprocessable(format!("Invalid project country: {error}")))?;
+    let mut request =
+        types::V2ProjectsCreateWithJsonRequest::new(country, description, name, "COMPASS".into());
+    request.latitude = latitude.filter(|value| !value.is_empty()).map(|value| {
+        Some(types::V2ProjectsCreateWithJsonRequestLatitude::String(
+            value,
+        ))
     });
-    if let Some(lat) = latitude.as_deref().filter(|s| !s.is_empty()) {
-        body["latitude"] = serde_json::json!(lat);
-    }
-    if let Some(lon) = longitude.as_deref().filter(|s| !s.is_empty()) {
-        body["longitude"] = serde_json::json!(lon);
-    }
-
-    let req = http::authenticated(get_api_client().post(url).json(&body), api_info)?;
-    http::send_json(req).await
+    request.longitude = longitude.filter(|value| !value.is_empty()).map(|value| {
+        Some(types::V2ProjectsCreateWithJsonRequestLongitude::String(
+            value,
+        ))
+    });
+    let project = client
+        .v2_projects_create_with_json(None, None::<&str>, request)
+        .await
+        .map_err(http::sdk_error)?;
+    project_info(project)
 }
 
 pub async fn acquire_project_mutex(
@@ -53,18 +51,17 @@ pub async fn acquire_project_mutex(
     project_id: Uuid,
 ) -> Result<ProjectInfo, Error> {
     info!("Acquiring project mutex for project: {project_id}");
-    let url = http::v2_url(
-        api_info.instance(),
-        &format!("projects/{project_id}/acquire/"),
-    );
-    let req = http::authenticated(get_api_client().post(url), api_info)?;
-    match http::send_json(req).await {
-        Ok(info) => Ok(info),
+    let result = http::authenticated(api_info)?
+        .v2_projects_acquire_create(project_id.to_string(), None, None::<&str>)
+        .await
+        .map_err(http::sdk_error)
+        .and_then(project_info);
+    match result {
         Err(Error::Conflict(_)) => {
             warn!("Mutex already locked by another user for project: {project_id}");
             Err(Error::ProjectMutexLocked(project_id))
         }
-        Err(e) => Err(e),
+        other => other,
     }
 }
 
@@ -73,35 +70,41 @@ pub async fn release_project_mutex(
     project_id: Uuid,
 ) -> Result<ProjectInfo, Error> {
     info!("Releasing project mutex for project: {project_id}");
-    let url = http::v2_url(
-        api_info.instance(),
-        &format!("projects/{project_id}/release/"),
-    );
-    let req = http::authenticated(get_api_client().post(url), api_info)?;
-    http::send_json(req).await
+    let project = http::authenticated(api_info)?
+        .v2_projects_release_create_with_json(project_id.to_string(), None, None::<&str>, None)
+        .await
+        .map_err(http::sdk_error)?;
+    project_info(project)
 }
 
 pub async fn fetch_projects(api_info: &ApiInfo) -> Result<Vec<ProjectInfo>, Error> {
-    let url = http::v2_url(api_info.instance(), "projects/");
-    info!("Fetching projects from server: {url}");
-    let req = http::authenticated(get_api_client().get(url), api_info)?;
-    let mut projects: Vec<ProjectInfo> = http::send_json(req).await?;
+    info!("Fetching projects from server: {}", api_info.instance());
+    let response = http::authenticated(api_info)?
+        .v2_projects_list(None)
+        .await
+        .map_err(http::sdk_error)?;
+    let mut projects = response
+        .into_iter()
+        .map(project_info)
+        .collect::<Result<Vec<_>, _>>()?;
     retain_compass_projects(&mut projects);
     Ok(projects)
 }
 
 fn retain_compass_projects(projects: &mut Vec<ProjectInfo>) {
-    projects.retain(|p| p.project_type.is_compass());
+    projects.retain(|project| project.project_type.is_compass());
 }
 
 pub async fn fetch_project_info(
     api_info: &ApiInfo,
     project_id: Uuid,
 ) -> Result<ProjectInfo, Error> {
-    let url = http::v2_url(api_info.instance(), &format!("projects/{project_id}/"));
-    info!("Fetching project info from server: {url}");
-    let req = http::authenticated(get_api_client().get(url), api_info)?;
-    http::send_json(req).await
+    info!("Fetching project info from server for project: {project_id}");
+    let project = http::authenticated(api_info)?
+        .v2_project_retrieve(project_id.to_string(), None)
+        .await
+        .map_err(http::sdk_error)?;
+    project_info(project)
 }
 
 pub async fn download_project_zip(
@@ -109,32 +112,36 @@ pub async fn download_project_zip(
     project_id: Uuid,
 ) -> Result<bytes::Bytes, Error> {
     info!("Downloading project zip for project: {project_id}");
-    let url = http::v2_url(
-        api_info.instance(),
-        &format!("projects/{project_id}/download/compass_zip/"),
-    );
-    let req = http::authenticated(
-        get_api_client().get(url).timeout(PROJECT_DOWNLOAD_TIMEOUT),
-        api_info,
-    )?;
-
     let started = Instant::now();
-    let result = http::send_raw(req).await;
+    let response = http::transfer_client(api_info)?
+        .v2_projects_download_retrieve_by_format("compass_zip", project_id.to_string(), None)
+        .await;
+    let result = match response {
+        Ok(bytes) => Ok(bytes),
+        Err(ApiOpError::Api(response))
+            if matches!(response.status, 301 | 302 | 303 | 307 | 308) =>
+        {
+            http::download_redirect(
+                api_info.instance(),
+                project_id,
+                &response.headers,
+                http::TRANSFER_TIMEOUT.saturating_sub(started.elapsed()),
+            )
+            .await
+        }
+        Err(error) => Err(http::sdk_error(error)),
+    };
     info!(
         "Download request completed for project {project_id} in {:?}",
         started.elapsed()
     );
-
     match result {
-        Ok(resp) => resp
-            .bytes()
-            .await
-            .map_err(|e| Error::Deserialization(e.to_string())),
         Err(Error::Unprocessable(_)) => Err(Error::NoProjectData(project_id)),
-        Err(e) => {
-            error!("Download failed for project {project_id}: {e}");
-            Err(e)
+        Err(error) => {
+            error!("Download failed for project {project_id}: {error}");
+            Err(error)
         }
+        other => other,
     }
 }
 
@@ -145,47 +152,45 @@ pub async fn upload_project_zip(
     zip_path: &Path,
 ) -> Result<ProjectSaveResult, Error> {
     info!("Uploading project ZIP for project: {project_id}");
-    let url = http::v2_url(
-        api_info.instance(),
-        &format!("projects/{project_id}/upload/compass_zip/"),
-    );
-
-    let zip_bytes = std::fs::read(zip_path).map_err(|e| Error::FileRead(e.to_string()))?;
-    let part = reqwest::multipart::Part::bytes(zip_bytes)
-        .file_name("project.zip")
-        .mime_str("application/zip")
-        .expect("application/zip is a valid MIME type");
-    let form = reqwest::multipart::Form::new()
-        .text("message", commit_message)
-        .part("artifact", part);
-
-    let req = http::authenticated(
-        get_api_client()
-            .put(url)
-            .timeout(PROJECT_UPLOAD_TIMEOUT)
-            .multipart(form),
-        api_info,
-    )?;
-
+    let zip_bytes = std::fs::read(zip_path).map_err(|error| Error::FileRead(error.to_string()))?;
+    let request = types::ProjectUploadRequestRequest {
+        artifact: vec![types::MultipartFile {
+            content: zip_bytes.into(),
+            file_name: Some("project.zip".into()),
+            content_type: Some("application/zip".into()),
+        }],
+        message: commit_message,
+    };
     let started = Instant::now();
-    let result = http::send_raw(req).await;
+    let result = http::transfer_client(api_info)?
+        .v2_projects_upload(
+            "compass_zip",
+            project_id.to_string(),
+            None,
+            None::<&str>,
+            request,
+        )
+        .await
+        .map_err(http::sdk_error);
     info!(
         "Upload request completed for project {project_id} in {:?}",
         started.elapsed()
     );
-
     match result {
         Ok(_) => {
             info!("Successfully uploaded project: {project_id}");
             Ok(ProjectSaveResult::Saved)
         }
-        Err(Error::Api { status, .. }) if status == NOT_MODIFIED => {
+        Err(Error::Api {
+            status: NOT_MODIFIED,
+            ..
+        }) => {
             info!("No changes to upload for project: {project_id}");
             Ok(ProjectSaveResult::NoChanges)
         }
-        Err(e) => {
-            error!("Upload failed for project {project_id}: {e}");
-            Err(e)
+        Err(error) => {
+            error!("Upload failed for project {project_id}: {error}");
+            Err(error)
         }
     }
 }
@@ -197,6 +202,7 @@ mod tests {
         build_minimal_compass_zip, ensure_test_env_vars, fixture_project_id, test_api_info,
         unauthorized_api_info, with_acquired_project_mutex,
     };
+    use common::api_types::ProjectType;
     use serial_test::serial;
 
     /// A UUID that is virtually guaranteed not to exist server-side, used

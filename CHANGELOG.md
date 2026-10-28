@@ -1,12 +1,28 @@
 ## [Unreleased]
 
+### Dependencies
+
+- Route every SpeleoDB operation and test preflight through `speleodb-api`,
+  preserving desktop models, authentication, timeouts and project errors.
+- Use the SDK's binary/JSON Accept negotiation so the download view can select
+  its JSON renderer before returning a signed-storage redirect; cover this
+  behavior with a negotiation-aware loopback regression.
+- Resolve the published SDK in standalone clones and the local SDK through the
+  monorepo's native Cargo path override without changing registry lock entries.
+
 ### Fixes
+
+- Download signed project ZIPs without forwarding API credentials, retaining
+  support for direct downloads and ZIPs larger than 8 MiB.
 
 - Match the frontend API environment to native release/debug builds so packaged
   release builds default to production instead of staging; cover Tauri hooks and
   explicit profile overrides with build-script regression tests.
 
 ### Developer tooling
+
+- Add deterministic SDK adapter HTTP tests and document request ownership, typed
+  model conversion and standalone/monorepo dependency resolution.
 
 - Fix native test compilation with Zip 9's fallible archive filename iterator.
 

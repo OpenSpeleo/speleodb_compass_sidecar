@@ -91,6 +91,12 @@ packages. `make update` updates Rust dependencies within their declared bounds
 and reports available frontend upgrades; review and apply frontend upgrades with
 Bun.
 
+SpeleoDB requests use `speleodb-api` from crates.io. In the SpeleoDB monorepo,
+its ancestor Cargo configuration supplies the local SDK source while the sidecar
+retains the same registry manifest and lockfile. Run Cargo from the monorepo
+root or a descendant to load that configuration; check standalone resolution
+outside the monorepo. See [SDK integration](docs/api-v2.md).
+
 VS Code recommendations cover Tauri, rust-analyzer, ESLint and Prettier. Rust
 and TypeScript use language-specific formatters. `make pre-commit` runs
 repository hooks after `make setup`; hooks include frontend checks for frontend

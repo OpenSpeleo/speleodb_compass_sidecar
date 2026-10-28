@@ -47,6 +47,8 @@ jobs:
           shared-key: ubuntu-lint
       - name: Run all lint checks
         run: make lint
+      - name: Verify SDK adapter without API credentials
+        run: cargo test -p api --test sdk_adapter --locked
       - name: Verify release workflow contracts
         run: cargo test -p xtask --test release_workflow
 

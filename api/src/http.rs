@@ -1,91 +1,125 @@
-//! Centralized HTTP plumbing for the SpeleoDB v2 API.
+//! SpeleoDB SDK transport policy and sidecar error adaptation.
 //!
-//! All endpoint functions in this crate go through `send_json` (for JSON
-//! responses) or `send_raw` (for binary responses such as ZIP downloads).
-//! Status codes map to typed `Error` variants in a single place; success
-//! bodies deserialize directly into the caller's target type without any
-//! `data:` wrapper, matching the v2 contract.
+//! The generated SDK owns every SpeleoDB request, wire model and response decoder.
+//! This module retains the sidecar's timeouts, Token authentication, instance
+//! prefixes and status-to-domain-error mapping. Signed storage downloads use a
+//! separate anonymous transport so API credentials cannot cross the handoff.
+
+use std::{sync::LazyLock, time::Duration};
 
 use common::{ApiInfo, Error};
-use log::error;
-use reqwest::{RequestBuilder, Response, StatusCode};
-use serde::{Deserialize, de::DeserializeOwned};
+use reqwest::{Client, StatusCode, header::HeaderMap};
+use serde::Deserialize;
+use speleodb_api::{ApiOpError, HttpClient};
 use url::Url;
 
-/// V2 path prefix appended to the configured `instance` URL.
-const API_V2_PREFIX: &str = "api/v2/";
+pub(crate) const TRANSFER_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Build a fully-qualified v2 URL by joining `instance + "api/v2/" + path`.
-///
-/// Force a trailing slash on the instance path before joining: per RFC 3986
-/// reference resolution, `Url::join` *replaces* the last path segment when
-/// the base does not end in `/`. Without this guard, a self-hosted instance
-/// at `https://example.com/speleodb` would silently route requests to
-/// `https://example.com/api/v2/...`, dropping the `/speleodb` prefix.
-///
-/// Panics on join failure since all callers pass static, well-formed paths;
-/// a runtime error here indicates a programmer bug, not a user-facing
-/// condition.
-pub(crate) fn v2_url(instance: &Url, path: &str) -> Url {
+static API_CLIENT: LazyLock<Client> =
+    LazyLock::new(|| transport(Duration::from_secs(10), reqwest::redirect::Policy::none()));
+static TRANSFER_CLIENT: LazyLock<Client> =
+    LazyLock::new(|| transport(TRANSFER_TIMEOUT, reqwest::redirect::Policy::none()));
+static DOWNLOAD_CLIENT: LazyLock<Client> =
+    LazyLock::new(|| transport(TRANSFER_TIMEOUT, reqwest::redirect::Policy::limited(10)));
+
+fn transport(timeout: Duration, redirects: reqwest::redirect::Policy) -> Client {
+    Client::builder()
+        .user_agent(crate::API_USER_AGENT)
+        .timeout(timeout)
+        .redirect(redirects)
+        .build()
+        .expect("Failed to build API client")
+}
+
+fn instance_base_url(instance: &Url) -> String {
     let mut base = instance.clone();
-    if !base.path().ends_with('/') {
-        let with_slash = format!("{}/", base.path());
-        base.set_path(&with_slash);
-    }
-    base.join(API_V2_PREFIX)
-        .and_then(|u| u.join(path))
-        .expect("static API path must join cleanly with instance URL")
+    base.set_query(None);
+    base.set_fragment(None);
+    base.as_str().trim_end_matches('/').to_owned()
 }
 
-/// Inject the bearer token header, or fail fast if the user is unauthenticated.
-pub(crate) fn authenticated(
-    builder: RequestBuilder,
-    api_info: &ApiInfo,
-) -> Result<RequestBuilder, Error> {
+fn sdk_client(instance: &Url, transport: &Client) -> HttpClient {
+    HttpClient::with_client(transport.clone())
+        .with_base_url(instance_base_url(instance))
+        // Preserve the previous client's response sizes, including ZIPs >8 MiB.
+        .with_max_response_body_bytes(usize::MAX)
+}
+
+pub(crate) fn client(instance: &Url) -> HttpClient {
+    sdk_client(instance, &API_CLIENT)
+}
+
+pub(crate) fn authenticated(api_info: &ApiInfo) -> Result<HttpClient, Error> {
     let token = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
-    Ok(builder.header("Authorization", format!("Token {token}")))
+    Ok(client(api_info.instance()).with_header("Authorization", format!("Token {token}")))
 }
 
-/// Send a request and deserialize a JSON success body into `T`.
-///
-/// On non-2xx responses, the body is parsed for the v2 `{"error": "..."}`
-/// shape and dispatched to the typed error variant matching the status.
-pub(crate) async fn send_json<T: DeserializeOwned>(builder: RequestBuilder) -> Result<T, Error> {
-    let resp = builder
+pub(crate) fn transfer_client(api_info: &ApiInfo) -> Result<HttpClient, Error> {
+    let token = api_info.oauth_token().ok_or(Error::NoAuthToken)?;
+    Ok(sdk_client(api_info.instance(), &TRANSFER_CLIENT)
+        .with_header("Authorization", format!("Token {token}")))
+}
+
+pub(crate) fn sdk_error<E: std::fmt::Debug>(error: ApiOpError<E>) -> Error {
+    match error {
+        ApiOpError::Transport(error) => Error::NetworkRequest(error.to_string()),
+        ApiOpError::Api(response) => {
+            if (200..300).contains(&response.status) {
+                return Error::Deserialization(
+                    response
+                        .parse_error
+                        .unwrap_or_else(|| "Unexpected API response".into()),
+                );
+            }
+            map_status_to_error(
+                StatusCode::from_u16(response.status).expect("SDK reports a valid HTTP status"),
+                Some(&response.body),
+            )
+        }
+    }
+}
+
+/// Resolve a signed-storage handoff, then fetch it without API credentials.
+/// The endpoint path is used only to resolve relative Location headers; the
+/// request to that endpoint is always made by the generated SDK operation.
+pub(crate) async fn download_redirect(
+    instance: &Url,
+    project_id: uuid::Uuid,
+    headers: &HeaderMap,
+    timeout: Duration,
+) -> Result<bytes::Bytes, Error> {
+    let location = headers
+        .get(reqwest::header::LOCATION)
+        .and_then(|value| value.to_str().ok())
+        .ok_or_else(|| Error::NetworkRequest("Download redirect has no valid Location".into()))?;
+    let endpoint = format!(
+        "{}/api/v2/projects/{project_id}/download/compass_zip/",
+        instance_base_url(instance)
+    );
+    let location = Url::parse(&endpoint)
+        .and_then(|endpoint| endpoint.join(location))
+        .map_err(|error| Error::NetworkRequest(error.to_string()))?;
+    if !matches!(location.scheme(), "http" | "https")
+        || !location.username().is_empty()
+        || location.password().is_some()
+    {
+        return Err(Error::NetworkRequest("Invalid signed download URL".into()));
+    }
+    let response = DOWNLOAD_CLIENT
+        .get(location)
+        .timeout(timeout)
         .send()
         .await
-        .map_err(|e| Error::NetworkRequest(e.to_string()))?;
-    let status = resp.status();
+        .map_err(|error| Error::NetworkRequest(error.without_url().to_string()))?;
+    let status = response.status();
     if status.is_success() {
-        return resp.json::<T>().await.map_err(|e| {
-            error!("Failed to deserialize success response: {e}");
-            Error::Deserialization(e.to_string())
-        });
+        return response
+            .bytes()
+            .await
+            .map_err(|error| Error::Deserialization(error.without_url().to_string()));
     }
-    Err(error_from_response(status, resp).await)
-}
-
-/// Send a request whose success body is consumed by the caller (e.g. raw bytes).
-///
-/// Returns the underlying `Response` on 2xx so the caller can call
-/// `.bytes()`, stream, etc. Non-2xx responses go through the same status
-/// mapping as `send_json`.
-pub(crate) async fn send_raw(builder: RequestBuilder) -> Result<Response, Error> {
-    let resp = builder
-        .send()
-        .await
-        .map_err(|e| Error::NetworkRequest(e.to_string()))?;
-    let status = resp.status();
-    if status.is_success() {
-        return Ok(resp);
-    }
-    Err(error_from_response(status, resp).await)
-}
-
-/// Drain the failed response body and convert it to a typed `Error`.
-async fn error_from_response(status: StatusCode, resp: Response) -> Error {
-    let body = resp.text().await.ok();
-    map_status_to_error(status, body.as_deref())
+    let body = response.text().await.ok();
+    Err(map_status_to_error(status, body.as_deref()))
 }
 
 /// Maximum length (in bytes) of an error message stored in `Error` variants.
@@ -263,46 +297,5 @@ mod tests {
         // String is valid UTF-8 by construction; the assertion is that we
         // didn't panic during the slice. Sanity-check the suffix.
         assert!(capped.ends_with("…[truncated]"));
-    }
-
-    #[test]
-    fn v2_url_appends_path_correctly() {
-        let instance = Url::parse("https://stage.speleodb.org").unwrap();
-        let url = v2_url(&instance, "projects/");
-        assert_eq!(url.as_str(), "https://stage.speleodb.org/api/v2/projects/");
-    }
-
-    #[test]
-    fn v2_url_handles_nested_paths() {
-        let instance = Url::parse("https://stage.speleodb.org/").unwrap();
-        let url = v2_url(&instance, "projects/abc-123/acquire/");
-        assert_eq!(
-            url.as_str(),
-            "https://stage.speleodb.org/api/v2/projects/abc-123/acquire/"
-        );
-    }
-
-    #[test]
-    fn v2_url_preserves_path_prefix_without_trailing_slash() {
-        // Self-hosted SpeleoDB at a sub-path: the auth screen trims trailing
-        // slashes on blur, so this is the shape that actually reaches the
-        // backend. Without the trailing-slash guard, Url::join would replace
-        // the "speleodb" segment and drop the prefix entirely.
-        let instance = Url::parse("https://intranet.example.com/speleodb").unwrap();
-        let url = v2_url(&instance, "projects/");
-        assert_eq!(
-            url.as_str(),
-            "https://intranet.example.com/speleodb/api/v2/projects/"
-        );
-    }
-
-    #[test]
-    fn v2_url_preserves_path_prefix_with_trailing_slash() {
-        let instance = Url::parse("https://intranet.example.com/speleodb/").unwrap();
-        let url = v2_url(&instance, "projects/abc-123/acquire/");
-        assert_eq!(
-            url.as_str(),
-            "https://intranet.example.com/speleodb/api/v2/projects/abc-123/acquire/"
-        );
     }
 }

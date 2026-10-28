@@ -227,6 +227,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
+ "speleodb-api",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
@@ -242,6 +243,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bc62ac97cc33321f50863d514c3bc38a453947a8f9e781137e47c7401020aed"
 dependencies = [
  "derive_arbitrary",
+]
+
+[[package]]
+name = "async-trait"
+version = "0.1.92"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -3733,6 +3745,7 @@ dependencies = [
  "rustls-platform-verifier",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "sync_wrapper",
  "tokio",
  "tokio-native-tls",
@@ -3746,6 +3759,21 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-streams",
  "web-sys",
+]
+
+[[package]]
+name = "reqwest-middleware"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07bc3f1384cffa4f274dad2d4ddd73aed32fed8f786d96c6be8aa4e5fd3c3b58"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "http 1.5.0",
+ "reqwest",
+ "serde",
+ "thiserror 2.0.21",
+ "tower-service",
 ]
 
 [[package]]
@@ -4510,6 +4538,26 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps",
+]
+
+[[package]]
+name = "speleodb-api"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61b53e10d249f3ea280158335f661aa972f51b230463491c1eae1ef3f8cbf928"
+dependencies = [
+ "bytes",
+ "chrono",
+ "futures-util",
+ "mime",
+ "reqwest",
+ "reqwest-middleware",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "thiserror 2.0.21",
+ "url",
+ "uuid",
 ]
 
 [[package]]

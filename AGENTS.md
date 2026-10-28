@@ -249,7 +249,7 @@ unit/browser tests use fixtures without contacting SpeleoDB.
 
 Four native Cargo members (resolver v3, Rust edition 2024):
 
-- **api/** — SpeleoDB REST client and HTTP policy.
+- **api/** — SpeleoDB SDK adapter, desktop models and HTTP policy.
 - **app/src-tauri/** — native commands, state, Compass integration and OS
   actions.
 - **common/** — serialized types, shared errors and native domain helpers.
@@ -333,19 +333,23 @@ and filesystem operations. See `docs/react-frontend.md` for boundaries.
 
 **API (api/src/)**
 
-- `lib.rs` - Module declarations, global HTTP client (`reqwest`) with 10s
-  timeout
-- `http.rs` - Centralized v2 plumbing: `v2_url()`, `authenticated()`,
-  `send_json()`, `send_raw()`, `map_status_to_error()`. Single chokepoint for
-  status-code → typed `Error` mapping (401/403→Unauthorized, 404→NotFound,
+- `lib.rs` - Module declarations and versioned API user agent.
+- `http.rs` - SDK clients with pooled Reqwest transports (10s ordinary calls,
+  60s transfers), Token authentication, instance-prefix normalization, anonymous
+  signed-download handoffs and `sdk_error()`. Single chokepoint for status-code
+  → typed `Error` mapping (401/403→Unauthorized, 404→NotFound,
   422→Unprocessable, 409/423→Conflict, otherwise `Api{status,message}`)
-- `auth.rs` - `authorize_with_token()` and `authorize_with_email()` against
-  `api/v2/user/auth-token/`
+- `auth.rs` - `authorize_with_token()` and `authorize_with_email()` through the
+  SDK's v2 authentication operations.
 - `project.rs` - `create_project()`, `fetch_project_info()`, `fetch_projects()`,
   `acquire_project_mutex()` (Conflict→`ProjectMutexLocked`),
   `release_project_mutex()`, `download_project_zip()`
   (Unprocessable→`NoProjectData`), `upload_project_zip()` — all under
   `api/v2/projects/`
+- `models.rs` - Explicit projection of SDK wire models into desktop types,
+  preserving permissions, mutex state and commit-tree emptiness.
+- `api/tests/sdk_adapter.rs` - Deterministic loopback HTTP coverage of every
+  operation, large ZIPs, multipart fields and redirect credential isolation.
 - `test_support.rs` (test-only) - `.env` autoloader, `test_api_info()`,
   `unauthorized_api_info()`, `fixture_project_id()` (lazy shared OnceCell),
   `build_minimal_compass_zip()`. See `docs/api-v2.md` for the testing strategy.
@@ -431,12 +435,19 @@ tools. See `DEV.md` for Rust installation and other native prerequisites.
   builds the frontend and **Bun 1.4.2** manages packages and runs tools.
 - **compass_data 0.0.7** — parses Compass survey file formats.
 - **sentry 0.49** — native error tracking.
-- **reqwest 0.13** with rustls — SpeleoDB HTTP client.
+- **speleodb-api** — every SpeleoDB API operation and wire model.
+- **reqwest 0.13** with rustls — SDK transport policy and anonymous signed-file
+  downloads; never build SpeleoDB endpoint requests by hand.
 - **sysinfo 0.39** (Windows only) — monitors the Compass process.
 - **zip 8** — packages project files for upload and download.
 
 Cargo manifests and `Cargo.lock` remain authoritative for native requirements
-and resolutions; `app/package.json` and `app/bun.lock` serve the frontend.
+and resolutions; `app/package.json` and `app/bun.lock` serve the frontend. The
+SDK dependency stays pinned in `api/Cargo.toml` to crates.io in standalone
+clones. The monorepo's ancestor Cargo configuration overrides its source locally
+using native `paths`, preserving this repository's registry lockfile. Do not add
+sibling paths, monorepo-only manifests or a root Cargo workspace. Validate the
+registry dependency in an external standalone copy as well as the local source.
 `app/.bun-version` pins Bun. Do not upgrade native dependencies as a side effect
 of frontend work.
 

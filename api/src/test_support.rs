@@ -20,7 +20,6 @@ use std::{
     io::Write,
     panic,
     sync::atomic::{AtomicBool, Ordering},
-    time::Duration,
 };
 
 use common::{ApiInfo, api_types::ProjectInfo};
@@ -29,7 +28,7 @@ use tokio::sync::OnceCell;
 use url::Url;
 use uuid::Uuid;
 
-use crate::{get_api_client, http, project};
+use crate::{http, project};
 
 static FIXTURE_PROJECT: OnceCell<Uuid> = OnceCell::const_new();
 static TEST_ENV_PREFLIGHT: OnceCell<Result<(), String>> = OnceCell::const_new();
@@ -88,37 +87,33 @@ async fn test_environment_preflight() -> Result<(), String> {
     let oauth = std::env::var("TEST_SPELEODB_OAUTH").expect("TEST_SPELEODB_OAUTH not set");
     let instance = Url::parse(&instance_raw)
         .map_err(|e| format!("Invalid TEST_SPELEODB_INSTANCE '{instance_raw}': {e}"))?;
-    let url = http::v2_url(&instance, "user/auth-token/");
-
-    let response = get_api_client()
-        .get(url.clone())
-        .header("Authorization", format!("Token {oauth}"))
-        .timeout(Duration::from_secs(10))
-        .send()
+    let response = http::client(&instance)
+        .with_header("Authorization", format!("Token {oauth}"))
+        .v2_user_auth_token_retrieve(None)
         .await
-        .map_err(|e| {
-            format!(
-                "SpeleoDB integration test preflight failed before endpoint tests ran.\n\
+        .map_err(http::sdk_error);
+    let error = match response {
+        Ok(_) => return Ok(()),
+        Err(error) => error,
+    };
+    if let common::Error::NetworkRequest(error) = &error {
+        return Err(format!(
+            "SpeleoDB integration test preflight failed before endpoint tests ran.\n\
                  TEST_SPELEODB_INSTANCE={instance_raw}\n\
-                 Auth endpoint={url}\n\
+                 Auth operation=v2_user_auth_token_retrieve\n\
                  Could not reach the configured host. Start the test SpeleoDB server or update \
                  TEST_SPELEODB_INSTANCE in .env.\n\
                  This is a test environment issue, not an endpoint regression.\n\
-                 Network error: {e}"
-            )
-        })?;
-
-    let status = response.status();
-    if status.is_success() {
-        return Ok(());
+                 Network error: {error}"
+        ));
     }
 
-    if status.as_u16() == 401 || status.as_u16() == 403 {
+    if matches!(error, common::Error::Unauthorized(_)) {
         return Err(format!(
             "SpeleoDB integration test preflight failed before endpoint tests ran.\n\
              TEST_SPELEODB_INSTANCE={instance_raw}\n\
-             Auth endpoint={url}\n\
-             TEST_SPELEODB_OAUTH was rejected with HTTP {status}.\n\
+             Auth operation=v2_user_auth_token_retrieve\n\
+             TEST_SPELEODB_OAUTH was rejected.\n\
              Update the OAuth token in .env.\n\
              This is a test authentication issue, not an endpoint regression."
         ));
@@ -127,8 +122,8 @@ async fn test_environment_preflight() -> Result<(), String> {
     Err(format!(
         "SpeleoDB integration test preflight failed before endpoint tests ran.\n\
          TEST_SPELEODB_INSTANCE={instance_raw}\n\
-         Auth endpoint={url}\n\
-         Expected the auth endpoint to accept TEST_SPELEODB_OAUTH, but it returned HTTP {status}.\n\
+         Auth operation=v2_user_auth_token_retrieve\n\
+         Expected the auth endpoint to accept TEST_SPELEODB_OAUTH: {error}.\n\
          This is a test environment/authentication issue, not an endpoint regression."
     ))
 }

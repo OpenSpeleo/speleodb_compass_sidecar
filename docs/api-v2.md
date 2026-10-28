@@ -2,99 +2,136 @@
 
 ## Feature intent
 
-The desktop sidecar talks to a single SpeleoDB instance over HTTPS. Every
-request is now scoped under the `api/v2/` prefix and every JSON response is the
-bare resource itself — no `{data, success, timestamp, url}` envelope. Error
-bodies are now `{"error": "<message>"}` only.
-
-This document captures **why** the architecture looks the way it does so future
-contributors don't reinvent it.
+Every SpeleoDB operation uses the published `speleodb-api` Rust SDK. The SDK
+owns endpoint paths, request serialization, response schemas and HTTP execution.
+The sidecar's `api` crate adapts that contract to desktop permissions, project
+synchronization and existing UI messages. The frontend continues to use Tauri
+IPC; application updates and Sentry use their own vendor integrations.
 
 ## Engineering scope
 
-The `api` crate is the only place in the workspace that makes outbound HTTP
-calls. Three files own everything:
+| File                      | Ownership                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `api/src/auth.rs`         | Token/email authentication through SDK operations and friendly authentication errors                    |
+| `api/src/project.rs`      | SDK project operations and desktop lock/save/no-data semantics                                          |
+| `api/src/http.rs`         | Reusable SDK transport policies, Token credentials, SDK error conversion and anonymous signed downloads |
+| `api/src/models.rs`       | Explicit SDK-to-desktop projection preserving IPC and persisted models                                  |
+| `api/src/test_support.rs` | Credential-gated live tests, including SDK authentication preflight                                     |
 
-| File                                        | Responsibility                                                                                                                                      |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [api/src/http.rs](../api/src/http.rs)       | URL building, auth header injection, request execution, status-code → typed `Error` mapping. **Single source of truth.**                            |
-| [api/src/auth.rs](../api/src/auth.rs)       | `authorize_with_token`, `authorize_with_email`. Translates typed `Error` variants into user-facing strings the UI renders verbatim.                 |
-| [api/src/project.rs](../api/src/project.rs) | All project-scoped endpoints. Each function is ~5 LOC: build URL, attach auth, dispatch through `http::send_json` (or `http::send_raw` for binary). |
+The standalone workspace manifest and `Cargo.lock` pin the crates.io release.
+Inside the SpeleoDB monorepo, the parent's `.cargo/config.toml` uses Cargo's
+native `paths` override to compile the local SDK checkout. The sidecar has no
+sibling path dependencies, conditional manifests or parent workspace dependency.
+The registry source/checksum stays in this repository's lockfile. Run Cargo from
+the monorepo root or one of its descendants to discover that override;
+`--manifest-path` alone does not change Cargo configuration discovery. Native
+path overrides require matching published dependency graphs; coordinate SDK
+dependency changes with a release and consumer lockfile update.
 
-### The `http` module contract
+## SDK operation inventory
 
-```text
-v2_url(instance, path)           → fully-qualified Url
-authenticated(builder, api_info) → builder + Authorization header (or NoAuthToken)
-send_json::<T>(builder)          → T on 2xx, typed Error otherwise
-send_raw(builder)                → reqwest::Response on 2xx, typed Error otherwise
-map_status_to_error(status, body) → Error (used internally, exported for tests)
-```
+| Desktop operation                       | SDK method                                |
+| --------------------------------------- | ----------------------------------------- |
+| Token authentication and test preflight | `v2_user_auth_token_retrieve`             |
+| Email/password authentication           | `v2_user_auth_token_create_with_json`     |
+| List projects                           | `v2_projects_list`                        |
+| Create Compass project                  | `v2_projects_create_with_json`            |
+| Retrieve project                        | `v2_project_retrieve`                     |
+| Acquire mutex                           | `v2_projects_acquire_create`              |
+| Release mutex                           | `v2_projects_release_create_with_json`    |
+| Download Compass ZIP                    | `v2_projects_download_retrieve_by_format` |
+| Upload Compass ZIP                      | `v2_projects_upload`                      |
 
-`send_raw` exists for two callers: `download_project_zip` (returns ZIP bytes,
-not JSON) and `upload_project_zip` (only the status code is meaningful;
-`304 Not Modified` is mapped to `ProjectSaveResult::NoChanges`).
+To add an operation, select its generated SDK method and request types, convert
+its error through `http::sdk_error`, and project successful models at the
+adapter boundary. Keep domain-specific remapping in the corresponding endpoint
+function. Do not add manual SpeleoDB request builders or duplicate wire models.
 
-### Error model
+## Transport and download behavior
 
-Defined in [common/src/error.rs](../common/src/error.rs). HTTP-derived variants:
+### Binary and JSON content negotiation
 
-| HTTP status   | Variant                   | Domain remap                                              |
-| ------------- | ------------------------- | --------------------------------------------------------- |
-| 401, 403      | `Unauthorized(String)`    | —                                                         |
-| 404           | `NotFound(String)`        | —                                                         |
-| 422           | `Unprocessable(String)`   | `download_project_zip` → `NoProjectData(uuid)`            |
-| 409, 423      | `Conflict(String)`        | `acquire_project_mutex` → `ProjectMutexLocked(uuid)`      |
-| anything else | `Api { status, message }` | `upload_project_zip` checks `status == 304` → `NoChanges` |
+The SDK includes both the binary success media type and JSON error media type in
+the download operation's Accept header. The SpeleoDB download view selects its
+JSON renderer before returning a signed-storage redirect, so accepting only
+`application/octet-stream` makes renderer negotiation fail with HTTP 406 before
+the endpoint runs. Standalone clones and the local monorepo source must both
+include this negotiation behavior.
 
-Every variant carries the server-provided `error` string from the JSON body when
-present, with fallback to the raw body text and finally to the HTTP status
-canonical reason. Call sites pattern-match on the typed variant; they should not
-inspect status codes directly.
+The signed-download loopback regression applies a JSON renderer gate before
+issuing its redirect, mirroring that negotiation boundary. Binary-only Accept
+headers receive 406, so an unconditional fixture success cannot hide this
+regression. Existing live download tests continue to verify backend behavior.
 
-## Adding a new endpoint
+### Adapter transport policy
 
-Drop in five lines. No request boilerplate, no wrapper struct, no manual status
-mapping.
+SDK clients use the selected instance origin and optional path prefix, removing
+trailing slashes, query strings and fragments before adding generated paths.
+They send `Authorization: Token …` and the versioned
+`Tauri/SpeleoDB-Compass-Sidecar/v…` user agent. Do not use the SDK's Bearer
+API-key helper for these credentials. Requests fail before networking if no
+token is available.
 
-```rust
-pub async fn cancel_project(api_info: &ApiInfo, id: Uuid) -> Result<ProjectInfo, Error> {
-    let url = http::v2_url(api_info.instance(), &format!("projects/{id}/cancel/"));
-    let req = http::authenticated(get_api_client().post(url), api_info)?;
-    http::send_json(req).await
-}
-```
+Ordinary operations retain a 10-second timeout. Uploads and downloads retain a
+60-second timeout. SDK response buffering has no additional size limit so the
+SDK's default 8 MiB limit does not reject existing large project downloads.
+Authenticated transports disable redirect following.
 
-If a status code carries domain meaning beyond the generic mapping (e.g. "locked
-→ already-checked-out"), remap inside the endpoint:
+A download may return ZIP bytes directly or a redirect to signed storage. The
+adapter reads the SDK's error-envelope status and `Location`, resolves relative
+URLs against the download endpoint, and downloads through a separate client
+without API Authorization or cookies. Only HTTP(S) URLs without embedded
+credentials are accepted. The signed request uses the remaining portion of the
+60-second download budget and permits up to ten storage redirects. The endpoint
+path retained in this helper serves only to resolve relative `Location` headers;
+the initial API request always uses the SDK.
 
-```rust
-match http::send_json(req).await {
-    Ok(info) => Ok(info),
-    Err(Error::Conflict(_)) => Err(Error::AlreadyCheckedOut(id)),
-    Err(e) => Err(e),
-}
-```
+## Error handling strategy
+
+`http::sdk_error` maps transport failures to `NetworkRequest` and malformed or
+unexpected successful responses to `Deserialization`. Failed HTTP responses
+retain the existing status-to-domain mapping:
+
+| HTTP status | Domain error              | Endpoint refinement                                  |
+| ----------- | ------------------------- | ---------------------------------------------------- |
+| 401, 403    | `Unauthorized(String)`    | Friendly invalid-credentials authentication message  |
+| 404         | `NotFound(String)`        | —                                                    |
+| 422         | `Unprocessable(String)`   | Downloads return `NoProjectData(uuid)`               |
+| 409, 423    | `Conflict(String)`        | Mutex acquisition returns `ProjectMutexLocked(uuid)` |
+| Other       | `Api { status, message }` | Upload 304 returns `ProjectSaveResult::NoChanges`    |
+
+Messages use the server's JSON `error` string, falling back to body text and the
+HTTP canonical reason. Error text remains capped at 512 bytes with a UTF-8-safe
+truncation marker. Upload success requires the SDK's declared response schema;
+malformed 2xx bodies are reported rather than treated as a saved project.
 
 ## Project type handling
 
-The sidecar is a Compass bridge, so `common::ProjectType` intentionally treats
-only `COMPASS` as supported. SpeleoDB may return other project types in the same
-authenticated list response, including `ARIANE` or `OTHER`; those values
-deserialize into an ignored enum value so one unsupported project cannot fail
-the whole load.
+The SDK decodes generated wire models; `models.rs` moves their fields into the
+existing desktop types. Permissions remain required, mutex and commit objects
+retain lock/tree state, UUIDs become desktop strings where required, and dates
+are normalized to equivalent UTC RFC3339 timestamps. `commit_date` remains
+optional because the v2 wire model exposes the separate `authored_date` display
+field. String-valued mutex/commit alternatives remain invalid desktop snapshots.
 
-`fetch_projects` filters the decoded list to Compass projects before state and
-UI code see it. Outbound project creation still serializes
-`ProjectType::Compass` as `"COMPASS"`.
+Only `COMPASS` projects appear in the desktop list. Other project types declared
+by the SDK are decoded and ignored. Future values outside the generated enum
+require a reviewed SDK upgrade; they cause a decoding error. Project creation
+uses the typed SDK request, omits empty coordinates and serializes Compass as
+`"COMPASS"`. Country values must belong to the SDK's generated country enum.
 
 ## Testing strategy
 
-Endpoint integration tests in the `api` crate hit a real SpeleoDB instance.
-There are no HTTP mocks; the configured server is the contract. Pure HTTP
-status/error mapping tests run without network access. Tests live alongside
-production code in `#[cfg(test)] mod tests` blocks, with shared infrastructure
-in [api/src/test_support.rs](../api/src/test_support.rs).
+`api/tests/sdk_adapter.rs` sends real local HTTP requests through the SDK to
+controlled loopback servers. These tests verify method/path/header/body
+contracts, typed model conversion, domain errors, multipart upload fields, large
+ZIPs and credential isolation across signed download handoffs. They do not
+establish backend business validation or replace live integration coverage.
+
+Unit tests cover desktop model projection, status mapping and authentication
+messages. Existing credential-gated integration tests contact a real SpeleoDB
+instance, using shared infrastructure in
+[api/src/test_support.rs](../api/src/test_support.rs).
 
 ### Coverage matrix
 
@@ -112,7 +149,7 @@ Every endpoint is exercised in both success and failure modes:
 | `download_project_zip`  | upload → download lifecycle returns bytes | empty project → `NoProjectData`; unknown UUID → `NotFound`; unauthorized |
 | `upload_project_zip`    | upload to fresh project → `Saved`         | unknown UUID → `NotFound`; unauthorized; missing local file → `FileRead` |
 
-Plus `http.rs` carries unit tests for `map_status_to_error` (no network).
+SDK projection and HTTP-status mapping also have deterministic unit coverage.
 
 ### Fixture project lifecycle
 
@@ -157,12 +194,11 @@ independently when those are unset.
 
 - `OnceCell` ensures fixture creation happens at most once per test session (one
   `create_project` POST instead of dozens).
-- Centralized request execution means all retry/timeout policy lives in one
-  place — adjusting `PROJECT_DOWNLOAD_TIMEOUT` or adding a global retry policy
-  is a one-line change.
-- Response bodies are streamed once; the helper does not buffer twice. The
-  failure path drains the body via `.text()` only because we need it for the
-  error message.
+- SDK clients share pooled Reqwest transports for ordinary calls and transfers.
+  There are no automatic retries. Transport policy lives in `http.rs`.
+- The SDK buffers response bytes and decodes typed models. Desktop projection
+  moves model fields without another JSON serialization pass. ZIPs remain fully
+  buffered, as required by the existing project-extraction interface.
 
 ## Verification commands
 

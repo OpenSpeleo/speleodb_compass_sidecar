@@ -27,10 +27,15 @@ test to its JavaScript replacement and distinguishes browser-only obligations.
 | `cargo test -p xtask --test release_workflow` | CI/release install, paths and packaging contracts                  |
 
 Deterministic Rust tests use synthetic Compass files and temporary directories.
-Frontend tests use explicit presentation fixtures to exercise UI states and
-callbacks. Such tests prove rendering and interaction contracts, not live server
-or native IPC behavior. HTTP integration tests contact a real SpeleoDB instance;
-no fake API replaces that coverage.
+The SDK adapter also has deterministic loopback HTTP tests for every SpeleoDB
+operation, error mapping, large ZIPs, multipart uploads and anonymous
+signed-file handoffs. The signed-download fixture negotiates JSON before its
+redirect to catch incompatible binary-only Accept headers. Run without
+credentials using `cargo test -p api --test sdk_adapter --locked`. Frontend
+tests use explicit presentation fixtures to exercise UI states and callbacks.
+Such tests prove rendering and interaction contracts, not live server or native
+IPC behavior. HTTP integration tests contact a real SpeleoDB instance; loopback
+protocol tests do not replace that coverage.
 
 ## Real API tests
 
