@@ -64,6 +64,7 @@ struct Response {
     headers: Vec<(&'static str, String)>,
     body: Vec<u8>,
     json_renderer_gate: bool,
+    truncate_body: bool,
 }
 
 impl Response {
@@ -74,6 +75,7 @@ impl Response {
             headers: vec![],
             body: serde_json::to_vec(&body).unwrap(),
             json_renderer_gate: false,
+            truncate_body: false,
         }
     }
 
@@ -84,6 +86,7 @@ impl Response {
             headers: vec![],
             body: body.into(),
             json_renderer_gate: false,
+            truncate_body: false,
         }
     }
 
@@ -96,6 +99,11 @@ impl Response {
         self.json_renderer_gate = true;
         self
     }
+
+    fn truncated(mut self) -> Self {
+        self.truncate_body = true;
+        self
+    }
 }
 
 struct Server {
@@ -105,6 +113,10 @@ struct Server {
 
 impl Server {
     fn new(responses: Vec<Response>) -> Self {
+        Self::with_disconnects(responses.into_iter().map(Some).collect())
+    }
+
+    fn with_disconnects(responses: Vec<Option<Response>>) -> Self {
         let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
         let address = listener.local_addr().unwrap();
         listener.set_nonblocking(true).unwrap();
@@ -129,6 +141,10 @@ impl Server {
                     stream.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
                     stream.set_write_timeout(Some(Duration::from_secs(3))).unwrap();
                     let request = read_request(&mut stream);
+                    let Some(response) = response else {
+                        // Close after receiving the request, before any response.
+                        return request;
+                    };
                     // DRF negotiates its JSON renderer before invoking the
                     // download view, even when that view returns a redirect.
                     let response = if response.json_renderer_gate && !request.accepts_json() {
@@ -147,7 +163,12 @@ impl Server {
                         write!(stream, "{name}: {value}\r\n").unwrap();
                     }
                     stream.write_all(b"\r\n").unwrap();
-                    stream.write_all(&response.body).unwrap();
+                    let body = if response.truncate_body {
+                        &response.body[..response.body.len() / 2]
+                    } else {
+                        &response.body
+                    };
+                    stream.write_all(body).unwrap();
                     request
                 })
                 .collect()
@@ -283,6 +304,83 @@ async fn token_and_email_authorization_use_sdk_routes_and_preserve_credentials()
         serde_json::from_slice::<Value>(&requests[1].body).unwrap(),
         json!({"email": "test@example.invalid", "password": "password"})
     );
+}
+
+#[tokio::test]
+async fn token_authorization_recovers_from_transient_transport_failures() {
+    let server = Server::with_disconnects(vec![
+        None,
+        None,
+        Some(Response::json(
+            200,
+            json!({"token": "issued-token", "user": "test@example.invalid"}),
+        )),
+    ]);
+    let info = auth::authorize_with_token(server.url(""), TOKEN)
+        .await
+        .unwrap();
+    assert_eq!(info.oauth_token(), Some("issued-token"));
+    let requests = server.finish();
+    assert_eq!(requests.len(), 3);
+    for request in requests {
+        assert_eq!(request.method, "GET");
+        assert_eq!(request.path, "/api/v2/user/auth-token/");
+        request.assert_sidecar_headers(true);
+    }
+}
+
+#[tokio::test]
+async fn token_authorization_stops_after_three_transport_failures() {
+    let server = Server::with_disconnects(vec![None, None, None]);
+    let error = auth::authorize_with_token(server.url(""), TOKEN)
+        .await
+        .unwrap_err();
+    assert!(error.contains("Network request failed"), "{error}");
+    assert!(error.contains("connection closed"), "{error}");
+    assert_eq!(server.finish().len(), 3);
+}
+
+#[tokio::test]
+async fn email_authorization_does_not_retry_transport_failures() {
+    let server = Server::with_disconnects(vec![None]);
+    let error = auth::authorize_with_email(server.url(""), "test@example.invalid", "password")
+        .await
+        .unwrap_err();
+    assert!(error.contains("Network request failed"), "{error}");
+    assert_eq!(server.finish().len(), 1);
+}
+
+#[tokio::test]
+async fn project_reads_recover_from_transport_and_interrupted_body_failures() {
+    let server = Server::with_disconnects(vec![
+        None,
+        Some(Response::json(200, project_json()).truncated()),
+        Some(Response::json(200, project_json())),
+        Some(Response::json(200, json!([project_json()])).truncated()),
+        Some(Response::json(200, json!([project_json()]))),
+    ]);
+    let info = server.api_info("");
+    assert_eq!(
+        project::fetch_project_info(&info, id()).await.unwrap().id,
+        id()
+    );
+    let projects = project::fetch_projects(&info).await.unwrap();
+    assert_eq!(projects.len(), 1);
+    assert_eq!(projects[0].id, id());
+    let requests = server.finish();
+    assert_eq!(requests.len(), 5);
+    for (index, request) in requests.iter().enumerate() {
+        assert_eq!(request.method, "GET");
+        assert_eq!(
+            request.path,
+            if index < 3 {
+                format!("/api/v2/projects/{ID}/")
+            } else {
+                "/api/v2/projects/".into()
+            }
+        );
+        request.assert_sidecar_headers(true);
+    }
 }
 
 #[tokio::test]

@@ -28,7 +28,7 @@ use tokio::sync::OnceCell;
 use url::Url;
 use uuid::Uuid;
 
-use crate::{http, project};
+use crate::{auth, project};
 
 static FIXTURE_PROJECT: OnceCell<Uuid> = OnceCell::const_new();
 static TEST_ENV_PREFLIGHT: OnceCell<Result<(), String>> = OnceCell::const_new();
@@ -87,11 +87,7 @@ async fn test_environment_preflight() -> Result<(), String> {
     let oauth = std::env::var("TEST_SPELEODB_OAUTH").expect("TEST_SPELEODB_OAUTH not set");
     let instance = Url::parse(&instance_raw)
         .map_err(|e| format!("Invalid TEST_SPELEODB_INSTANCE '{instance_raw}': {e}"))?;
-    let response = http::client(&instance)
-        .with_header("Authorization", format!("Token {oauth}"))
-        .v2_user_auth_token_retrieve(None)
-        .await
-        .map_err(http::sdk_error);
+    let response = auth::request_token_authentication(&instance, &oauth).await;
     let error = match response {
         Ok(_) => return Ok(()),
         Err(error) => error,

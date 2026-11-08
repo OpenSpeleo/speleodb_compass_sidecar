@@ -119,6 +119,15 @@ dev:
 
 # All Rust crates share this workspace and Cargo.lock; one update covers them.
 update:
-	cargo update --manifest-path "Cargo.toml"
-	cargo outdated --depth 1
+	cargo update --manifest-path "Cargo.toml" --verbose
+	# cargo-outdated cannot traverse Cargo's inherited paths overrides.
+	# Report registry versions from outside the checkout; builds keep the override.
+	@set -eu; \
+	report_dir=$$(mktemp -d); \
+	trap 'cd "$(CURDIR)" && rmdir "$$report_dir"' EXIT; \
+	cd "$$report_dir"; \
+	cargo outdated --manifest-path "$(CURDIR)/Cargo.toml" --workspace --depth 1
+
+	# Keep the Bun runtime pin and the compiler/DOM compatibility bounds intact.
+	cd app && bun update
 	cd app && bun outdated

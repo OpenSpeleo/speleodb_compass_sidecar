@@ -2,6 +2,12 @@
 
 ### Dependencies
 
+- Refresh frontend command-line tools, DOM test libraries, Node API types and
+  lint tooling while keeping compiler and DOM versions compatible with the
+  linter and pinned Bun runtime.
+- Declare DOM Testing Library explicitly for the test matchers and align the
+  package manager metadata with the pinned Bun runtime.
+
 - Route every SpeleoDB operation and test preflight through `speleodb-api`,
   preserving desktop models, authentication, timeouts and project errors.
 - Use the SDK's binary/JSON Accept negotiation so the download view can select
@@ -11,6 +17,19 @@
   monorepo's native Cargo path override without changing registry lock entries.
 
 ### Fixes
+
+- Retry token validation and project metadata reads after transient network
+  failures with a bounded backoff; preserve underlying connection errors and
+  cover recovery, interrupted responses and exhausted retries.
+
+- Keep one setup recipe so frontend installation and browser setup run instead
+  of a stale, missing script.
+
+- Run dependency reports outside inherited Cargo path overrides to avoid a
+  `cargo-outdated` panic; cover all workspace members and run frontend updates
+  from `app/`.
+- Use native Bun dependency updates that preserve the runtime pin and declared
+  compiler/DOM compatibility bounds.
 
 - Download signed project ZIPs without forwarding API credentials, retaining
   support for direct downloads and ZIPs larger than 8 MiB.

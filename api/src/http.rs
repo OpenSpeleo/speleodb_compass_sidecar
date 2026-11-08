@@ -5,7 +5,7 @@
 //! prefixes and status-to-domain-error mapping. Signed storage downloads use a
 //! separate anonymous transport so API credentials cannot cross the handoff.
 
-use std::{sync::LazyLock, time::Duration};
+use std::{future::Future, sync::LazyLock, time::Duration};
 
 use common::{ApiInfo, Error};
 use reqwest::{Client, StatusCode, header::HeaderMap};
@@ -60,9 +60,45 @@ pub(crate) fn transfer_client(api_info: &ApiInfo) -> Result<HttpClient, Error> {
         .with_header("Authorization", format!("Token {token}")))
 }
 
+/// Retry ordinary read-only SDK operations, including interrupted response bodies.
+/// Keep writes and transfers outside this policy so they are not replayed and
+/// retain their existing transfer timeout budget.
+pub(crate) async fn retry_read<T, E, F, Fut>(mut request: F) -> Result<T, Error>
+where
+    E: std::fmt::Debug,
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, ApiOpError<E>>>,
+{
+    let mut retries = 0;
+    loop {
+        let response = request().await;
+        if retries < 2
+            && matches!(&response, Err(ApiOpError::Transport(error)) if error.is_retryable())
+        {
+            retries += 1;
+            log::warn!("Read-only API transport failed; retrying ({retries}/2)");
+            tokio::time::sleep(Duration::from_millis(250 * retries)).await;
+            continue;
+        }
+        return response.map_err(sdk_error);
+    }
+}
+
 pub(crate) fn sdk_error<E: std::fmt::Debug>(error: ApiOpError<E>) -> Error {
     match error {
-        ApiOpError::Transport(error) => Error::NetworkRequest(error.to_string()),
+        ApiOpError::Transport(error) => {
+            let mut message = error.to_string();
+            let mut source = std::error::Error::source(&error);
+            while let Some(cause) = source {
+                let detail = cause.to_string();
+                if !message.ends_with(&detail) {
+                    message.push_str(": ");
+                    message.push_str(&detail);
+                }
+                source = cause.source();
+            }
+            Error::NetworkRequest(message)
+        }
         ApiOpError::Api(response) => {
             if (200..300).contains(&response.status) {
                 return Error::Deserialization(

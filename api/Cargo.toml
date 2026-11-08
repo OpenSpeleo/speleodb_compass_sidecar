@@ -12,6 +12,7 @@ log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
 url.workspace = true
 uuid.workspace = true
 
@@ -20,9 +21,7 @@ speleodb-api = "=0.1.1"
 reqwest = { version = "0.13.4", features = ["json", "rustls", "multipart"] }
 
 [dev-dependencies]
-# tokio is only used by tests (#[tokio::test], tokio::sync::OnceCell in
-# test_support); the library itself does not depend on it.
-tokio.workspace = true
+# Additional test infrastructure (Tokio is also used by read-only API retries).
 serial_test = "4"
 dotenvy = "0.15"
 ctor = "1.0"

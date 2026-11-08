@@ -88,8 +88,28 @@ The frontend imports plain CSS and preserves the existing HTML, assets and
 static About page. No Rust WASM target, Trunk or wasm-pack is required. Native
 Rust dependencies and their Cargo lockfile remain separate from frontend
 packages. `make update` updates Rust dependencies within their declared bounds
-and reports available frontend upgrades; review and apply frontend upgrades with
-Bun.
+and reports direct dependencies across the entire Cargo workspace. The report
+runs from a temporary directory with an absolute manifest path because
+`cargo-outdated` panics when it inherits the monorepo's Cargo `paths` override.
+Builds continue to use the local SDK; the report checks published dependencies.
+The temporary directory is removed when the report finishes, including on
+failure. Frontend upgrades and installation run from `app/` using `bun update`,
+followed by `bun outdated` to report remaining upgrades. Updates respect the
+declared dependency ranges, including compiler and DOM compatibility bounds, and
+leave the Bun runtime pin unchanged. Do not add `--latest` to this workflow;
+changing compatibility bounds requires a separate review.
+
+Keep the TypeScript compiler within the installed `typescript-eslint` peer range
+when upgrading frontend tooling. Check published peer dependencies before
+adopting a new compiler major; do not suppress compatibility warnings. DOM test
+matchers require `@testing-library/dom`, declared directly in
+`app/package.json`. Keep `packageManager`, `engines.bun` and `app/.bun-version`
+aligned.
+
+Keep jsdom within the pinned Bun runtime's supported range as well: newer DOM
+releases require VM context fixes absent from that runtime and fail before test
+setup. Upgrade the runtime and DOM environment together after reviewing the
+upstream compatibility fixes.
 
 SpeleoDB requests use `speleodb-api` from crates.io. In the SpeleoDB monorepo,
 its ancestor Cargo configuration supplies the local SDK source while the sidecar

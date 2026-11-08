@@ -79,10 +79,8 @@ pub async fn release_project_mutex(
 
 pub async fn fetch_projects(api_info: &ApiInfo) -> Result<Vec<ProjectInfo>, Error> {
     info!("Fetching projects from server: {}", api_info.instance());
-    let response = http::authenticated(api_info)?
-        .v2_projects_list(None)
-        .await
-        .map_err(http::sdk_error)?;
+    let client = http::authenticated(api_info)?;
+    let response = http::retry_read(|| client.v2_projects_list(None)).await?;
     let mut projects = response
         .into_iter()
         .map(project_info)
@@ -100,10 +98,9 @@ pub async fn fetch_project_info(
     project_id: Uuid,
 ) -> Result<ProjectInfo, Error> {
     info!("Fetching project info from server for project: {project_id}");
-    let project = http::authenticated(api_info)?
-        .v2_project_retrieve(project_id.to_string(), None)
-        .await
-        .map_err(http::sdk_error)?;
+    let client = http::authenticated(api_info)?;
+    let project =
+        http::retry_read(|| client.v2_project_retrieve(project_id.to_string(), None)).await?;
     project_info(project)
 }
 

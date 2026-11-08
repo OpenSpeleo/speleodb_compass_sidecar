@@ -1,18 +1,15 @@
 use common::{ApiInfo, Error};
 use log::{error, info};
-use speleodb_api::{
-    ApiOpError,
-    types::{AuthTokenResponse, PatchedAuthTokenRequest},
-};
+use speleodb_api::types::{AuthTokenResponse, PatchedAuthTokenRequest};
 use url::Url;
 
 use crate::http;
 
-fn handle_auth_response<E: std::fmt::Debug>(
+fn handle_auth_response(
     instance: Url,
-    response: Result<AuthTokenResponse, ApiOpError<E>>,
+    response: Result<AuthTokenResponse, Error>,
 ) -> Result<ApiInfo, String> {
-    match response.map_err(http::sdk_error) {
+    match response {
         Ok(resp) => Ok(ApiInfo::new(instance, Some(resp.user), Some(resp.token))),
         Err(err) => {
             error!("Authorization failed: {err}");
@@ -58,11 +55,16 @@ fn format_auth_error(err: &Error) -> String {
 
 pub async fn authorize_with_token(instance: Url, oauth: &str) -> Result<ApiInfo, String> {
     info!("Attempting to authorize with: {instance} using OAuth token");
-    let response = http::client(&instance)
-        .with_header("Authorization", format!("Token {oauth}"))
-        .v2_user_auth_token_retrieve(None)
-        .await;
+    let response = request_token_authentication(&instance, oauth).await;
     handle_auth_response(instance, response)
+}
+
+pub(crate) async fn request_token_authentication(
+    instance: &Url,
+    oauth: &str,
+) -> Result<AuthTokenResponse, Error> {
+    let client = http::client(instance).with_header("Authorization", format!("Token {oauth}"));
+    http::retry_read(|| client.v2_user_auth_token_retrieve(None)).await
 }
 
 pub async fn authorize_with_email(
@@ -80,7 +82,8 @@ pub async fn authorize_with_email(
                 password: Some(password.into()),
             }),
         )
-        .await;
+        .await
+        .map_err(http::sdk_error);
     handle_auth_response(instance, response)
 }
 
