@@ -1,8 +1,8 @@
 # Testing
 
-Run `make lint` and `make test` from the repository root. `make test` runs the
-native workspace once, followed by frontend unit and browser tests. Missing
-frontend tooling fails the run rather than silently skipping coverage.
+Run `prek run --all-files` and `make test` from the repository root. `make test`
+runs the native workspace once, followed by frontend unit and browser tests.
+Missing frontend tooling fails the run rather than silently skipping coverage.
 
 Use the Bun version pinned in `app/.bun-version`. `app/bunfig.toml` applies the
 Bun runtime to Vitest, Playwright and their executable children. Runtime
@@ -17,7 +17,7 @@ test to its JavaScript replacement and distinguishes browser-only obligations.
 
 | Command                                       | Coverage                                                           |
 | --------------------------------------------- | ------------------------------------------------------------------ |
-| `make lint`                                   | Rust formatting/Clippy, TypeScript, ESLint and frontend formatting |
+| `prek run --all-files`                        | Rust formatting/Clippy, TypeScript, ESLint and frontend formatting |
 | `make test-rust`                              | Native API, common domain, Tauri backend and xtask tests           |
 | `make test-tauri`                             | Tauri backend library tests                                        |
 | `make test-common`                            | Shared Rust types, serialization and import selection              |

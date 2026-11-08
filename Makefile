@@ -1,4 +1,4 @@
-.PHONY: clean test test-rust test-rust-verbose test-tauri test-common test-ui test-ui-ci lint lint-fmt lint-clippy lint-ui dev build-tauri build-ui setup update pre-commit
+.PHONY: clean test test-rust test-rust-verbose test-tauri test-common test-ui test-ui-ci dev build-tauri build-ui setup update
 
 # ============================================================================ #
 # Load .env file
@@ -19,36 +19,6 @@ clean:
 	rm -fr target/
 	rm -rf app/dist/
 	rm -rf app/test-results/ app/playwright-report/
-
-# ============================================================================ #
-# LINTING COMMANDS
-# ============================================================================ #
-
-pre-commit:
-	@command -v prek >/dev/null 2>&1 || { \
-		echo "error: 'prek' is not on PATH."; \
-		echo "       Local devs: run 'make setup' once to install it."; \
-		echo "       CI: provision prek before running make pre-commit."; \
-		exit 127; \
-	}
-	prek run -a
-
-# Run all lint checks (formatting + clippy + frontend checks)
-lint: lint-fmt lint-clippy lint-ui
-
-# Check formatting
-lint-fmt:
-	cargo fmt --all -- --check
-
-# Run clippy with warnings denied across the whole workspace
-lint-clippy:
-	cargo clippy --workspace --all-targets --all-features -- -D warnings
-
-# Check frontend types, lint rules, and formatting
-lint-ui:
-	cd app && bun run typecheck
-	cd app && bun run lint
-	cd app && bun run format:check
 
 # ============================================================================ #
 # TEST COMMANDS

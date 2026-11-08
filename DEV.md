@@ -16,7 +16,7 @@ APIs supported by Bun and do not require a Node process.
 Install Rust through
 [rustup](https://www.rust-lang.org/learn/get-started#installing-rust). The Tauri
 backend still requires Rust and Cargo even though the frontend now uses React.
-Install the stable toolchain and the components used by `make lint`:
+Install the stable toolchain and the components used by `prek run --all-files`:
 
 ```sh
 rustup toolchain install stable
@@ -60,7 +60,7 @@ From the repository root:
 ```sh
 make setup                    # frozen Bun install, browsers, Rust helper tools
 make dev                      # native Tauri app and Vite hot reload
-make lint                     # Rust and frontend checks
+prek run --all-files           # Rust and frontend checks
 make test                     # native, unit and browser tests
 make build-ui                 # production frontend
 make build-tauri              # packaged native application
@@ -118,7 +118,7 @@ root or a descendant to load that configuration; check standalone resolution
 outside the monorepo. See [SDK integration](docs/api-v2.md).
 
 VS Code recommendations cover Tauri, rust-analyzer, ESLint and Prettier. Rust
-and TypeScript use language-specific formatters. `make pre-commit` runs
+and TypeScript use language-specific formatters. `prek run --all-files` runs
 repository hooks after `make setup`; hooks include frontend checks for frontend
 changes. The Markdown formatter hook uses prek's Bun environment and the system
 Bun binary; it does not provision npm or Node.

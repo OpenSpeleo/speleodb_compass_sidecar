@@ -83,11 +83,11 @@ twice, waiting 250 ms and 500 ms between attempts. Each attempt retains the
 10-second timeout, so an unreachable server fails in about 31 seconds at most.
 The live test authentication preflight uses this same policy. HTTP errors
 (including credential rejection and rate limiting) and malformed responses fail
-immediately.
-Email/password authentication and project writes are not replayed: repeating
-those operations can create tokens or duplicate server-side changes. Successful
-requests incur no retry delay or additional network traffic. Uploads and downloads
-retain their existing 60-second transfer budgets without these retries.
+immediately. Email/password authentication and project writes are not replayed:
+repeating those operations can create tokens or duplicate server-side changes.
+Successful requests incur no retry delay or additional network traffic. Uploads
+and downloads retain their existing 60-second transfer budgets without these
+retries.
 
 A download may return ZIP bytes directly or a redirect to signed storage. The
 adapter reads the SDK's error-envelope status and `Location`, resolves relative
@@ -101,9 +101,9 @@ the initial API request always uses the SDK.
 ## Error handling strategy
 
 `http::sdk_error` retains transport error causes (such as timeout, DNS, TLS or
-connection closure) in `NetworkRequest`, and maps malformed or
-unexpected successful responses to `Deserialization`. Failed HTTP responses
-retain the existing status-to-domain mapping:
+connection closure) in `NetworkRequest`, and maps malformed or unexpected
+successful responses to `Deserialization`. Failed HTTP responses retain the
+existing status-to-domain mapping:
 
 | HTTP status | Domain error              | Endpoint refinement                                  |
 | ----------- | ------------------------- | ---------------------------------------------------- |
@@ -142,8 +142,8 @@ ZIPs and credential isolation across signed download handoffs. They do not
 establish backend business validation or replace live integration coverage.
 Disconnecting and truncated-body loopback fixtures also verify bounded token and
 metadata recovery, failure after three attempts, and immediate email/password
-failure. Authentication response fixtures ensure rejected credentials, rate limits
-and invalid payloads do not trigger retries.
+failure. Authentication response fixtures ensure rejected credentials, rate
+limits and invalid payloads do not trigger retries.
 
 Unit tests cover desktop model projection, status mapping and authentication
 messages. Existing credential-gated integration tests contact a real SpeleoDB

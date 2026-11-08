@@ -123,7 +123,7 @@ scope.
 Frontend unit tests cover case-insensitive name ordering, descending modified
 strings and incoming-order stability for equal keys. Browser tests also cover
 the default Name choice, sort button interaction, scroll position and reset on
-unmount. Run `make lint`, `make test-ui` and `make build-ui`.
+unmount. Run `prek run --all-files`, `make test-ui` and `make build-ui`.
 
 Sorting operates on a copy of the incoming list and costs O(n log n). Lowercase
 keys can be computed once per sort; do not change comparator semantics to

@@ -2,6 +2,9 @@
 
 ### Dependencies
 
+- Upgrade the SpeleoDB SDK dependency to the published release pinned in
+  `api/Cargo.toml`, retaining standalone registry resolution.
+
 - Refresh frontend command-line tools, DOM test libraries, Node API types and
   lint tooling while keeping compiler and DOM versions compatible with the
   linter and pinned Bun runtime.
@@ -39,6 +42,9 @@
   explicit profile overrides with build-script regression tests.
 
 ### Developer tooling
+
+- Use `prek run --all-files` for local and CI validation, removing redundant
+  Make lint and hook wrappers while retaining test and development targets.
 
 - Add deterministic SDK adapter HTTP tests and document request ownership, typed
   model conversion and standalone/monorepo dependency resolution.

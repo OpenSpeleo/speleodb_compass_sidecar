@@ -45,8 +45,10 @@ jobs:
         with:
           cache-on-failure: true
           shared-key: ubuntu-lint
-      - name: Run all lint checks
-        run: make lint
+      - uses: j178/prek-action@v3.0.0
+        with:
+          extra-args: --all-files
+          cache: true
       - name: Verify SDK adapter without API credentials
         run: cargo test -p api --test sdk_adapter --locked
       - name: Verify release workflow contracts

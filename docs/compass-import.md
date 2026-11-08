@@ -260,10 +260,11 @@ The regression tests live in `app/src-tauri/src/project_management/import.rs`:
 | `long_and_accented_station_names_retain_their_complete_identity`                                       | Exact DAT/MAK-link matching without truncating or conflating station names.                                                                                      |
 | `utf16_and_binary_mak_files_are_rejected`                                                              | Encoding tolerance does not admit UTF-16 or NUL-containing MAK files.                                                                                            |
 
-For broader validation, run `make lint`, browser-backed `make test-ui`, and
-`make build-ui`. Browser testing requires Bun-installed Playwright Chromium and
-WebKit. The existing CI matrix runs native tests on Windows and macOS; Windows
-file locking and native-picker behavior also need a Windows smoke test.
+For broader validation, run `prek run --all-files`, browser-backed
+`make test-ui`, and `make build-ui`. Browser testing requires Bun-installed
+Playwright Chromium and WebKit. The existing CI matrix runs native tests on
+Windows and macOS; Windows file locking and native-picker behavior also need a
+Windows smoke test.
 
 The real-HTTP API suite is separate. It requires valid test credentials and may
 create permanent fixture projects on the configured server. Verify its auth

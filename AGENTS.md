@@ -151,19 +151,17 @@ files.
 ## Testing Requirements
 
 Run `make test-ui` for frontend changes (Vitest and Playwright) and relevant
-native Cargo tests for backend/shared contracts. Run `make lint` for both Rust
-and frontend checks. The API integration suite uses real SpeleoDB credentials;
-unit tests and browser presentation fixtures do not claim native/API coverage.
-See `TESTING.md` for browser setup, native smoke tests and credential policy.
+native Cargo tests for backend/shared contracts. Run `prek run --all-files` for
+both Rust and frontend checks. The API integration suite uses real SpeleoDB
+credentials; unit tests and browser presentation fixtures do not claim
+native/API coverage. See `TESTING.md` for browser setup, native smoke tests and
+credential policy.
 
 ## Linter
 
-Run `make lint` to validate the codebase. This depends on:
-
-- `make lint-fmt` — `cargo fmt --all -- --check`
-- `make lint-ui` — TypeScript, ESLint and frontend formatting checks
-- `make lint-clippy` —
-  `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+Run `prek run --all-files` to validate the codebase. The repository
+configuration owns Rust formatting, workspace Clippy, compile checks,
+TypeScript, ESLint and frontend formatting checks.
 
 Clippy runs with `-D warnings` so any clippy lint blocks the lint stage and CI.
 Fix the lint at its root rather than `#[allow(...)]`-annotating it unless there
@@ -227,7 +225,7 @@ make setup          # Bun frozen install, Playwright browsers, Rust helpers
 make dev            # Tauri + Vite on fixed port 1420
 make build-tauri    # packaged release
 make build-ui       # production frontend
-make lint           # Rust + TypeScript/frontend checks
+prek run --all-files # Rust + TypeScript/frontend checks
 make test           # native suite once, frontend unit + browser suites
 make test-rust      # cargo test --workspace
 make test-ui        # bun run test:ui from app/

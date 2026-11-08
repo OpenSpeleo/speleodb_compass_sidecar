@@ -12,9 +12,9 @@ make setup
 make dev
 ```
 
-Use `make lint`, `make test`, and `make build-tauri` to validate and package the
-app. [Testing](TESTING.md) distinguishes deterministic frontend/native coverage
-from tests requiring real SpeleoDB credentials.
+Use `prek run --all-files`, `make test`, and `make build-tauri` to validate and
+package the app. [Testing](TESTING.md) distinguishes deterministic
+frontend/native coverage from tests requiring real SpeleoDB credentials.
 
 Initial Compass import supports choosing MAK survey sections and automatically
 including dependencies. Original source files remain unchanged; see

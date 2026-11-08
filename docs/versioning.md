@@ -88,5 +88,5 @@ cargo test -p speleodb-compass-sidecar --lib about_info
 cargo test -p speleodb-compass-sidecar --lib local_project
 cargo test -p xtask
 cargo fmt --all -- --check
-make lint
+prek run --all-files
 ```

@@ -91,7 +91,7 @@ shipped — restore this workaround.
 ## Verification checklist (must hold after any change here)
 
 1. `cargo check --workspace --all-features` passes on macOS and Linux.
-2. `make lint-clippy` passes on macOS (`-D warnings`).
+2. `prek run cargo-clippy --all-files` passes on macOS (`-D warnings`).
 3. `cargo test --workspace` completes the `speleodb_compass_sidecar_lib` test
    binary without exit code `0xc0000139` on `windows-latest`.
 4. `bun run tauri build` from `app/` on Windows produces a release `.exe` with

@@ -21,7 +21,8 @@ Validate configuration edits with
 `prek run check-yaml --files .github/dependabot.yml` and `git diff --check`.
 When reviewing a dependency PR, check that the new release falls outside the old
 requirement and the PR contains no lockfile edits. After refreshing the
-lockfile, run `make lint` and the tests relevant to the dependency change.
+lockfile, run `prek run --all-files` and the tests relevant to the dependency
+change.
 
 References: [Dependabot options][options] and the Cargo implementation's
 [supported strategies][strategies], [file exclusions][fetcher], and [conditional
@@ -62,7 +63,7 @@ the
 [Bun requirements updater](https://github.com/dependabot/dependabot-core/blob/main/bun/lib/dependabot/bun/update_checker/requirements_updater.rb).
 
 Validate frontend updates with `bun install --frozen-lockfile` from `app/`,
-`make lint-ui`, `make test-ui`, and `make build-ui`. Run
+`prek run --all-files`, `make test-ui`, and `make build-ui`. Run
 `cargo test -p xtask --test release_workflow` when changing the policy;
 regressions protect widening, direct-only updates, and minor/patch ignores.
 Native dependencies and application release versions remain independent.
