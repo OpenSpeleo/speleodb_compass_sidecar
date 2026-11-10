@@ -38,7 +38,7 @@ pub(crate) fn project_info(project: Project) -> Result<ProjectInfo, Error> {
                 author_name: commit.author_name,
                 // The v2 contract exposes authored_date, not commit_date. Keep
                 // the existing optional field absent rather than substitute a
-                // differently formatted server display value.
+                // distinct authored timestamp.
                 commit_date: None,
                 dt_since: commit.dt_since,
                 // The desktop uses emptiness to detect an empty project even
@@ -168,7 +168,7 @@ mod tests {
         json["latest_commit"] = json!({
             "author_email": "editor@example.invalid",
             "author_name": "Editor",
-            "authored_date": "2026/02/27 10:18",
+            "authored_date": "2026-02-27T15:18:00Z",
             "dt_since": "a minute ago",
             "formats": [],
             "id": "0123456789abcdef0123456789abcdef01234567",
