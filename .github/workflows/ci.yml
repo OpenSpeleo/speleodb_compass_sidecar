@@ -45,7 +45,7 @@ jobs:
         with:
           cache-on-failure: true
           shared-key: ubuntu-lint
-      - uses: j178/prek-action@v3.0.0
+      - uses: j178/prek-action@v3.1.0
         with:
           extra-args: --all-files
           cache: true
