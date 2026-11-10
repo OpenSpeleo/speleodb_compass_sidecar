@@ -21,6 +21,9 @@
 
 ### Fixes
 
+- Align revision fixtures with UTC API timestamps while preserving relative-age
+  display and the desktop's absent optional commit date.
+
 - Retry token validation and project metadata reads after transient network
   failures with a bounded backoff; preserve underlying connection errors and
   cover recovery, interrupted responses and exhausted retries.

@@ -124,8 +124,10 @@ The SDK decodes generated wire models; `models.rs` moves their fields into the
 existing desktop types. Permissions remain required, mutex and commit objects
 retain lock/tree state, UUIDs become desktop strings where required, and dates
 are normalized to equivalent UTC RFC3339 timestamps. `commit_date` remains
-optional because the v2 wire model exposes the separate `authored_date` display
-field. String-valued mutex/commit alternatives remain invalid desktop snapshots.
+optional because the v2 wire model exposes the separate `authored_date`
+timestamp in UTC ISO 8601 format. The desktop retains the server's `dt_since`
+presentation without substituting the authored timestamp for its commit date.
+String-valued mutex/commit alternatives remain invalid desktop snapshots.
 
 Only `COMPASS` projects appear in the desktop list. Other project types declared
 by the SDK are decoded and ignored. Future values outside the generated enum
