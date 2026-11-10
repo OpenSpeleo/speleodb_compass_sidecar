@@ -256,7 +256,7 @@ fn project_json() -> Value {
 
 fn upload_response() -> Value {
     json!({
-        "browser_url": null, "files": ["project.zip"], "geojson_status": "pending",
+        "browser_url": null, "files": ["project.zip"],
         "hexsha": "0123456789abcdef0123456789abcdef01234567", "message": "Saved",
         "project": project_json()
     })

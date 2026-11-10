@@ -43,6 +43,9 @@
 
 ### Developer tooling
 
+- Align the upload adapter fixture with source-save responses that omit optional
+  map-generation status.
+
 - Use `prek run --all-files` for local and CI validation, removing redundant
   Make lint and hook wrappers while retaining test and development targets.
 

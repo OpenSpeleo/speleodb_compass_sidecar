@@ -224,3 +224,13 @@ cargo fmt --all -- --check    # lint (zero diff expected)
 make test-rust                # full Rust suite incl. all v2 tests
 cargo test -p api -- --nocapture   # api-only with stdout
 ```
+
+Upload success confirms that source files were saved. The current contract omits
+the former map-generation status field; optional map processing is managed by
+server administrators. The server must not remove that field for deployed native
+clients until the regenerated SDK has been published through its authorized
+release process and this adapter's SDK pin and lockfile adopt that release.
+Verify the adapter from a standalone checkout outside the monorepo's Cargo path
+override before deploying the matching server contract. Updating the local SDK
+source or these fixtures alone does not update the SDK used by a packaged
+client.
