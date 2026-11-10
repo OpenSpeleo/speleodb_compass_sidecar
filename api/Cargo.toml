@@ -17,7 +17,7 @@ url.workspace = true
 uuid.workspace = true
 
 #Cargo dependencies
-speleodb-api = "=0.6.0"
+speleodb-api = "=0.6.1"
 reqwest = { version = "0.13.4", features = ["json", "rustls", "multipart"] }
 
 [dev-dependencies]
