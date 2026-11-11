@@ -64,7 +64,7 @@ zip = "9"
 serial_test = "4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-sysinfo = "0.39"
+sysinfo = "0.40"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
