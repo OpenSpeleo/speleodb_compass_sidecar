@@ -217,7 +217,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "api"
-version = "26.9.23"
+version = "26.11.17"
 dependencies = [
  "bytes",
  "common",
@@ -654,7 +654,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "26.9.23"
+version = "26.11.17"
 dependencies = [
  "bytes",
  "ctor",
@@ -4529,7 +4529,7 @@ dependencies = [
 
 [[package]]
 name = "speleodb-compass-sidecar"
-version = "26.9.23"
+version = "26.11.17"
 dependencies = [
  "api",
  "bytes",
@@ -6357,7 +6357,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "26.9.23"
+version = "26.11.17"
 dependencies = [
  "serde_json",
  "toml 1.1.8+spec-1.1.0",
