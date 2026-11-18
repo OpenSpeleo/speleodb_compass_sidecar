@@ -42,6 +42,9 @@ dependency changes with a release and consumer lockfile update.
 | Download Compass ZIP                    | `v2_projects_download_retrieve_by_format` |
 | Upload Compass ZIP                      | `v2_projects_upload`                      |
 
+The create dialog accepts an empty project description and sends it as an empty
+string.
+
 To add an operation, select its generated SDK method and request types, convert
 its error through `http::sdk_error`, and project successful models at the
 adapter boundary. Keep domain-specific remapping in the corresponding endpoint

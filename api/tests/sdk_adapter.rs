@@ -441,7 +441,7 @@ async fn project_metadata_operations_keep_routes_json_and_desktop_projection() {
     project::create_project(
         &info,
         "Survey".into(),
-        "Description".into(),
+        String::new(),
         "US".into(),
         Some(String::new()),
         None,
@@ -488,6 +488,7 @@ async fn project_metadata_operations_keep_routes_json_and_desktop_projection() {
         "country": "US", "type": "COMPASS", "latitude": "28.5", "longitude": "-82.5"})
     );
     let omitted: Value = serde_json::from_slice(&requests[2].body).unwrap();
+    assert_eq!(omitted["description"], "");
     assert!(omitted.get("latitude").is_none());
     assert!(omitted.get("longitude").is_none());
     assert!(requests[4].body.is_empty());

@@ -25,9 +25,6 @@ describe("project creation parity", () => {
     expect(validateCreateProject({ ...valid, name: "a".repeat(256) })).toBe(
       "Project name must be less than 255 characters",
     );
-    expect(validateCreateProject({ ...valid, description: " " })).toBe(
-      "Description is required",
-    );
     expect(validateCreateProject({ ...valid, country: "" })).toBe(
       "Please select a country",
     );
@@ -71,14 +68,11 @@ describe("project creation parity", () => {
       "Longitude must be a valid number",
     );
   });
-  it("sends optional coordinate strings and leaves successful navigation to backend state", async () => {
+  it("submits an untouched description with optional coordinates", async () => {
     const onClose = vi.fn();
     render(<CreateProjectModal onClose={onClose} />);
     fireEvent.change(screen.getByPlaceholderText("My Awesome Cave Project"), {
       target: { value: "Cave" },
-    });
-    fireEvent.change(screen.getByPlaceholderText("Describe the project..."), {
-      target: { value: "Survey" },
     });
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "US" } });
     fireEvent.change(screen.getByPlaceholderText("e.g. 45.1234"), {
@@ -88,7 +82,7 @@ describe("project creation parity", () => {
     await waitFor(() =>
       expect(controller.createProject).toHaveBeenCalledWith(
         "Cave",
-        "Survey",
+        "",
         "US",
         "45.1",
         null,

@@ -27,8 +27,8 @@ pub async fn create_project(
     let client = http::authenticated(api_info)?;
     let country = serde_json::from_value(serde_json::Value::String(country))
         .map_err(|error| Error::Unprocessable(format!("Invalid project country: {error}")))?;
-    let mut request =
-        types::V2ProjectsCreateWithJsonRequest::new(country, description, name, "COMPASS".into());
+    let mut request = types::V2ProjectsCreateWithJsonRequest::new(country, name, "COMPASS".into());
+    request.description = Some(description);
     request.latitude = latitude.filter(|value| !value.is_empty()).map(|value| {
         Some(types::V2ProjectsCreateWithJsonRequestLatitude::String(
             value,

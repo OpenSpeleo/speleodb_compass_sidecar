@@ -28,7 +28,6 @@ export function validateCreateProject(
   if (rustTrim(fields.name) === "") return "Project name is required";
   if (new TextEncoder().encode(fields.name).length > 255)
     return "Project name must be less than 255 characters";
-  if (rustTrim(fields.description) === "") return "Description is required";
   if (fields.country === "") return "Please select a country";
   if (fields.latitude !== "" && !validCoordinate(fields.latitude))
     return "Latitude must be a valid number";
@@ -154,7 +153,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
             />
           </div>
           <div style={{ marginBottom: "16px" }}>
-            <label style={labelStyle}>Description *</label>
+            <label style={labelStyle}>Description</label>
             <textarea
               value={fields.description}
               onChange={(event) =>
