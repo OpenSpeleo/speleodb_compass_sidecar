@@ -383,24 +383,11 @@ pub async fn create_project(
 mod tests {
     use super::about_info_from_package_info;
 
-    fn tauri_config_version() -> String {
-        let config: serde_json::Value =
-            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri config parses");
-        config
-            .get("version")
-            .and_then(serde_json::Value::as_str)
-            .expect("tauri config should define version")
-            .to_string()
-    }
-
     #[test]
     fn about_info_uses_tauri_package_version() {
-        let configured_version = tauri_config_version();
         let package_info = tauri::PackageInfo {
             name: "SpeleoDB Compass Sidecar".to_string(),
-            version: configured_version
-                .parse()
-                .expect("tauri config version should be semver-compatible"),
+            version: "1.2.3".parse().unwrap(),
             authors: "",
             description: "",
             crate_name: "speleodb-compass-sidecar",
@@ -408,11 +395,6 @@ mod tests {
 
         let info = about_info_from_package_info(&package_info);
 
-        assert_eq!(info.version, configured_version);
-    }
-
-    #[test]
-    fn tauri_config_version_matches_cargo_package_version() {
-        assert_eq!(tauri_config_version(), env!("CARGO_PKG_VERSION"));
+        assert_eq!(info.version, "1.2.3");
     }
 }

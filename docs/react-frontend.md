@@ -34,8 +34,9 @@ fixed port 1420. The explicit UI build profile preserves staging defaults for
 debug and production defaults for release, independently of Vite mode. Native
 build hooks infer that profile from `TAURI_ENV_PLATFORM` and `TAURI_ENV_DEBUG`;
 standalone builds default to debug unless explicitly configured.
-`app/package.json` is private and unversioned; application versions remain in
-Cargo and Tauri configuration.
+`app/package.json` is private and unversioned; the application version comes
+from root Cargo workspace metadata, which Tauri inherits without a configuration
+override.
 
 `app/.bun-version` pins the development and CI runtime, mirrored by
 `packageManager` and `engines.bun`. `[run] bun = true` in `app/bunfig.toml`

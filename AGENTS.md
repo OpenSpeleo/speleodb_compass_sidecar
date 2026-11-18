@@ -466,7 +466,8 @@ contracts. No WASM target, Trunk or wasm-pack is needed for this React app.
 
 ## Version Info
 
-- Root `Cargo.toml` `[workspace.package].version` and
-  `app/src-tauri/tauri.conf.json`
+- Root `Cargo.toml` `[workspace.package].version` is the sole application
+  version source. Workspace packages inherit it; omit `version` from
+  `app/src-tauri/tauri.conf.json` so Tauri uses the Cargo package version.
 - `SPELEODB_COMPASS_TOML_VERSION` in `local_project.rs`: `1.0.0` schema marker
   for local `compass.toml` metadata

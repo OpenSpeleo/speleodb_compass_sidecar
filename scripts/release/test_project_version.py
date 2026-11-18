@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for Sidecar's resolved Cargo/Tauri release version."""
+"""Tests for Sidecar's release version inherited from Cargo."""
 
 from __future__ import annotations
 
@@ -50,22 +50,16 @@ class AppVersionTests(unittest.TestCase):
                 app_version_from_metadata(data)
 
     @patch("project_version.subprocess.run")
-    def test_resolves_cargo_and_requires_matching_tauri_version(self, run):
+    def test_resolves_version_from_cargo_metadata(self, run):
         run.return_value = subprocess.CompletedProcess([], 0, json.dumps(metadata()), "")
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            config = root / "app/src-tauri/tauri.conf.json"
-            config.parent.mkdir(parents=True)
-            config.write_text('{"version":"1.2.3"}')
             with patch.dict("project_version.os.environ", {}, clear=True):
                 self.assertEqual(read_app_version(root), "1.2.3")
             run.assert_called_once_with(
                 ["cargo", "metadata", "--locked", "--no-deps", "--format-version", "1"],
                 cwd=root, check=True, capture_output=True, text=True,
             )
-            config.write_text('{"version":"9.9.9"}')
-            with self.assertRaisesRegex(ValueError, "Tauri version must match"):
-                read_app_version(root)
 
     @patch("project_version.subprocess.run", side_effect=subprocess.CalledProcessError(1, "cargo"))
     def test_cargo_failure_is_fatal(self, run):

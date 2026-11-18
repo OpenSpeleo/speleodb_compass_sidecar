@@ -15,38 +15,38 @@ schema changes.
 
 ## Application version source
 
-The user-facing version is the Tauri package version from
-`app/src-tauri/tauri.conf.json`. Tauri codegen places that value into
-`AppHandle::package_info().version`, and the `about_info` command returns that
-package metadata to `app/about.html`.
+The root `Cargo.toml` `[workspace.package].version` is the single application
+version source. Workspace member manifests inherit it with
+`version.workspace = true`.
 
-Cargo package versions use the root `Cargo.toml` `[workspace.package].version`
-as their single Cargo source of truth. Workspace member manifests inherit it
-with `version.workspace = true`, so other package metadata consumers, including
-`env!("CARGO_PKG_VERSION")`, do not report a different app version.
+`app/src-tauri/tauri.conf.json` deliberately omits `version`. Tauri then uses
+the resolved Cargo package version for packaging and code generation, including
+`AppHandle::package_info().version`. The `about_info` command returns that
+package metadata to `app/about.html`, and the updater uses the same app version.
+There is no JSON version to synchronize or override Cargo accidentally.
 
-`tauri.conf.json.version` remains explicit for Tauri packaging. A backend unit
-test compares it to `env!("CARGO_PKG_VERSION")` so JSON/TOML drift fails in the
-normal Rust test suite.
+Release preparation resolves the Sidecar member through `cargo metadata`.
+Resolution happens at build time and adds no runtime work.
 
-Use the Cargo alias to bump both version files together:
+Use the Cargo alias to bump the application version:
 
 ```bash
 cargo bump-version 27.6.9
 ```
 
-The command updates root `Cargo.toml` and `app/src-tauri/tauri.conf.json`.
-Date-like input with leading zeroes is accepted but normalized to SemVer, so
-`cargo bump-version 27.06.09` writes `27.6.9`.
+The command updates only root `Cargo.toml`; the Tauri configuration stays
+versionless. Date-like input with leading zeroes is accepted but normalized to
+SemVer, so `cargo bump-version 27.06.09` writes `27.6.9`.
 
 For the complete agent release workflow, use the repository's
 [`bump-version` skill](../.agents/skills/bump-version/SKILL.md), for example:
-"Bump the version to 27.6.9 using $bump-version." It directly edits the two
-version sources, runs `cargo update --workspace --offline` to refresh inherited
+"Bump the version to 27.6.9 using $bump-version." It directly edits the root
+Cargo version, runs `cargo update --workspace --offline` to refresh inherited
 workspace versions without upgrading unrelated dependencies, and moves
 Unreleased notes under `## v27.6.9` with a fresh empty `## [Unreleased]` above
-it. All four metadata files belong in one `[compass_speleodb] Release - v27.6.9`
-commit.
+it. The three metadata files (`Cargo.toml`, `Cargo.lock` and `CHANGELOG.md`)
+belong in one `[compass_speleodb] Release - v27.6.9` commit when the user
+explicitly requests staging and committing them.
 
 This metadata-only workflow uses file and diff inspection instead of builds,
 tests, or commit hooks, so it avoids compiling `xtask` or the application. It
@@ -76,17 +76,17 @@ version-aware handling.
 
 Backend coverage checks that:
 
-- `about_info` uses Tauri package metadata from the generated app context.
-- `app/src-tauri/tauri.conf.json.version` matches Cargo's package version.
+- `about_info` uses Tauri package metadata.
 - Imported Compass project metadata keeps `[speleodb].version` on
   `SPELEODB_COMPASS_TOML_VERSION`.
 
 Run from repo root:
 
 ```bash
-cargo test -p speleodb-compass-sidecar --lib about_info
+cargo test -p speleodb-compass-sidecar --lib commands::tests
 cargo test -p speleodb-compass-sidecar --lib local_project
 cargo test -p xtask
+python -B -m unittest discover -s scripts/release -p test_project_version.py
 cargo fmt --all -- --check
 prek run --all-files
 ```

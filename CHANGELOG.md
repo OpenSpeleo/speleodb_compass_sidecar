@@ -23,6 +23,9 @@
 
 ### Fixes
 
+- Use Cargo as the application's version source, removing the duplicate Tauri
+  version and synchronization checks; update release and version-bump tooling.
+
 - Align revision fixtures with UTC API timestamps while preserving relative-age
   display and the desktop's absent optional commit date.
 

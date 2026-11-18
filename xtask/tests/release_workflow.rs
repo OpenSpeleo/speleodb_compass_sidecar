@@ -299,6 +299,42 @@ fn platform_checks_follow_the_cargo_target_output_paths() {
 }
 
 #[test]
+fn ci_skips_dependabot_prs_before_allocating_runners() {
+    let workflow = workflow("ci.yml");
+    let jobs = workflow
+        .split("\njobs:\n")
+        .nth(1)
+        .expect("CI must define jobs");
+    let names: Vec<_> = jobs
+        .lines()
+        .filter(|line| line.starts_with("  ") && !line.starts_with("   ") && line.ends_with(':'))
+        .collect();
+    assert_eq!(
+        names,
+        ["  lint:", "  test:", "  trigger-release:"],
+        "review Dependabot gating when adding CI jobs"
+    );
+    let (lint, downstream) = jobs.split_once("\n  test:\n").unwrap();
+    assert!(
+        lint.contains("    if: github.event.pull_request.user.login != 'dependabot[bot]'\n"),
+        "gate by PR author so human updates and reruns cannot bypass the skip"
+    );
+    let (test, release) = downstream.split_once("\n  trigger-release:\n").unwrap();
+    assert!(test.contains("    needs: [lint]\n"));
+    assert!(release.contains("    needs: [test]\n"));
+    for job in [test, release] {
+        assert!(!job.contains("always()"));
+        assert!(!job.contains("!cancelled()"));
+    }
+    assert!(workflow.contains("  push:\n    branches: [master]\n"));
+    assert!(workflow.contains("  pull_request:\n    branches: [master]\n"));
+    assert!(
+        !workflow.contains("github.actor"),
+        "gate PRs, not master push actors"
+    );
+}
+
+#[test]
 fn ci_gates_releases_on_native_and_frontend_checks() {
     let workflow = workflow("ci.yml");
     assert!(workflow.contains("platform: [windows-latest, macos-latest]"));
@@ -340,7 +376,7 @@ fn frontend_package_uses_the_shared_bun_pin_without_a_release_version() {
     assert_eq!(package["scripts"]["test"], "vitest run");
     assert!(
         package.get("version").is_none(),
-        "Cargo and Tauri remain the only app version sources"
+        "Cargo remains the only app version source"
     );
 }
 

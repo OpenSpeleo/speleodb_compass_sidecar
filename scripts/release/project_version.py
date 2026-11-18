@@ -31,7 +31,7 @@ def app_version_from_metadata(metadata: dict[str, Any]) -> str:
 
 
 def read_app_version(repo_root: Path = Path(".")) -> str:
-    """Resolve Cargo inheritance and require the Tauri package version to match."""
+    """Resolve the application version through Cargo's workspace inheritance."""
     cargo = os.environ.get("CARGO", "cargo")
     result = subprocess.run(
         [cargo, "metadata", "--locked", "--no-deps", "--format-version", "1"],
@@ -40,11 +40,7 @@ def read_app_version(repo_root: Path = Path(".")) -> str:
         capture_output=True,
         text=True,
     )
-    version = app_version_from_metadata(json.loads(result.stdout))
-    config = json.loads((repo_root / "app/src-tauri/tauri.conf.json").read_text(encoding="utf-8"))
-    if config.get("version") != version:
-        raise ValueError("Tauri version must match the Sidecar Cargo workspace package version")
-    return version
+    return app_version_from_metadata(json.loads(result.stdout))
 
 
 if __name__ == "__main__":

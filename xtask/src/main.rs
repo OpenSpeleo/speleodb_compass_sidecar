@@ -26,7 +26,7 @@ fn run() -> Result<(), String> {
                 return Err("usage: cargo bump-version <version>".to_string());
             }
             let version = normalize_semver(&requested)?;
-            update_versions(&repo_root()?, &version)?;
+            update_version(&repo_root()?, &version)?;
             if version == requested {
                 println!("Updated software version to {version}");
             } else {
@@ -59,9 +59,8 @@ fn find_repo_root(start: &Path) -> Result<PathBuf, String> {
         })
 }
 
-fn update_versions(repo_root: &Path, version: &str) -> Result<(), String> {
+fn update_version(repo_root: &Path, version: &str) -> Result<(), String> {
     let cargo_path = repo_root.join(ROOT_CARGO_TOML);
-    let tauri_path = repo_root.join(TAURI_CONFIG_JSON);
 
     let cargo_toml = fs::read_to_string(&cargo_path)
         .map_err(|error| format!("failed to read {}: {error}", cargo_path.display()))?;
@@ -69,16 +68,8 @@ fn update_versions(repo_root: &Path, version: &str) -> Result<(), String> {
     toml::from_str::<toml::Value>(&updated_cargo_toml)
         .map_err(|error| format!("updated {} is invalid TOML: {error}", cargo_path.display()))?;
 
-    let tauri_config = fs::read_to_string(&tauri_path)
-        .map_err(|error| format!("failed to read {}: {error}", tauri_path.display()))?;
-    let updated_tauri_config = replace_json_version(&tauri_config, version)?;
-    serde_json::from_str::<serde_json::Value>(&updated_tauri_config)
-        .map_err(|error| format!("updated {} is invalid JSON: {error}", tauri_path.display()))?;
-
     fs::write(&cargo_path, updated_cargo_toml)
         .map_err(|error| format!("failed to write {}: {error}", cargo_path.display()))?;
-    fs::write(&tauri_path, updated_tauri_config)
-        .map_err(|error| format!("failed to write {}: {error}", tauri_path.display()))?;
 
     Ok(())
 }
@@ -137,36 +128,15 @@ fn replace_workspace_package_version(input: &str, version: &str) -> Result<Strin
     Ok(output)
 }
 
-fn replace_json_version(input: &str, version: &str) -> Result<String, String> {
-    let mut replaced = false;
-    let mut output = String::with_capacity(input.len());
-
-    for line in input.lines() {
-        let trimmed = line.trim_start();
-        if !replaced && trimmed.starts_with("\"version\"") {
-            let indent = line.strip_suffix(trimmed).unwrap_or_default();
-            let suffix = if trimmed.ends_with(',') { "," } else { "" };
-            output.push_str(&format!("{indent}\"version\": \"{version}\"{suffix}\n"));
-            replaced = true;
-        } else {
-            output.push_str(line);
-            output.push('\n');
-        }
-    }
-
-    if !replaced {
-        return Err(format!(
-            "failed to find top-level version in {TAURI_CONFIG_JSON}"
-        ));
-    }
-
-    Ok(output)
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        find_repo_root, normalize_semver, replace_json_version, replace_workspace_package_version,
+        ROOT_CARGO_TOML, TAURI_CONFIG_JSON, find_repo_root, normalize_semver,
+        replace_workspace_package_version, update_version,
+    };
+    use std::{
+        env, fs,
+        time::{SystemTime, UNIX_EPOCH},
     };
 
     #[test]
@@ -194,12 +164,28 @@ mod tests {
     }
 
     #[test]
-    fn replace_json_version_preserves_comma() {
-        let input = "{\n  \"productName\": \"SpeleoDB Compass Sidecar\",\n  \"version\": \"1.2.3\",\n  \"identifier\": \"com.speleodb-compass-sidecar\"\n}\n";
-        let output = replace_json_version(input, "2.3.4").unwrap();
+    fn bump_updates_cargo_without_adding_a_tauri_version_override() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = env::temp_dir().join(format!("sidecar-version-{}-{unique}", std::process::id()));
+        fs::create_dir(&root).unwrap();
+        let tauri_path = root.join(TAURI_CONFIG_JSON);
+        fs::create_dir_all(tauri_path.parent().unwrap()).unwrap();
+        let cargo_path = root.join(ROOT_CARGO_TOML);
+        fs::write(&cargo_path, "[workspace.package]\nversion = \"1.2.3\"\n").unwrap();
+        let tauri_config = "{\n  \"productName\": \"SpeleoDB Compass Sidecar\",\n  \"identifier\": \"com.speleodb-compass-sidecar\"\n}\n";
+        fs::write(&tauri_path, tauri_config).unwrap();
 
-        assert!(output.contains("  \"version\": \"2.3.4\","));
-        assert!(output.contains("  \"identifier\": \"com.speleodb-compass-sidecar\""));
+        update_version(&root, "2.3.4").unwrap();
+
+        assert_eq!(
+            fs::read_to_string(&cargo_path).unwrap(),
+            "[workspace.package]\nversion = \"2.3.4\"\n"
+        );
+        assert_eq!(fs::read_to_string(&tauri_path).unwrap(), tauri_config);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

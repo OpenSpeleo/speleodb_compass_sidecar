@@ -7,15 +7,31 @@ adapts FrameForge's prepare, sign, verify and aggregate stages to Sidecar's
 workspace and supported platforms. Signing setup belongs to the operator; the
 release workflow consumes existing credentials and never provisions them.
 
+## CI eligibility
+
+CI checks pull requests targeting `master` and pushes to `master`. Dependabot
+pull requests skip every CI job to avoid spending runner time on individual
+dependency updates. The initial lint job checks the pull request author's login,
+so human updates and reruns do not bypass the policy. Native/frontend tests and
+release dispatch depend on that job through the existing job dependency chain.
+Pushes to `master`, including merged dependency updates, still run the full CI
+gate before any tagged release dispatch.
+
+GitHub may show a workflow run with skipped jobs; no CI runner is allocated for
+the skipped jobs. `.github/workflows/ci.yml` owns this policy, and
+`xtask/tests/release_workflow.rs` checks the author guard and downstream job
+dependencies. Validate changes with
+`cargo test -p xtask --test release_workflow` and `prek run --all-files`.
+
 ## One draft and two platform builds
 
 The preparation job resolves the `speleodb-compass-sidecar` package version
-through Cargo metadata and checks it against the Tauri configuration. It
-requires the dispatched tag to match that version, finds an existing draft
-through the paginated release inventory, or creates one. A published release or
-duplicate matching releases stops the job. Both build jobs receive the same
-release ID, and the final aggregation job rechecks the draft's identity before
-uploading.
+through Cargo metadata. Tauri inherits that Cargo version because its
+configuration omits `version`. The job requires the dispatched tag to match that
+version, finds an existing draft through the paginated release inventory, or
+creates one. A published release or duplicate matching releases stops the job.
+Both build jobs receive the same release ID, and the final aggregation job
+rechecks the draft's identity before uploading.
 
 This coordination prevents parallel platform builds from producing competing
 drafts or publishing a partial updater manifest. Concurrency serializes release
