@@ -1,49 +1,26 @@
-## [Unreleased]
+# Changelog
 
-### Dependencies
+The most important `Compass Sidecar` product updates are listed here. This is a
+curated, high-level release history; routine maintenance and implementation
+details are intentionally omitted.
 
-- Upgrade the SpeleoDB SDK dependency to the published release pinned in
-  `api/Cargo.toml`, retaining standalone registry resolution. Adapt SDK `time`
-  timestamps while preserving UTC project/mutex strings, numeric offsets and
-  fractional-second precision in the desktop/cache contract.
+## Unreleased
 
-- Refresh frontend command-line tools, DOM test libraries, Node API types and
-  lint tooling while keeping compiler and DOM versions compatible with the
-  linter and pinned Bun runtime.
-- Declare DOM Testing Library explicitly for the test matchers and align the
-  package manager metadata with the pinned Bun runtime.
+### Features
 
-- Route every SpeleoDB operation and test preflight through `speleodb-api`,
-  preserving desktop models, authentication, timeouts and project errors.
-- Use the SDK's binary/JSON Accept negotiation so the download view can select
-  its JSON renderer before returning a signed-storage redirect; cover this
-  behavior with a negotiation-aware loopback regression.
-- Resolve the published SDK in standalone clones and the local SDK through the
-  monorepo's native Cargo path override without changing registry lock entries.
+### UI/UX
+
+### Performance
 
 ### Fixes
 
-- Keep jsdom on the Bun-compatible 30.0.x line so Vitest DOM workers start;
-  cover window event registration, bubbling and removal with a regression test.
+## v26.11.18
 
-- Use Cargo as the application's version source, removing the duplicate Tauri
-  version and synchronization checks; update release and version-bump tooling.
+### Signing
 
-- Align revision fixtures with UTC API timestamps while preserving relative-age
-  display and the desktop's absent optional commit date.
+Windows and MacOS binaries are now signed and notarized.
 
-- Retry token validation and project metadata reads after transient network
-  failures with a bounded backoff; preserve underlying connection errors and
-  cover recovery, interrupted responses and exhausted retries.
-
-- Keep one setup recipe so frontend installation and browser setup run instead
-  of a stale, missing script.
-
-- Run dependency reports outside inherited Cargo path overrides to avoid a
-  `cargo-outdated` panic; cover all workspace members and run frontend updates
-  from `app/`.
-- Use native Bun dependency updates that preserve the runtime pin and declared
-  compiler/DOM compatibility bounds.
+### Fixes
 
 - Download signed project ZIPs without forwarding API credentials, retaining
   support for direct downloads and ZIPs larger than 8 MiB.
@@ -52,55 +29,11 @@
   release builds default to production instead of staging; cover Tauri hooks and
   explicit profile overrides with build-script regression tests.
 
-### Developer tooling
-
-- Skip CI jobs for Dependabot pull requests, including human reruns, while
-  retaining checks on pushes to `master` after dependency updates are merged.
-
-- Sign Windows releases with Azure Artifact Signing and notarize macOS releases
-  with Developer ID credentials, including verification and stapling of the
-  distributed DMG.
-- Coordinate platform uploads through one draft release, verify signed updater
-  downloads with the shipping executable, and aggregate complete macOS and
-  Windows updater metadata after both platform checks pass.
-- Bound release smoke-test package downloads as well as metadata requests, so a
-  stalled local payload fails verification instead of holding the release job.
-- Adapt signing setup instructions for Sidecar while retaining shared publisher
-  resources and documenting credential rotation and release verification.
-
-- Align the upload adapter fixture with source-save responses that omit optional
-  map-generation status.
-
-- Use `prek run --all-files` for local and CI validation, removing redundant
-  Make lint and hook wrappers while retaining test and development targets.
-
-- Add deterministic SDK adapter HTTP tests and document request ownership, typed
-  model conversion and standalone/monorepo dependency resolution.
-
-- Fix native test compilation with Zip 9's fallible archive filename iterator.
-
-- Standardize frontend tools and their child processes on Bun 1.4.2, remove
-  redundant Node setup from CI and releases, and run the Markdown formatter hook
-  with Bun; retain Vitest, Playwright and the native Tauri build.
-
-- Fix YAML formatting in workflows and hook configuration so yamllint passes
-  without changing CI or release behavior; format the Playwright example test
-  for the frontend formatting check.
-
-- Restore frontend dependency/browser setup and use the Bun-managed Tauri CLI
-  instead of installing a duplicate Cargo CLI.
+### UI/UX
 
 - Replace the Rust/Yew frontend with React and TypeScript, preserving the
   existing interface and native backend contracts; use Bun and Vite for UI
   development and builds.
-- Migrate frontend tests and CI to JavaScript/browser tooling, retain native
-  macOS and Windows checks, and use frozen Bun installs for signed releases.
-- Refresh development, testing, architecture and release documentation for the
-  React frontend and separate native and frontend dependency maintenance.
-- Configure Bun dependency updates to preserve lower bounds and widen upper
-  bounds with the lockfile, suppressing routine minor/patch lockfile-only PRs.
-- Require agents to preserve relevant explanatory comments, section headings and
-  dividers throughout the repository.
 
 ## v26.9.23
 
