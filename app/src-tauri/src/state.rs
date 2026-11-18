@@ -507,7 +507,7 @@ impl AppState {
         self.compass_pid.lock().unwrap().is_some()
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", test))]
     pub fn set_compass_pid(&self, pid: Option<u32>) {
         *self.compass_pid.lock().unwrap() = pid;
         // Spawn emit in a separate task since this function is sync
@@ -519,7 +519,7 @@ impl AppState {
         }
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", test))]
     fn get_compass_pid(&self) -> Option<u32> {
         *self.compass_pid.lock().unwrap()
     }
@@ -529,13 +529,28 @@ impl AppState {
     fn check_compass_process(&self) {
         use sysinfo::System;
 
-        if let Some(pid) = self.get_compass_pid() {
-            let s = System::new_all();
-            let pid = sysinfo::Pid::from_u32(pid);
-            if s.process(pid).is_none() {
+        self.check_compass_process_with(|pid| {
+            System::new_all().map(|system| system.process(sysinfo::Pid::from_u32(pid)).is_some())
+        });
+    }
+
+    #[cfg(any(target_os = "windows", test))]
+    fn check_compass_process_with<E: std::fmt::Display>(
+        &self,
+        process_exists: impl FnOnce(u32) -> Result<bool, E>,
+    ) {
+        let Some(pid) = self.get_compass_pid() else {
+            return;
+        };
+        match process_exists(pid) {
+            Ok(false) => {
                 info!("Compass process (PID {}) has exited", pid);
                 self.set_compass_pid(None);
             }
+            Ok(true) => {}
+            // A failed query does not prove Compass exited. Keep the PID so
+            // project actions stay guarded and the next background pass retries.
+            Err(error) => warn!("Failed to check Compass process (PID {}): {}", pid, error),
         }
     }
 
@@ -832,7 +847,42 @@ impl AppState {
 
 #[cfg(test)]
 mod tests {
-    use super::{APP_MENU_TITLE, AppMenuItem, AppMenuLayout, app_menu_layout};
+    use super::{APP_MENU_TITLE, AppMenuItem, AppMenuLayout, AppState, app_menu_layout};
+
+    #[test]
+    fn compass_process_check_skips_query_when_no_pid_is_tracked() {
+        AppState::new().check_compass_process_with(|_| -> Result<bool, &str> {
+            panic!("No process query is needed without a tracked PID")
+        });
+    }
+
+    #[test]
+    fn compass_process_check_preserves_running_process() {
+        let state = AppState::new();
+        state.set_compass_pid(Some(42));
+        state.check_compass_process_with(|pid| {
+            assert_eq!(pid, 42);
+            Ok::<_, &str>(true)
+        });
+        assert_eq!(state.get_compass_pid(), Some(42));
+        assert!(state.compass_is_open());
+    }
+
+    #[test]
+    fn compass_process_check_retries_after_error_and_clears_confirmed_exit() {
+        let state = AppState::new();
+        state.set_compass_pid(Some(42));
+        state.check_compass_process_with(|_| Err("Process enumeration failed"));
+        assert_eq!(state.get_compass_pid(), Some(42));
+        assert!(state.compass_is_open());
+
+        state.check_compass_process_with(|pid| {
+            assert_eq!(pid, 42);
+            Ok::<_, &str>(false)
+        });
+        assert_eq!(state.get_compass_pid(), None);
+        assert!(!state.compass_is_open());
+    }
 
     #[test]
     fn application_menu_title_is_space_separated_title_case() {
