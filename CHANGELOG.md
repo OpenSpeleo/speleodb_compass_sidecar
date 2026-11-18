@@ -48,6 +48,9 @@
 
 ### Developer tooling
 
+- Skip CI jobs for Dependabot pull requests, including human reruns, while
+  retaining checks on pushes to `master` after dependency updates are merged.
+
 - Sign Windows releases with Azure Artifact Signing and notarize macOS releases
   with Developer ID credentials, including verification and stapling of the
   distributed DMG.
