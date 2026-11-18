@@ -129,6 +129,24 @@ timestamp in UTC ISO 8601 format. The desktop retains the server's `dt_since`
 presentation without substituting the authored timestamp for its commit date.
 String-valued mutex/commit alternatives remain invalid desktop snapshots.
 
+The SDK uses `time::OffsetDateTime` for timestamps and `time::Date` for calendar
+dates, preserving incoming timestamp offsets. Sidecar keeps these SDK types
+inside the adapter: `desktop_timestamp` uses `checked_to_offset(UtcOffset::UTC)`
+and compile-time `format_description!` formats to retain the existing numeric
+`+00:00` suffix and Chrono AutoSi fractional precision (no fraction, or exactly
+three, six or nine digits). Both project and mutex creation/modification
+timestamps follow this contract, so SDK upgrades do not alter cached metadata,
+string ordering or UI payloads. Out-of-range UTC conversion and formatting
+failures return the existing `Error::Deserialization` instead of panicking.
+Sidecar currently consumes no SDK calendar dates; unrelated native Chrono
+polling remains unchanged.
+
+Projection tests cover positive/negative offsets crossing day boundaries, UTC
+inputs, padded fractional seconds and range errors. The loopback adapter suite
+also verifies project/mutex conversion through SDK HTTP decoding. Formatting
+uses static descriptions with constant work per timestamp and no file or network
+operations.
+
 Only `COMPASS` projects appear in the desktop list. Other project types declared
 by the SDK are decoded and ignored. Future values outside the generated enum
 require a reviewed SDK upgrade; they cause a decoding error. Project creation

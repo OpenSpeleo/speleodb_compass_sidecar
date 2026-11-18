@@ -8,6 +8,33 @@ use common::{
     api_types::{ActiveMutex, CommitInfo, CommitTreeEntry, ProjectInfo, ProjectType},
 };
 use speleodb_api::types::{Project, ProjectActiveMutex, ProjectLatestCommit};
+use time::{OffsetDateTime, UtcOffset, macros::format_description};
+
+fn desktop_timestamp(timestamp: OffsetDateTime) -> Result<String, Error> {
+    let timestamp = timestamp.checked_to_offset(UtcOffset::UTC).ok_or_else(|| {
+        Error::Deserialization("Project timestamp is outside the supported UTC range".into())
+    })?;
+    // Match Chrono's AutoSi precision and numeric UTC suffix for cached/IPC strings.
+    let nanos = timestamp.nanosecond();
+    let description = if nanos == 0 {
+        format_description!("[year]-[month]-[day]T[hour]:[minute]:[second]+00:00")
+    } else if nanos.is_multiple_of(1_000_000) {
+        format_description!(
+            "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:3]+00:00"
+        )
+    } else if nanos.is_multiple_of(1_000) {
+        format_description!(
+            "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:6]+00:00"
+        )
+    } else {
+        format_description!(
+            "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:9]+00:00"
+        )
+    };
+    timestamp.format(description).map_err(|error| {
+        Error::Deserialization(format!("Could not format project timestamp: {error}"))
+    })
+}
 
 pub(crate) fn project_info(project: Project) -> Result<ProjectInfo, Error> {
     // Desktop permissions have always been required. Do not turn a missing or
@@ -21,8 +48,8 @@ pub(crate) fn project_info(project: Project) -> Result<ProjectInfo, Error> {
         .map(|mutex| match mutex {
             ProjectActiveMutex::ProjectActiveMutexInlineVariant(mutex) => Ok(ActiveMutex {
                 user: mutex.user,
-                creation_date: mutex.creation_date.to_rfc3339(),
-                modified_date: mutex.modified_date.to_rfc3339(),
+                creation_date: desktop_timestamp(mutex.creation_date)?,
+                modified_date: desktop_timestamp(mutex.modified_date)?,
             }),
             ProjectActiveMutex::String(_) => Err(Error::Deserialization(
                 "Project active_mutex must be an object or null".into(),
@@ -64,8 +91,8 @@ pub(crate) fn project_info(project: Project) -> Result<ProjectInfo, Error> {
         active_mutex,
         country: project.country.to_string(),
         created_by: project.created_by,
-        creation_date: project.creation_date.to_rfc3339(),
-        modified_date: project.modified_date.to_rfc3339(),
+        creation_date: desktop_timestamp(project.creation_date)?,
+        modified_date: desktop_timestamp(project.modified_date)?,
         latitude: project.latitude,
         longitude: project.longitude,
         fork_from: project.fork_from.map(|id| id.to_string()),
@@ -121,6 +148,75 @@ mod tests {
         assert_eq!(serialized["type"], "COMPASS");
         assert!(serialized.get("color").is_none());
         assert!(serialized.get("commit_count").is_none());
+    }
+
+    #[test]
+    fn project_and_mutex_timestamps_keep_utc_and_chrono_fractional_precision() {
+        for (input, expected) in [
+            ("2026-02-27T00:08:23+05:30", "2026-02-26T18:38:23+00:00"),
+            ("2026-02-27T23:08:23-05:00", "2026-02-28T04:08:23+00:00"),
+            ("2026-02-27T15:08:23Z", "2026-02-27T15:08:23+00:00"),
+            ("2026-02-27T15:08:23.000+00:00", "2026-02-27T15:08:23+00:00"),
+            ("2026-02-27T15:08:23.1Z", "2026-02-27T15:08:23.100+00:00"),
+            ("2026-02-27T15:08:23.120Z", "2026-02-27T15:08:23.120+00:00"),
+            (
+                "2026-02-27T15:08:23.1234Z",
+                "2026-02-27T15:08:23.123400+00:00",
+            ),
+            (
+                "2026-02-27T10:08:23.160083-05:00",
+                "2026-02-27T15:08:23.160083+00:00",
+            ),
+            (
+                "2026-02-27T15:08:23.1234567Z",
+                "2026-02-27T15:08:23.123456700+00:00",
+            ),
+            (
+                "2026-02-27T15:08:23.123456789Z",
+                "2026-02-27T15:08:23.123456789+00:00",
+            ),
+        ] {
+            let mut json = project_json();
+            json["creation_date"] = input.into();
+            json["modified_date"] = input.into();
+            json["active_mutex"] = json!({
+                "user": "editor@example.invalid",
+                "creation_date": input,
+                "modified_date": input,
+            });
+            let projected = project_info(serde_json::from_value(json).unwrap()).unwrap();
+            let serialized = serde_json::to_value(projected).unwrap();
+            for field in ["creation_date", "modified_date"] {
+                assert_eq!(serialized[field], expected, "project {field}: {input}");
+                assert_eq!(
+                    serialized["active_mutex"][field], expected,
+                    "mutex {field}: {input}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn timestamps_outside_the_supported_utc_range_return_projection_errors() {
+        for timestamp in [
+            time::Date::MIN
+                .midnight()
+                .assume_offset(UtcOffset::from_hms(1, 0, 0).unwrap()),
+            time::Date::MAX
+                .with_time(time::Time::from_hms(23, 59, 59).unwrap())
+                .assume_offset(UtcOffset::from_hms(-1, 0, 0).unwrap()),
+        ] {
+            assert!(matches!(
+                desktop_timestamp(timestamp),
+                Err(Error::Deserialization(_))
+            ));
+        }
+        let mut json = project_json();
+        json["creation_date"] = "9999-12-31T23:59:59-01:00".into();
+        assert!(matches!(
+            project_info(serde_json::from_value(json).unwrap()),
+            Err(Error::Deserialization(_))
+        ));
     }
 
     #[test]

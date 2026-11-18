@@ -384,6 +384,28 @@ async fn project_reads_recover_from_transport_and_interrupted_body_failures() {
 }
 
 #[tokio::test]
+async fn sdk_offset_timestamps_keep_the_desktop_contract_through_http() {
+    let mut response = project_json();
+    response["creation_date"] = "2026-02-27T00:08:23.1+05:30".into();
+    response["modified_date"] = "2026-02-27T23:08:23.1234-05:00".into();
+    response["active_mutex"] = json!({
+        "user": "test@example.invalid",
+        "creation_date": "2026-02-27T15:08:23.1234567Z",
+        "modified_date": "2026-02-27T15:08:23+00:00"
+    });
+    let server = Server::new(vec![Response::json(200, response)]);
+    let projected = project::fetch_project_info(&server.api_info(""), id())
+        .await
+        .unwrap();
+    assert_eq!(projected.creation_date, "2026-02-26T18:38:23.100+00:00");
+    assert_eq!(projected.modified_date, "2026-02-28T04:08:23.123400+00:00");
+    let mutex = projected.active_mutex.unwrap();
+    assert_eq!(mutex.creation_date, "2026-02-27T15:08:23.123456700+00:00");
+    assert_eq!(mutex.modified_date, "2026-02-27T15:08:23+00:00");
+    server.finish();
+}
+
+#[tokio::test]
 async fn project_metadata_operations_keep_routes_json_and_desktop_projection() {
     let mut ignored = project_json();
     ignored["type"] = "ARIANE".into();

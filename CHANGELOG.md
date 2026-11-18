@@ -3,7 +3,9 @@
 ### Dependencies
 
 - Upgrade the SpeleoDB SDK dependency to the published release pinned in
-  `api/Cargo.toml`, retaining standalone registry resolution.
+  `api/Cargo.toml`, retaining standalone registry resolution. Adapt SDK `time`
+  timestamps while preserving UTC project/mutex strings, numeric offsets and
+  fractional-second precision in the desktop/cache contract.
 
 - Refresh frontend command-line tools, DOM test libraries, Node API types and
   lint tooling while keeping compiler and DOM versions compatible with the
