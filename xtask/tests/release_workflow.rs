@@ -91,15 +91,17 @@ fn publish_preserves_packaging_and_updater_contracts() {
         "projectPath: app",
         "tauriScript: bun run tauri",
         "SIDECAR_UI_PROFILE: release",
-        "uploadUpdaterJson: true",
+        "uploadUpdaterJson: false",
+        "uploadUpdaterSignatures: false",
+        "updaterJsonPreferNsis: false",
         "releaseDraft: true",
-        "tagName: v__VERSION__",
+        "tagName: ${{ github.ref_name }}",
         "--target aarch64-apple-darwin",
         "windows-latest",
         "TAURI_SIGNING_PRIVATE_KEY:",
         "TAURI_SIGNING_PRIVATE_KEY_PASSWORD:",
         "SENTRY_DSN_SPELEODB_COMPASS:",
-        "APPLE_SIGNING_IDENTITY: \"-\"",
+        "APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}",
     ] {
         assert!(
             workflow.contains(required),
@@ -108,6 +110,192 @@ fn publish_preserves_packaging_and_updater_contracts() {
     }
     assert!(!workflow.contains("includeUpdaterJson:"));
     assert!(!workflow.contains("./src-tauri -> target"));
+    assert!(!workflow.contains("APPLE_SIGNING_IDENTITY: \"-\""));
+    assert!(!workflow.contains("secrets.APPLE_PASSWORD"));
+}
+
+fn assert_in_order(text: &str, markers: &[&str]) {
+    let mut remaining = text;
+    for marker in markers {
+        let index = remaining
+            .find(marker)
+            .unwrap_or_else(|| panic!("missing or out-of-order release step: {marker}"));
+        remaining = &remaining[index + marker.len()..];
+    }
+}
+
+#[test]
+fn release_workers_share_one_draft_and_aggregate_only_after_verification() {
+    let workflow = publish_workflow();
+    let prepare = named_step(&workflow, "Find or create the single draft");
+    for required in [
+        "scripts/release/project_version.py",
+        "test \"$RELEASE_TAG\" = \"v$app_version\"",
+        "gh api --paginate",
+        "Multiple releases for tag",
+        "Release must remain a draft",
+        "--verify-tag",
+        "--draft --title \"SpeleoDB Compass Sidecar $app_version\"",
+        "release_id=$release_id",
+    ] {
+        assert!(
+            prepare.contains(required),
+            "missing draft guard: {required}"
+        );
+    }
+    assert!(workflow.contains("releaseId: ${{ needs.prepare-release.outputs.release_id }}"));
+    assert!(workflow.contains("needs: [prepare-release, release]"));
+    let guard = named_step(&workflow, "Verify the draft before platform uploads");
+    assert!(guard.contains(".draft == true and .tag_name == $tag"));
+    let aggregate = named_step(
+        &workflow,
+        "Validate and publish the complete updater manifest",
+    );
+    for required in [
+        "latest-macos-arm64.json",
+        "latest-windows-x86_64.json",
+        "release_metadata.py aggregate",
+        ".draft == true and .tag_name == $tag",
+        "gh release upload",
+    ] {
+        assert!(
+            aggregate.contains(required),
+            "missing aggregation guard: {required}"
+        );
+    }
+    assert!(!workflow.contains("latest-linux"));
+    assert_in_order(
+        &workflow,
+        &[
+            "- name: Verify the draft before platform uploads",
+            "- uses: tauri-apps/tauri-action@v1",
+            "- name: Verify updater artifacts",
+            "- name: Smoke test updater with the built release executable",
+            "- name: Upload stapled macOS DMG",
+            "- name: Generate platform updater metadata",
+            "- name: Upload platform updater metadata for aggregation",
+            "  aggregate-release:",
+        ],
+    );
+}
+
+#[test]
+fn macos_release_imports_developer_id_and_staples_before_replacing_the_dmg() {
+    let workflow = publish_workflow();
+    assert!(workflow.contains("environment: ${{ matrix.environment }}"));
+    assert!(workflow.contains("environment: macos-signing"));
+    let credentials = named_step(&workflow, "Prepare Apple notarization credentials");
+    for required in [
+        "if: runner.os == 'macOS'",
+        "umask 077",
+        "secrets.APPLE_SIGNING_IDENTITY",
+        "secrets.APPLE_API_KEY",
+        "secrets.APPLE_API_ISSUER",
+        "secrets.APPLE_API_PRIVATE_KEY",
+        "APPLE_API_KEY_PATH=%s",
+    ] {
+        assert!(
+            credentials.contains(required),
+            "missing Apple credential contract: {required}"
+        );
+    }
+    let certificate = named_step(&workflow, "Import Apple signing certificate");
+    assert!(certificate.contains("apple-actions/import-codesign-certs@v7"));
+    assert!(certificate.contains("secrets.APPLE_CERTIFICATE }}"));
+    assert!(certificate.contains("secrets.APPLE_CERTIFICATE_PASSWORD"));
+    let notarize = named_step(&workflow, "Notarize and staple macOS DMG");
+    assert!(notarize.contains("\"${#dmgs[@]}\" -ne 1"));
+    assert_in_order(
+        notarize,
+        &[
+            "notarytool submit",
+            "--wait --timeout 30m",
+            "stapler staple",
+        ],
+    );
+    let cleanup = named_step(&workflow, "Remove Apple notarization private key");
+    assert!(cleanup.contains("if: always() && runner.os == 'macOS'"));
+    assert!(cleanup.contains("rm -f \"${RUNNER_TEMP}/speleodb-compass-sidecar-apple-api-key.p8\""));
+    assert_in_order(
+        &workflow,
+        &[
+            "- name: Prepare Apple notarization credentials",
+            "- name: Import Apple signing certificate",
+            "- uses: tauri-apps/tauri-action@v1",
+            "- name: Notarize and staple macOS DMG",
+            "- name: Remove Apple notarization private key",
+            "- name: Verify signed macOS package",
+            "- name: Upload stapled macOS DMG",
+        ],
+    );
+}
+
+#[test]
+fn windows_release_signs_during_bundling_using_the_environment_oidc_identity() {
+    let workflow = publish_workflow();
+    for required in [
+        "environment: windows-signing",
+        "id-token: write",
+        "ARTIFACT_SIGNING_MODULE_VERSION: \"0.1.20\"",
+        "secrets.AZURE_CLIENT_ID",
+        "secrets.AZURE_TENANT_ID",
+        "secrets.AZURE_SUBSCRIPTION_ID",
+        "secrets.AZURE_SIGNING_ENDPOINT",
+        "secrets.AZURE_SIGNING_ACCOUNT",
+        "secrets.AZURE_SIGNING_PROFILE",
+        "format('--config \"{0}\" {1}', steps.windows-signing.outputs.config,",
+    ] {
+        assert!(
+            workflow.contains(required),
+            "missing Windows signing contract: {required}"
+        );
+    }
+    let prepare = named_step(&workflow, "Prepare Windows signing command");
+    for required in [
+        "if: runner.os == 'Windows'",
+        "Install-Module -Name ArtifactSigning",
+        "-RequiredVersion $env:ARTIFACT_SIGNING_MODULE_VERSION",
+        "scripts/release/windows-sign.ps1",
+        "signCommand = @{",
+        "'-NoProfile', '-NonInteractive', '-File', $signer, '%1'",
+    ] {
+        assert!(
+            prepare.contains(required),
+            "missing signing callback setup: {required}"
+        );
+    }
+    assert_in_order(
+        &workflow,
+        &[
+            "- name: Cache Windows signing tools",
+            "- name: Prepare Windows signing command",
+            "- name: Log in to Azure for Windows signing",
+            "uses: azure/login@v3",
+            "- uses: tauri-apps/tauri-action@v1",
+        ],
+    );
+}
+
+#[test]
+fn platform_checks_follow_the_cargo_target_output_paths() {
+    let workflow = publish_workflow();
+    assert!(workflow.contains("RELEASE_ROOT: ${{ matrix.release-root }}"));
+    assert!(workflow.contains("release-root: target/aarch64-apple-darwin/release"));
+    assert!(workflow.contains("release-root: target/release"));
+    for name in [
+        "Verify signed macOS package",
+        "Verify updater artifacts",
+        "Smoke test updater with the built release executable",
+        "Generate platform updater metadata",
+    ] {
+        assert!(
+            named_step(&workflow, name).contains("--release-root \"$RELEASE_ROOT\""),
+            "{name} must use the matrix's Cargo target directory"
+        );
+    }
+    for name in ["Notarize and staple macOS DMG", "Upload stapled macOS DMG"] {
+        assert!(named_step(&workflow, name).contains("\"$RELEASE_ROOT\"/bundle/dmg/*.dmg"));
+    }
 }
 
 #[test]
@@ -128,6 +316,13 @@ fn ci_gates_releases_on_native_and_frontend_checks() {
     let release = workflow.split("  trigger-release:").nth(1).unwrap();
     assert!(release.contains("needs: [test]"));
     assert!(release.contains("gh workflow run publish.yml --ref \"$TAG\""));
+    assert!(
+        named_step(&workflow, "Test release metadata and artifact verification")
+            .contains("python -B -m unittest discover -s scripts/release")
+    );
+    let signing = named_step(&workflow, "Test Windows signing callback");
+    assert!(signing.contains("if: runner.os == 'Windows'"));
+    assert!(signing.contains("scripts/release/test_windows_sign.ps1"));
 }
 
 #[test]

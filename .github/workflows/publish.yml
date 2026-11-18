@@ -9,30 +9,104 @@ concurrency:
   group: release-publishing
   cancel-in-progress: false
 
+env:
+  CARGO_TERM_COLOR: always
+
 permissions:
-  contents: write
+  contents: read
 
 # Manual dispatch or the successful tagged-push CI gate creates a draft release.
 
 jobs:
-  publish-tauri:
+  prepare-release:
+    name: Prepare draft release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      release_id: ${{ steps.draft.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          cache-python: true
+          python-version: '3.14'
+      - name: Find or create the single draft
+        id: draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          app_version="$(
+            uv run --no-project scripts/release/project_version.py
+          )"
+          test "$RELEASE_TAG" = "v$app_version"
+          # Draft releases must be found through the paginated release list.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '.[] | {id, tag_name, draft}' > "$RUNNER_TEMP/releases.jsonl"
+          release_id="$(jq -s -r --arg tag "$RELEASE_TAG" '
+            [.[] | select(.tag_name == $tag)] |
+            if length > 1 then error("Multiple releases for tag")
+            elif length == 1 and .[0].draft != true
+            then error("Release must remain a draft")
+            else .[0].id // empty end
+          ' "$RUNNER_TEMP/releases.jsonl")"
+          if [ -z "$release_id" ]; then
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --draft --title "SpeleoDB Compass Sidecar $app_version" \
+              --notes \
+              'See the assets to download and install SpeleoDB Compass Sidecar.'
+            release_id="$(gh release view "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json databaseId --jq .databaseId)"
+          fi
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: [prepare-release]
+    environment: ${{ matrix.environment }}
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      ARTIFACT_SIGNING_MODULE_VERSION: "0.1.20"
+      RELEASE_ROOT: ${{ matrix.release-root }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: "macos-latest"  # for Arm based macs (M1 and above).
-            args: "--target aarch64-apple-darwin"
-          # - platform: 'macos-latest' # for Intel based macs.
-          #   args: '--target x86_64-apple-darwin'
-          # For Tauri v1 you could replace this with ubuntu-20.04.
-          # - platform: 'ubuntu-22.04'
-          #   args: ''
-          - platform: "windows-latest"
-            args: ""
+          - platform: macos-latest  # Apple Silicon (M1 and above).
+            args: "--target aarch64-apple-darwin -- --locked"
+            label: macOS (ARM64)
+            artifact: macos-arm64
+            environment: macos-signing
+            release-root: target/aarch64-apple-darwin/release
+          - platform: windows-latest
+            args: "-- --locked"
+            label: Windows (x86_64)
+            artifact: windows-x86_64
+            environment: windows-signing
+            release-root: target/release
 
+    name: Build - ${{ matrix.label }}
     runs-on: ${{ matrix.platform }}
+
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          cache-python: true
+          python-version: '3.14'
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -63,43 +137,295 @@ jobs:
         with:
           cache-on-failure: true
 
-      - uses: tauri-apps/tauri-action@action-v1.0.0
+      - name: Verify release tag matches workspace version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          app_version="$(
+            uv run --no-project scripts/release/project_version.py
+          )"
+          if [ "$RELEASE_TAG" != "v${app_version}" ]; then
+            echo "Release tag ${RELEASE_TAG} must match workspace version" \
+              "v${app_version}" >&2
+            exit 1
+          fi
+
+      - name: Prepare Apple notarization credentials
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        run: |
+          umask 077
+          key_path="${RUNNER_TEMP}/speleodb-compass-sidecar-apple-api-key.p8"
+          printf '%s\n' \
+            "${APPLE_API_PRIVATE_KEY:?Missing APPLE_API_PRIVATE_KEY}" \
+            > "$key_path"
+          {
+            printf 'APPLE_SIGNING_IDENTITY=%s\n' \
+              "${APPLE_SIGNING_IDENTITY:?Missing APPLE_SIGNING_IDENTITY}"
+            printf 'APPLE_API_KEY=%s\n' \
+              "${APPLE_API_KEY:?Missing APPLE_API_KEY}"
+            printf 'APPLE_API_ISSUER=%s\n' \
+              "${APPLE_API_ISSUER:?Missing APPLE_API_ISSUER}"
+            printf 'APPLE_API_KEY_PATH=%s\n' "$key_path"
+          } >> "$GITHUB_ENV"
+
+      # -------------------- Apple code signing -------------------- #
+      # Tauri signs and notarizes the app with the imported Developer ID.
+      - name: Import Apple signing certificate
+        if: runner.os == 'macOS'
+        uses: apple-actions/import-codesign-certs@v7
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+
+      - name: Locate Windows signing tool caches
+        if: runner.os == 'Windows'
+        id: windows-signing-cache
+        shell: pwsh
+        run: |
+          $moduleRoot = ($env:PSModulePath -split ';')[0]
+          $module = "$moduleRoot\ArtifactSigning" +
+            "\$env:ARTIFACT_SIGNING_MODULE_VERSION"
+          "module=$module" >> $env:GITHUB_OUTPUT
+          $dependencies = "$env:LOCALAPPDATA\ArtifactSigning"
+          "dependencies=$dependencies" >> $env:GITHUB_OUTPUT
+
+      - name: Cache Windows signing tools
+        if: runner.os == 'Windows'
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ steps.windows-signing-cache.outputs.module }}
+            ${{ steps.windows-signing-cache.outputs.dependencies }}
+          key: >-
+            windows-artifact-signing-${{ env.ARTIFACT_SIGNING_MODULE_VERSION }}
+
+      - name: Prepare Windows signing command
+        if: runner.os == 'Windows'
+        id: windows-signing
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $module = Get-Module -ListAvailable -Name ArtifactSigning |
+            Where-Object Version -eq $env:ARTIFACT_SIGNING_MODULE_VERSION
+          if (-not $module) {
+            Install-Module -Name ArtifactSigning `
+              -RequiredVersion $env:ARTIFACT_SIGNING_MODULE_VERSION `
+              -Scope CurrentUser -Force -Repository PSGallery
+          }
+          $signer = Join-Path $env:GITHUB_WORKSPACE `
+            'scripts/release/windows-sign.ps1'
+          $config = Join-Path $env:RUNNER_TEMP 'windows-signing.json'
+          @{
+            bundle = @{
+              windows = @{
+                signCommand = @{
+                  cmd = 'pwsh'
+                  args = @(
+                    '-NoProfile', '-NonInteractive', '-File', $signer, '%1'
+                  )
+                }
+              }
+            }
+          } | ConvertTo-Json -Depth 5 |
+            Set-Content -Path $config -Encoding utf8
+          "config=$config" >> $env:GITHUB_OUTPUT
+
+      - name: Log in to Azure for Windows signing
+        if: runner.os == 'Windows'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify the draft before platform uploads
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.prepare-release.outputs.release_id }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            --jq '{draft, tag_name}' > "$RUNNER_TEMP/release-identity.json"
+          jq -e --arg tag "$RELEASE_TAG" \
+            '.draft == true and .tag_name == $tag' \
+            "$RUNNER_TEMP/release-identity.json" > /dev/null
+
+      - uses: tauri-apps/tauri-action@v1
         env:
           SIDECAR_UI_PROFILE: release
           SENTRY_DSN_SPELEODB_COMPASS: >-
             ${{ secrets.SENTRY_DSN_SPELEODB_COMPASS }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Tauri Updater signing (required for in-app self-update)
+          # The pinned bundler otherwise hides WiX stdout/stderr on failure.
+          RUST_LOG: >-
+            ${{ matrix.platform == 'windows-latest' &&
+            'tauri_bundler::utils=debug' || '' }}
+          # Windows Authenticode signing uses the Azure CLI's OIDC session.
+          # The signing callback renews expired assertions after long builds.
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+          # Tauri Updater signing
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: >-
             ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # -------------------- Apple code signing -------------------- #
-          # ENABLE_CODE_SIGNING: "true"
-          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          # APPLE_CERTIFICATE_PASSWORD: >-
-          #   ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # APPLE_ID: ${{ secrets.APPLE_ID }}
-          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          # ---------------- macOS ad-hoc code signing ---------------- #
-          # macOS ad-hoc code signing. Pseudo-identity "-" runs `codesign -s -`
-          # so the bundle is locally signed and bypasses the "App is damaged"
-          # Gatekeeper hard-block on Apple Silicon. Users still see the
-          # "unidentified developer" warning and must right-click -> Open the
-          # first time. Replace with a real Developer ID + APPLE_CERTIFICATE /
-          # APPLE_ID / APPLE_TEAM_ID flow once a paid Apple Developer account
-          # is available (then notarization can be enabled too).
-          APPLE_SIGNING_IDENTITY: "-"
-
         with:
-          # The action replaces __VERSION__ with the app version.
-          tagName: v__VERSION__
-          releaseName: "App v__VERSION__"
-          releaseBody: "See the assets to download this version and install."
+          args: >-
+            ${{ runner.os == 'Windows' &&
+            format('--config "{0}" {1}', steps.windows-signing.outputs.config,
+            matrix.args) || matrix.args }}
+          releaseId: ${{ needs.prepare-release.outputs.release_id }}
+          tagName: ${{ github.ref_name }}
+          releaseName: SpeleoDB Compass Sidecar __VERSION__
+          releaseBody: >-
+            See the assets to download and install SpeleoDB Compass Sidecar.
           releaseDraft: true
+          # Workers pass metadata fragments after platform checks.
+          uploadUpdaterJson: false
+          # Signatures stay local and are embedded in latest.json.
+          uploadUpdaterSignatures: false
+          # Preserve MSI as the generic Windows updater; NSIS has its own key.
+          updaterJsonPreferNsis: false
           prerelease: false
-          args: ${{ matrix.args }}
-          uploadUpdaterJson: true
           projectPath: app
           tauriScript: bun run tauri
+
+      # Tauri notarizes the app, but only signs the enclosing DMG.
+      - name: Notarize and staple macOS DMG
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          shopt -s nullglob
+          dmgs=("$RELEASE_ROOT"/bundle/dmg/*.dmg)
+          if [ "${#dmgs[@]}" -ne 1 ]; then
+            echo "::error::Expected one macOS DMG, found ${#dmgs[@]}"
+            exit 1
+          fi
+          xcrun notarytool submit "${dmgs[0]}" \
+            --key "$APPLE_API_KEY_PATH" \
+            --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" \
+            --wait --timeout 30m
+          xcrun stapler staple "${dmgs[0]}"
+
+      - name: Remove Apple notarization private key
+        if: always() && runner.os == 'macOS'
+        shell: bash
+        run: |
+          rm -f "${RUNNER_TEMP}/speleodb-compass-sidecar-apple-api-key.p8"
+
+      # Release the mounted DMG before the download verification.
+      - name: Verify signed macOS package
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          bash scripts/release/verify-artifacts.sh runtime \
+            --platform "${{ matrix.platform }}" --release-root "$RELEASE_ROOT"
+
+      - name: Verify updater artifacts
+        shell: bash
+        run: |
+          bash scripts/release/verify-artifacts.sh updater-signatures \
+            --platform "${{ matrix.platform }}" --release-root "$RELEASE_ROOT"
+
+      - name: Smoke test updater with the built release executable
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          uv run --no-project scripts/release/run_updater_smoke.py \
+            --platform "${{ matrix.artifact }}" --version "${RELEASE_TAG#v}" \
+            --release-root "$RELEASE_ROOT"
+
+      # The action uploads before the DMG ticket is stapled. Replace that asset
+      # only after notarization and all local artifact checks have succeeded.
+      - name: Upload stapled macOS DMG
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          test "$(gh release view "$RELEASE_TAG" \
+            --json isDraft --jq .isDraft)" = true
+          gh release upload "$RELEASE_TAG" "$RELEASE_ROOT"/bundle/dmg/*.dmg \
+            --clobber
+
+      - name: Generate platform updater metadata
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.prepare-release.outputs.release_id }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_PLATFORM: ${{ matrix.artifact }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            > "$RUNNER_TEMP/release.json"
+          metadata="$RUNNER_TEMP/latest-$RELEASE_PLATFORM.json"
+          uv run --no-project scripts/release/release_metadata.py fragment \
+            --platform "$RELEASE_PLATFORM" --version "${RELEASE_TAG#v}" \
+            --repo "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" \
+            --release-root "$RELEASE_ROOT" \
+            --release-json "$RUNNER_TEMP/release.json" \
+            --output "$metadata"
+
+      - name: Upload platform updater metadata for aggregation
+        uses: actions/upload-artifact@v7
+        with:
+          name: updater-metadata-${{ matrix.artifact }}
+          path: ${{ runner.temp }}/latest-${{ matrix.artifact }}.json
+          if-no-files-found: error
+          overwrite: true
+
+  aggregate-release:
+    name: Aggregate updater metadata
+    needs: [prepare-release, release]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          cache-python: true
+          python-version: '3.14'
+      - name: Download platform updater metadata
+        uses: actions/download-artifact@v8
+        with:
+          pattern: updater-metadata-*
+          path: ${{ runner.temp }}/release-metadata
+          merge-multiple: true
+      - name: Validate and publish the complete updater manifest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.prepare-release.outputs.release_id }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          metadata_dir="$RUNNER_TEMP/release-metadata"
+          mkdir -p "$metadata_dir"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            > "$metadata_dir/release.json"
+          uv run --no-project scripts/release/release_metadata.py aggregate \
+            --repo "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" \
+            --release-json "$metadata_dir/release.json" \
+            --input "$metadata_dir/latest-macos-arm64.json" \
+              "$metadata_dir/latest-windows-x86_64.json" \
+            --output "$metadata_dir/latest.json"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            --jq '{draft, tag_name}' | \
+            jq -e --arg tag "$RELEASE_TAG" \
+              '.draft == true and .tag_name == $tag' > /dev/null
+          gh release upload "$RELEASE_TAG" "$metadata_dir/latest.json" \
+            --repo "$GITHUB_REPOSITORY" --clobber

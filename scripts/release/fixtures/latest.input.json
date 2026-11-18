@@ -1,0 +1,27 @@
+{
+  "version": "0.5.0",
+  "notes": "See the assets to download and install SpeleoDB Compass Sidecar v0.5.0.",
+  "pub_date": "2026-04-25T17:13:22.294Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSQTJ4RDRCTzZXdk9veXd3VmxhVFMyTkdua1c5QURsc29BOGR5TkFNT01ZdCsxVExwcHhpdVdGN2E1RGFRMWw0eTdzck51NHVON1dqcGRIZURid3RWaUwxWlpjZGttTndrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc3MTM2MzY5CWZpbGU6RnJhbWVGb3JnZS5hcHAudGFyLmd6CnZuQkFrY3NLOXFBanRPZkg0dnhVWjZpaTl3ZU5pTEZWWkl2UlZWN0xRdGxEa2xUTzBBMVpadEJUSmFCNkJGQTBoVGpCQjlZam5ZcTk3ZGIyM09DckRnPT0K",
+      "url": "https://github.com/OpenSpeleo/speleodb_compass_sidecar/releases/download/v0.5.0/SpeleoDB%20Compass%20Sidecar_aarch64.app.tar.gz"
+    },
+    "darwin-aarch64-app": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSQTJ4RDRCTzZXdk9veXd3VmxhVFMyTkdua1c5QURsc29BOGR5TkFNT01ZdCsxVExwcHhpdVdGN2E1RGFRMWw0eTdzck51NHVON1dqcGRIZURid3RWaUwxWlpjZGttTndrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc3MTM2MzY5CWZpbGU6RnJhbWVGb3JnZS5hcHAudGFyLmd6CnZuQkFrY3NLOXFBanRPZkg0dnhVWjZpaTl3ZU5pTEZWWkl2UlZWN0xRdGxEa2xUTzBBMVpadEJUSmFCNkJGQTBoVGpCQjlZam5ZcTk3ZGIyM09DckRnPT0K",
+      "url": "https://github.com/OpenSpeleo/speleodb_compass_sidecar/releases/download/v0.5.0/SpeleoDB%20Compass%20Sidecar_aarch64.app.tar.gz"
+    },
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSQTJ4RDRCTzZXdkZUS1ZYdkc3MHRmMCtZNDJaZU9SMEdBeFBHYXN6eTRJbkpha2VOZVQ0TmtBUjdPTXRTTlJ2MVNmMVMvZHVUcVpmTlJKcDRwaFJXNW1DMWNPWWZDVXdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc3MTM3MTk2CWZpbGU6RnJhbWVGb3JnZV8wLjUuMF94NjRfZW4tVVMubXNpCk4zMzVDNWJPSk11ZlhGbFRueWhYT3RoZXNuaEpxOFd1alJkMzRqVzdWNU5FTWthdXNjQ24zbFk3TVFCZUZlMzZpR0tmUlM2Y3pETWV5OW9GencrWkF3PT0K",
+      "url": "https://github.com/OpenSpeleo/speleodb_compass_sidecar/releases/download/v0.5.0/SpeleoDB%20Compass%20Sidecar_0.5.0_x64_en-US.msi"
+    },
+    "windows-x86_64-msi": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSQTJ4RDRCTzZXdkZUS1ZYdkc3MHRmMCtZNDJaZU9SMEdBeFBHYXN6eTRJbkpha2VOZVQ0TmtBUjdPTXRTTlJ2MVNmMVMvZHVUcVpmTlJKcDRwaFJXNW1DMWNPWWZDVXdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc3MTM3MTk2CWZpbGU6RnJhbWVGb3JnZV8wLjUuMF94NjRfZW4tVVMubXNpCk4zMzVDNWJPSk11ZlhGbFRueWhYT3RoZXNuaEpxOFd1alJkMzRqVzdWNU5FTWthdXNjQ24zbFk3TVFCZUZlMzZpR0tmUlM2Y3pETWV5OW9GencrWkF3PT0K",
+      "url": "https://github.com/OpenSpeleo/speleodb_compass_sidecar/releases/download/v0.5.0/SpeleoDB%20Compass%20Sidecar_0.5.0_x64_en-US.msi"
+    },
+    "windows-x86_64-nsis": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSQTJ4RDRCTzZXdkZwNzZEc1VGK3dYcVZ4dnZMMmk5M3hkdUZjQStRWHl4elpaVzRuRkN5V25XUTdjeG9SU3BTSzRnRGxiOTN2cFpCTm5zdFJTOU9uQzBUZXpjM1p1bHdjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc3MTM3MTk2CWZpbGU6RnJhbWVGb3JnZV8wLjUuMF94NjQtc2V0dXAuZXhlCmloeVB3b251d2Zwc2ZjZlMrSWEwR0VhT2g5R3V1ZkFYS3I4RzRQWnRBS1M4Y2ptVExJZlRxa21uaGN1S3BoYkpxQURSMXIzQjRjYUtScG8welRiOURBPT0K",
+      "url": "https://github.com/OpenSpeleo/speleodb_compass_sidecar/releases/download/v0.5.0/SpeleoDB%20Compass%20Sidecar_0.5.0_x64-setup.exe"
+    }
+  }
+}

@@ -48,6 +48,17 @@
 
 ### Developer tooling
 
+- Sign Windows releases with Azure Artifact Signing and notarize macOS releases
+  with Developer ID credentials, including verification and stapling of the
+  distributed DMG.
+- Coordinate platform uploads through one draft release, verify signed updater
+  downloads with the shipping executable, and aggregate complete macOS and
+  Windows updater metadata after both platform checks pass.
+- Bound release smoke-test package downloads as well as metadata requests, so a
+  stalled local payload fails verification instead of holding the release job.
+- Adapt signing setup instructions for Sidecar while retaining shared publisher
+  resources and documenting credential rotation and release verification.
+
 - Align the upload adapter fixture with source-save responses that omit optional
   map-generation status.
 

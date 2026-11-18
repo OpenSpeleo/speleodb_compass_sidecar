@@ -53,6 +53,14 @@ jobs:
         run: cargo test -p api --test sdk_adapter --locked
       - name: Verify release workflow contracts
         run: cargo test -p xtask --test release_workflow
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          cache-python: true
+          python-version: '3.14'
+      - name: Test release metadata and artifact verification
+        run: >-
+          uv run --no-project python -B -m unittest discover -s scripts/release
 
   test:
     needs: [lint]
@@ -97,6 +105,10 @@ jobs:
           fi
       - name: Run native tests
         run: cargo test --workspace --locked
+      - name: Test Windows signing callback
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/release/test_windows_sign.ps1
       - name: Install browser engines
         run: bunx --bun --no-install playwright install chromium webkit
         working-directory: app
