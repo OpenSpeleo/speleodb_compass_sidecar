@@ -23,6 +23,9 @@
 
 ### Fixes
 
+- Keep jsdom on the Bun-compatible 30.0.x line so Vitest DOM workers start;
+  cover window event registration, bubbling and removal with a regression test.
+
 - Use Cargo as the application's version source, removing the duplicate Tauri
   version and synchronization checks; update release and version-bump tooling.
 

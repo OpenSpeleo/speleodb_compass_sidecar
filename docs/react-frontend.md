@@ -48,6 +48,14 @@ application or change its frontend assets.
 
 ## Verification and performance
 
+The jsdom dependency stays within `>=30.0.1 <30.1`: jsdom 31 scripted windows
+fail EventTarget receiver checks on pinned Bun 1.4.2 before Vitest loads test
+files. Keep the bound until the window event regression and full `make test-ui`
+suite pass with a newer version. The DOM runtime regression exercises window
+listener registration, bubbling and removal in the actual Vitest environment.
+This constraint affects development tests only, with no packaged application
+runtime or performance impact.
+
 Persistent unit and component tests cover validation, ordering, error
 presentation, updater behavior and import selection. Ten browser interaction
 cases run in Chromium and WebKit, including native-dialog focus, scrolling and
