@@ -198,7 +198,11 @@ release/update signing configuration, platform coverage and the native/frontend
 release gate. They also guard Bun script inheritance and the Bun formatter hook
 against reintroducing Node setup. Frontend runtime tests verify the actual
 Vitest worker and inherited executable runtime. Workflow parsing tests cover
-both LF and CRLF checkouts.
+both LF and CRLF checkouts. The Dependabot gate check normalizes line endings
+before inspecting job boundaries and dependencies, and exercises both formats
+against the actual CI workflow. This keeps Windows checkout formatting from
+masking the job gating contract without changing runner allocation or
+application runtime behavior.
 
 Release helper tests cover artifact discovery, version selection, per-platform
 fragments, complete aggregation, incorrect draft inventories, missing or

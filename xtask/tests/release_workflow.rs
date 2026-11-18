@@ -300,7 +300,15 @@ fn platform_checks_follow_the_cargo_target_output_paths() {
 
 #[test]
 fn ci_skips_dependabot_prs_before_allocating_runners() {
-    let workflow = workflow("ci.yml");
+    let workflow = workflow("ci.yml").replace("\r\n", "\n");
+    for newline in ["\n", "\r\n"] {
+        assert_dependabot_gating(&workflow.replace('\n', newline));
+    }
+}
+
+fn assert_dependabot_gating(workflow: &str) {
+    // Windows checkouts use CRLF; inspect the same job boundaries on every host.
+    let workflow = workflow.replace("\r\n", "\n");
     let jobs = workflow
         .split("\njobs:\n")
         .nth(1)
