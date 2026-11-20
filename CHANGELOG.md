@@ -6,6 +6,10 @@ details are intentionally omitted.
 
 ## Unreleased
 
+### Dependencies
+
+- Updated the SpeleoDB Rust SDK to 0.10.0.
+
 ### Features
 
 ### UI/UX
