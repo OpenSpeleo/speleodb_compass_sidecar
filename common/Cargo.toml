@@ -16,7 +16,7 @@ uuid.workspace = true
 
 # Cargo dependencies
 dirs = "7"
-flexi_logger = "0.31.7"
+flexi_logger = "0.32.0"
 
 [dev-dependencies]
 serial_test = "4"
