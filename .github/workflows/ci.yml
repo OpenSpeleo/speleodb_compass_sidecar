@@ -55,7 +55,7 @@ jobs:
         run: cargo test -p api --test sdk_adapter --locked
       - name: Verify release workflow contracts
         run: cargo test -p xtask --test release_workflow
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
           enable-cache: true
           cache-python: true
